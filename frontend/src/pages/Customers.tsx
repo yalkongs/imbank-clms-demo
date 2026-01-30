@@ -244,7 +244,7 @@ export default function Customers() {
           value={industries.length.toString()}
           subtitle="등록 업종"
           icon={<Building2 size={24} />}
-          color="purple"
+          color="blue"
         />
         <StatCard
           title="등급별 분포"

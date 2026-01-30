@@ -78,14 +78,17 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
         SELECT COUNT(*) FROM ews_alert WHERE status = 'OPEN'
     """)).fetchone()
 
+    # 단위 변환: DB는 십억원, 프론트엔드는 원 단위 기대
+    UNIT = 1_000_000_000  # 십억원 -> 원
+
     return {
         "capital": {
-            "bis_ratio": float(capital[10] * 100) if capital else 0,
-            "tier1_ratio": float(capital[12] * 100) if capital else 0,
-            "cet1_ratio": float(capital[11] * 100) if capital else 0,
-            "leverage_ratio": float(capital[13] * 100) if capital else 0,
-            "total_capital": float(capital[5]) if capital else 0,
-            "total_rwa": float(capital[9]) if capital else 0
+            "bis_ratio": float(capital[10]) if capital else 0,  # DB에 이미 % 값으로 저장
+            "tier1_ratio": float(capital[12]) if capital else 0,
+            "cet1_ratio": float(capital[11]) if capital else 0,
+            "leverage_ratio": float(capital[13]) if capital else 0,
+            "total_capital": float(capital[5]) * UNIT if capital else 0,
+            "total_rwa": float(capital[9]) * UNIT if capital else 0
         } if capital else {},
         "portfolio": {
             "total_customers": portfolio[0] if portfolio else 0,
@@ -93,7 +96,7 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
             "avg_rate": float(portfolio[2] * 100) if portfolio and portfolio[2] else 0,
             "weighted_pd": float(risk_params[0]) if risk_params and risk_params[0] else 0.02,
             "weighted_lgd": float(risk_params[1]) if risk_params and risk_params[1] else 0.35,
-            "avg_raroc": float(avg_raroc[0] * 100) if avg_raroc and avg_raroc[0] else 15.0,
+            "avg_raroc": float(avg_raroc[0]) if avg_raroc and avg_raroc[0] else 15.0,  # DB에 이미 % 값으로 저장
             "avg_rating": avg_grade[0] if avg_grade else "BBB"
         },
         "applications": {
@@ -168,7 +171,7 @@ def get_kpis(db: Session = Depends(get_db)):
     """)).fetchone()
 
     return {
-        "portfolio_raroc": float(portfolio_raroc[0] * 100) if portfolio_raroc and portfolio_raroc[0] else 15.0,
+        "portfolio_raroc": float(portfolio_raroc[0]) if portfolio_raroc and portfolio_raroc[0] else 15.0,  # DB에 이미 % 값으로 저장
         "avg_pd": float(avg_pd[0]) if avg_pd and avg_pd[0] else 0.02,
         "avg_lgd": float(avg_lgd[0]) if avg_lgd and avg_lgd[0] else 0.35,
         "hurdle_rate": 15.0
@@ -188,10 +191,10 @@ def get_capital_trend(db: Session = Depends(get_db)):
     return [
         {
             "date": r[0],
-            "bis_ratio": float(r[1] * 100) if r[1] else 0,
-            "cet1_ratio": float(r[2] * 100) if r[2] else 0,
-            "tier1_ratio": float(r[3] * 100) if r[3] else 0,
-            "leverage_ratio": float(r[4] * 100) if r[4] else 0
+            "bis_ratio": float(r[1]) if r[1] else 0,  # DB에 이미 % 값으로 저장
+            "cet1_ratio": float(r[2]) if r[2] else 0,
+            "tier1_ratio": float(r[3]) if r[3] else 0,
+            "leverage_ratio": float(r[4]) if r[4] else 0
         }
         for r in reversed(results)
     ]

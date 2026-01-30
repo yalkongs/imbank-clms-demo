@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from .core.database import engine, Base
 from .api import dashboard, applications, capital, portfolio, limits, stress_test, models, model_inference, customers, capital_optimizer
+from .api import ews_advanced, dynamic_limits, customer_profitability, collateral_monitoring, portfolio_optimization, workout, esg, alm
 
 
 @asynccontextmanager
@@ -32,6 +33,14 @@ app = FastAPI(
     - **한도관리**: 한도 사용현황, 한도 체크
     - **스트레스 테스트**: 시나리오 분석, 충격 시뮬레이션
     - **모델관리/MRM**: 모델 성능 모니터링, Override 관리
+    - **EWS 고도화**: 선행지표, 공급망 분석, 복합지표
+    - **동적 한도관리**: 경기사이클 연동, 자동 한도 조정
+    - **고객 수익성**: RBC, CLV, 교차판매
+    - **담보 모니터링**: 실시간 담보가치, LTV 관리
+    - **포트폴리오 최적화**: 효율적 프론티어, 리밸런싱
+    - **Workout 관리**: 부실채권, 회수 시나리오
+    - **ESG 리스크**: ESG 평가, 녹색금융
+    - **ALM**: 금리갭 분석, 헷지 전략
     """,
     version="1.0.0",
     lifespan=lifespan
@@ -58,6 +67,16 @@ app.include_router(model_inference.router)
 app.include_router(customers.router)
 app.include_router(capital_optimizer.router)
 
+# 신규 기능 API 라우터
+app.include_router(ews_advanced.router)
+app.include_router(dynamic_limits.router)
+app.include_router(customer_profitability.router)
+app.include_router(collateral_monitoring.router)
+app.include_router(portfolio_optimization.router)
+app.include_router(workout.router)
+app.include_router(esg.router)
+app.include_router(alm.router)
+
 
 @app.get("/")
 def root():
@@ -76,7 +95,15 @@ def root():
             "stress-test": "/api/stress-test",
             "models": "/api/models",
             "model-inference": "/api/models/inference",
-            "customers": "/api/customers"
+            "customers": "/api/customers",
+            "ews-advanced": "/api/ews-advanced",
+            "dynamic-limits": "/api/dynamic-limits",
+            "customer-profitability": "/api/customer-profitability",
+            "collateral-monitoring": "/api/collateral-monitoring",
+            "portfolio-optimization": "/api/portfolio-optimization",
+            "workout": "/api/workout",
+            "esg": "/api/esg",
+            "alm": "/api/alm"
         }
     }
 

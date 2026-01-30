@@ -872,7 +872,7 @@ function VintageTab({ data }: { data: any }) {
             value={`${s.avg_mob12_default?.toFixed(2) || 0}%`}
             subtitle={`MOB12 부도율 (누적 손실: ${s.avg_cumulative_loss?.toFixed(2) || 0}%)`}
             icon={<Calendar size={24} />}
-            color={s.cohort_type === 'OVERALL' ? 'blue' : s.cohort_type === 'GRADE' ? 'purple' : 'green'}
+            color={s.cohort_type === 'OVERALL' ? 'blue' : s.cohort_type === 'GRADE' ? 'yellow' : 'green'}
           />
         ))}
         <StatCard

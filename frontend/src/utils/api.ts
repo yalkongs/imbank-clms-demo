@@ -150,4 +150,106 @@ export const capitalOptimizerApi = {
   getEfficiencyDashboard: () => api.get('/capital-optimizer/efficiency-dashboard'),
 };
 
+// EWS Advanced API (조기경보 고도화)
+export const ewsAdvancedApi = {
+  getFeatureDescription: (featureId: string) => api.get(`/ews-advanced/feature-description/${featureId}`),
+  getIndicators: () => api.get('/ews-advanced/indicators'),
+  getIndicatorValues: (customerId: string, months?: number) =>
+    api.get(`/ews-advanced/indicator-values/${customerId}`, { params: months ? { months } : undefined }),
+  getSupplyChain: (customerId: string) => api.get(`/ews-advanced/supply-chain/${customerId}`),
+  getExternalSignals: (signalType?: string) =>
+    api.get('/ews-advanced/external-signals', { params: signalType ? { signal_type: signalType } : undefined }),
+  getCompositeScores: (params?: { min_score?: number; limit?: number }) =>
+    api.get('/ews-advanced/composite-scores', { params }),
+  getDashboard: () => api.get('/ews-advanced/dashboard'),
+};
+
+// Dynamic Limits API (동적 한도관리)
+export const dynamicLimitsApi = {
+  getFeatureDescription: (featureId: string) => api.get(`/dynamic-limits/feature-description/${featureId}`),
+  getEconomicCycle: () => api.get('/dynamic-limits/economic-cycle'),
+  getRules: (ruleType?: string) =>
+    api.get('/dynamic-limits/rules', { params: ruleType ? { rule_type: ruleType } : undefined }),
+  getAdjustments: (params?: { industry_code?: string; months?: number }) =>
+    api.get('/dynamic-limits/adjustments', { params }),
+  getCurrentStatus: () => api.get('/dynamic-limits/current-status'),
+  simulate: (params: { gdp_growth_shock?: number; interest_rate_shock?: number }) =>
+    api.get('/dynamic-limits/simulate-shock', { params }),
+};
+
+// Customer Profitability API (고객 수익성 분석)
+export const customerProfitabilityApi = {
+  getFeatureDescription: (featureId: string) => api.get(`/customer-profitability/feature-description/${featureId}`),
+  getRankings: (params?: { sort_by?: string; limit?: number }) =>
+    api.get('/customer-profitability/rankings', { params }),
+  getCustomer: (customerId: string) => api.get(`/customer-profitability/customer/${customerId}`),
+  getCrossSellOpportunities: (params?: { status?: string; min_probability?: number }) =>
+    api.get('/customer-profitability/cross-sell-opportunities', { params }),
+  getChurnRisk: (minRisk?: number) =>
+    api.get('/customer-profitability/churn-risk', { params: minRisk ? { min_risk: minRisk } : undefined }),
+  getDashboard: () => api.get('/customer-profitability/dashboard'),
+};
+
+// Collateral Monitoring API (담보 모니터링)
+export const collateralMonitoringApi = {
+  getFeatureDescription: (featureId: string) => api.get(`/collateral-monitoring/feature-description/${featureId}`),
+  getRealEstateIndex: (region?: string) =>
+    api.get('/collateral-monitoring/real-estate-index', { params: region ? { region } : undefined }),
+  getValuationHistory: (collateralId: string, months?: number) =>
+    api.get(`/collateral-monitoring/valuation-history/${collateralId}`, { params: months ? { months } : undefined }),
+  getAlerts: (params?: { alert_type?: string; status?: string }) =>
+    api.get('/collateral-monitoring/alerts', { params }),
+  getLtvAnalysis: () => api.get('/collateral-monitoring/ltv-analysis'),
+  getDashboard: () => api.get('/collateral-monitoring/dashboard'),
+};
+
+// Portfolio Optimization API (포트폴리오 최적화)
+export const portfolioOptimizationApi = {
+  getFeatureDescription: (featureId: string) => api.get(`/portfolio-optimization/feature-description/${featureId}`),
+  getOptimizationRuns: () => api.get('/portfolio-optimization/optimization-runs'),
+  getOptimizationResult: (runId: string) => api.get(`/portfolio-optimization/optimization-result/${runId}`),
+  getLatestRecommendations: () => api.get('/portfolio-optimization/latest-recommendations'),
+  getCurrentVsOptimal: () => api.get('/portfolio-optimization/current-vs-optimal'),
+  getConstraints: () => api.get('/portfolio-optimization/constraints'),
+  getDashboard: () => api.get('/portfolio-optimization/dashboard'),
+};
+
+// Workout API (Workout 관리)
+export const workoutApi = {
+  getFeatureDescription: (featureId: string) => api.get(`/workout/feature-description/${featureId}`),
+  getCases: (params?: { status?: string; priority?: string }) =>
+    api.get('/workout/cases', { params }),
+  getCase: (caseId: string) => api.get(`/workout/case/${caseId}`),
+  getScenarios: (caseId: string) => api.get(`/workout/scenarios/${caseId}`),
+  getRestructuringHistory: (customerId?: string) =>
+    api.get('/workout/restructuring-history', { params: customerId ? { customer_id: customerId } : undefined }),
+  getDashboard: () => api.get('/workout/dashboard'),
+};
+
+// ESG API (ESG 리스크 관리)
+export const esgApi = {
+  getFeatureDescription: (featureId: string) => api.get(`/esg/feature-description/${featureId}`),
+  getAssessments: (params?: { min_score?: number; limit?: number }) =>
+    api.get('/esg/assessments', { params }),
+  getAssessment: (customerId: string) => api.get(`/esg/assessment/${customerId}`),
+  getGreenFinance: (productType?: string) =>
+    api.get('/esg/green-finance', { params: productType ? { product_type: productType } : undefined }),
+  getGradeDistribution: () => api.get('/esg/grade-distribution'),
+  getDashboard: () => api.get('/esg/dashboard'),
+};
+
+// ALM API (금리 리스크 관리)
+export const almApi = {
+  getFeatureDescription: (featureId: string) => api.get(`/alm/feature-description/${featureId}`),
+  getGapAnalysis: () => api.get('/alm/gap-analysis'),
+  getScenarios: () => api.get('/alm/scenarios'),
+  getScenarioResults: (scenarioId?: string) =>
+    api.get('/alm/scenario-results', { params: scenarioId ? { scenario_id: scenarioId } : undefined }),
+  getHedgePositions: (params?: { instrument_type?: string; status?: string }) =>
+    api.get('/alm/hedge-positions', { params }),
+  getHedgeRecommendations: (status?: string) =>
+    api.get('/alm/hedge-recommendations', { params: status ? { status } : undefined }),
+  getDashboard: () => api.get('/alm/dashboard'),
+};
+
 export default api;

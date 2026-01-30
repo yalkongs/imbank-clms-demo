@@ -10,7 +10,15 @@ import {
   Limits,
   StressTest,
   Models,
-  Customers
+  Customers,
+  EWSAdvanced,
+  DynamicLimits,
+  CustomerProfitability,
+  CollateralMonitoring,
+  PortfolioOptimization,
+  Workout,
+  ESG,
+  ALM
 } from './pages';
 
 function App() {
@@ -26,6 +34,15 @@ function App() {
         <Route path="stress-test" element={<StressTest />} />
         <Route path="models" element={<Models />} />
         <Route path="customers" element={<Customers />} />
+        {/* 신규 기능 라우트 */}
+        <Route path="ews-advanced" element={<EWSAdvanced />} />
+        <Route path="dynamic-limits" element={<DynamicLimits />} />
+        <Route path="customer-profitability" element={<CustomerProfitability />} />
+        <Route path="collateral-monitoring" element={<CollateralMonitoring />} />
+        <Route path="portfolio-optimization" element={<PortfolioOptimization />} />
+        <Route path="workout" element={<Workout />} />
+        <Route path="esg" element={<ESG />} />
+        <Route path="alm" element={<ALM />} />
       </Route>
     </Routes>
   );

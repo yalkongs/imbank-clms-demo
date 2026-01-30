@@ -12,7 +12,15 @@ import {
   Bell,
   Settings,
   Users,
-  TrendingUp
+  TrendingUp,
+  AlertTriangle,
+  Target,
+  UserCheck,
+  Home,
+  Layers,
+  Briefcase,
+  Leaf,
+  TrendingDown
 } from 'lucide-react';
 
 interface NavItem {
@@ -21,16 +29,54 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-const navItems: NavItem[] = [
-  { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-  { path: '/applications', label: '여신신청', icon: <FileText size={20} /> },
-  { path: '/capital', label: '자본관리', icon: <PiggyBank size={20} /> },
-  { path: '/capital-optimizer', label: '자본최적화', icon: <TrendingUp size={20} /> },
-  { path: '/portfolio', label: '포트폴리오', icon: <PieChart size={20} /> },
-  { path: '/limits', label: '한도관리', icon: <Gauge size={20} /> },
-  { path: '/customers', label: '고객관리', icon: <Users size={20} /> },
-  { path: '/stress-test', label: '스트레스테스트', icon: <Activity size={20} /> },
-  { path: '/models', label: '모델관리', icon: <Brain size={20} /> },
+interface NavGroup {
+  title: string;
+  items: NavItem[];
+}
+
+const navGroups: NavGroup[] = [
+  {
+    title: '핵심 업무',
+    items: [
+      { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+      { path: '/applications', label: '여신신청', icon: <FileText size={20} /> },
+      { path: '/customers', label: '고객관리', icon: <Users size={20} /> },
+    ]
+  },
+  {
+    title: '자본/포트폴리오',
+    items: [
+      { path: '/capital', label: '자본관리', icon: <PiggyBank size={20} /> },
+      { path: '/capital-optimizer', label: '자본최적화', icon: <TrendingUp size={20} /> },
+      { path: '/portfolio', label: '포트폴리오', icon: <PieChart size={20} /> },
+      { path: '/portfolio-optimization', label: '포트폴리오최적화', icon: <Layers size={20} /> },
+    ]
+  },
+  {
+    title: '리스크 관리',
+    items: [
+      { path: '/limits', label: '한도관리', icon: <Gauge size={20} /> },
+      { path: '/dynamic-limits', label: '동적한도', icon: <Target size={20} /> },
+      { path: '/ews-advanced', label: 'EWS고도화', icon: <AlertTriangle size={20} /> },
+      { path: '/stress-test', label: '스트레스테스트', icon: <Activity size={20} /> },
+      { path: '/alm', label: 'ALM', icon: <TrendingDown size={20} /> },
+    ]
+  },
+  {
+    title: '고객/담보',
+    items: [
+      { path: '/customer-profitability', label: '고객수익성', icon: <UserCheck size={20} /> },
+      { path: '/collateral-monitoring', label: '담보모니터링', icon: <Home size={20} /> },
+      { path: '/workout', label: 'Workout', icon: <Briefcase size={20} /> },
+    ]
+  },
+  {
+    title: 'ESG/모델',
+    items: [
+      { path: '/esg', label: 'ESG리스크', icon: <Leaf size={20} /> },
+      { path: '/models', label: '모델관리', icon: <Brain size={20} /> },
+    ]
+  },
 ];
 
 export default function Layout() {
@@ -49,25 +95,32 @@ export default function Layout() {
 
         {/* 네비게이션 */}
         <nav className="flex-1 py-4 overflow-y-auto">
-          <ul className="space-y-1 px-3">
-            {navItems.map((item) => (
-              <li key={item.path}>
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center px-4 py-2.5 rounded-lg text-sm font-medium transition-colors duration-200 ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                    }`
-                  }
-                >
-                  <span className="mr-3">{item.icon}</span>
-                  {item.label}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+          {navGroups.map((group) => (
+            <div key={group.title} className="mb-4">
+              <h3 className="px-6 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                {group.title}
+              </h3>
+              <ul className="space-y-0.5 px-3">
+                {group.items.map((item) => (
+                  <li key={item.path}>
+                    <NavLink
+                      to={item.path}
+                      className={({ isActive }) =>
+                        `flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                        }`
+                      }
+                    >
+                      <span className="mr-3">{item.icon}</span>
+                      {item.label}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </nav>
 
         {/* 하단 정보 */}

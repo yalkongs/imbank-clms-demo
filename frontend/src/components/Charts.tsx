@@ -26,6 +26,7 @@ export const COLORS = {
   success: '#10b981',
   warning: '#f59e0b',
   danger: '#ef4444',
+  critical: '#dc2626',
   gray: '#6b7280',
   palette: ['#1e40af', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
 };
@@ -45,6 +46,7 @@ interface TrendChartProps {
     name: string;
     color?: string;
     strokeDasharray?: string;
+    yAxisId?: string;
   }[];
   xAxisKey?: string;
   height?: number;

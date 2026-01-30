@@ -11,3 +11,4 @@ export {
   GaugeChart,
   COLORS
 } from './Charts';
+export { default as Modal, FeatureModal, HelpButton } from './Modal';

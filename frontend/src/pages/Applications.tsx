@@ -696,7 +696,7 @@ export default function Applications() {
                                       <td className="text-right py-2 font-mono">{formatPercent((f.rate || 0) * 100)}</td>
                                       <td className="text-center py-2">{f.maturity || '-'}</td>
                                       <td className="text-center py-2 px-2">
-                                        <Badge variant={f.status === 'ACTIVE' ? 'success' : 'secondary'}>
+                                        <Badge variant={f.status === 'ACTIVE' ? 'success' : 'gray'}>
                                           {f.status}
                                         </Badge>
                                       </td>

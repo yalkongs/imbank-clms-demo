@@ -3,7 +3,7 @@
 /**
  * 금액 포맷 (억원 단위)
  */
-export function formatAmount(value: number, unit: 'won' | 'million' | 'billion' = 'million'): string {
+export function formatAmount(value: number, unit: 'won' | 'million' | 'billion' | 'trillion' = 'million'): string {
   if (value === null || value === undefined) return '-';
 
   switch (unit) {
@@ -13,6 +13,8 @@ export function formatAmount(value: number, unit: 'won' | 'million' | 'billion' 
       return new Intl.NumberFormat('ko-KR').format(value / 1_000_000) + '백만원';
     case 'billion':
       return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value / 100_000_000) + '억원';
+    case 'trillion':
+      return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value / 1_000_000_000_000) + '조원';
     default:
       return new Intl.NumberFormat('ko-KR').format(value);
   }

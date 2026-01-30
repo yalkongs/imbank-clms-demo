@@ -122,8 +122,8 @@ def get_rwa_optimization_analysis(db: Session = Depends(get_db)):
                 "exposure": r[2],
                 "rwa": r[3],
                 "rwa_density": r[4],
-                "avg_pd": round(r[5] * 100, 3) if r[5] else 0,
-                "avg_lgd": round(r[6] * 100, 1) if r[6] else 0
+                "avg_pd": round(r[5], 3) if r[5] else 0,  # DB에 이미 % 값으로 저장
+                "avg_lgd": round(r[6], 1) if r[6] else 0  # DB에 이미 % 값으로 저장
             }
             for r in rating_density
         ],
@@ -653,16 +653,19 @@ def get_efficiency_dashboard(db: Session = Depends(get_db)):
         FROM limit_exposure WHERE status IN ('WARNING', 'ALERT')
     """)).fetchone()
 
+    # 단위 변환: DB는 십억원, 프론트엔드는 원 단위 기대
+    UNIT = 1_000_000_000  # 십억원 -> 원
+
     return {
         "capital_metrics": {
-            "total_capital": capital[0] if capital else 0,
-            "total_rwa": capital[1] if capital else 0,
-            "bis_ratio": round(capital[2] * 100, 2) if capital and capital[2] else 0,
-            "cet1_ratio": round(capital[3] * 100, 2) if capital and capital[3] else 0,
-            "capital_buffer": round((capital[2] - 0.105) * capital[1], 0) if capital else 0  # 규제 대비 여유
+            "total_capital": capital[0] * UNIT if capital else 0,
+            "total_rwa": capital[1] * UNIT if capital else 0,
+            "bis_ratio": round(capital[2], 2) if capital and capital[2] else 0,  # DB에 이미 % 값으로 저장
+            "cet1_ratio": round(capital[3], 2) if capital and capital[3] else 0,
+            "capital_buffer": round((capital[2] / 100 - 0.105) * capital[1] * UNIT, 0) if capital else 0  # 규제 대비 여유
         },
         "efficiency_metrics": {
-            "portfolio_raroc": round(portfolio_raroc[0] * 100, 2) if portfolio_raroc and portfolio_raroc[0] else 0,
+            "portfolio_raroc": round(portfolio_raroc[0], 2) if portfolio_raroc and portfolio_raroc[0] else 0,  # DB에 이미 % 값으로 저장
             "rwa_density": round(rwa_density[0] * 100, 1) if rwa_density and rwa_density[0] else 0,
             "budget_utilization": round(budget_util[0] * 100, 1) if budget_util and budget_util[0] else 0,
             "expected_loss_rate": round(portfolio_raroc[3] / portfolio_raroc[1] * 100, 3) if portfolio_raroc and portfolio_raroc[1] else 0
