@@ -1252,7 +1252,8 @@ def generate_model_performance(conn):
     cursor.execute("DELETE FROM model_performance_log")
 
     performances = []
-    models = ['MDL_CORP_RATING', 'MDL_SME_PD', 'MDL_SOHO_SCORE', 'MDL_CORP_LGD', 'MDL_CORP_EWS']
+    # 실제 model_registry 테이블의 모델 ID와 일치해야 함
+    models = ['MDL_CORP_RATING', 'MDL_RETAIL_RATING', 'MDL_LGD', 'MDL_EAD', 'MDL_PRICING']
 
     for model in models:
         # 2022년 1월부터 2024년 1월까지

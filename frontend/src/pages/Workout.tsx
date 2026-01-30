@@ -7,7 +7,8 @@ import {
   CheckCircle,
   XCircle,
   TrendingUp,
-  FileText
+  FileText,
+  X
 } from 'lucide-react';
 import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton } from '../components';
 import { workoutApi } from '../utils/api';
@@ -20,7 +21,8 @@ export default function Workout() {
   const [restructuringHistory, setRestructuringHistory] = useState<any[]>([]);
   const [selectedCase, setSelectedCase] = useState<any>(null);
   const [scenarios, setScenarios] = useState<any[]>([]);
-  const [modalOpen, setModalOpen] = useState(false);
+  const [caseModalOpen, setCaseModalOpen] = useState(false);
+  const [featureModalOpen, setFeatureModalOpen] = useState(false);
   const [featureInfo, setFeatureInfo] = useState<any>(null);
 
   useEffect(() => {
@@ -52,16 +54,23 @@ export default function Workout() {
       ]);
       setSelectedCase(caseRes.data);
       setScenarios(scenarioRes.data.scenarios || []);
+      setCaseModalOpen(true);
     } catch (error) {
       console.error('Case detail load error:', error);
     }
+  };
+
+  const closeCaseModal = () => {
+    setCaseModalOpen(false);
+    setSelectedCase(null);
+    setScenarios([]);
   };
 
   const openFeatureModal = async (featureId: string) => {
     try {
       const res = await workoutApi.getFeatureDescription(featureId);
       setFeatureInfo(res.data);
-      setModalOpen(true);
+      setFeatureModalOpen(true);
     } catch (error) {
       console.error('Feature description load error:', error);
     }
@@ -188,9 +197,7 @@ export default function Workout() {
               {cases.map((c: any) => (
                 <tr
                   key={c.case_id}
-                  className={`border-b hover:bg-gray-50 cursor-pointer ${
-                    selectedCase?.case_id === c.case_id ? 'bg-blue-50' : ''
-                  }`}
+                  className="border-b hover:bg-blue-50 cursor-pointer transition-colors"
                   onClick={() => loadCaseDetail(c.case_id)}
                 >
                   <td className="px-3 py-2 font-medium">{c.customer_name}</td>
@@ -236,110 +243,179 @@ export default function Workout() {
         </div>
       </Card>
 
-      {/* Case Detail and Scenarios */}
-      {selectedCase && (
-        <div className="grid grid-cols-2 gap-6">
-          {/* Case Detail */}
-          <Card
-            title={`케이스 상세: ${selectedCase.case?.customer_name || selectedCase.customer_name}`}
-            headerAction={
+      {/* Case Detail Modal */}
+      {caseModalOpen && selectedCase && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-[90%] max-w-5xl max-h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-red-600 to-red-700">
+              <div className="text-white">
+                <h2 className="text-xl font-bold flex items-center">
+                  <Briefcase className="mr-2" size={24} />
+                  {selectedCase.case?.customer_name || selectedCase.customer_name}
+                </h2>
+                <p className="text-red-100 text-sm">Workout 케이스 상세 및 회수 시나리오</p>
+              </div>
               <button
-                onClick={() => setSelectedCase(null)}
-                className="text-sm text-gray-500 hover:text-gray-700"
+                onClick={closeCaseModal}
+                className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="overflow-y-auto max-h-[calc(90vh-140px)] p-6">
+              <div className="grid grid-cols-2 gap-6">
+                {/* Left: Case Detail */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                    <FileText className="mr-2 text-gray-600" size={20} />
+                    케이스 상세
+                  </h3>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500">케이스 개시일</p>
+                      <p className="text-sm font-medium">{selectedCase.case?.case_open_date || '-'}</p>
+                    </div>
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500">케이스 상태</p>
+                      <p className="text-sm font-medium">
+                        <span className={`px-2 py-0.5 rounded text-xs ${
+                          selectedCase.case?.case_status === 'IN_PROGRESS' ? 'bg-yellow-100 text-yellow-700' :
+                          selectedCase.case?.case_status === 'RECOVERED' ? 'bg-green-100 text-green-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {selectedCase.case?.case_status || '-'}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-red-700 flex items-center">
+                        <AlertTriangle className="mr-1" size={16} />
+                        총 익스포저
+                      </span>
+                      <span className="text-2xl font-bold text-red-600">{formatAmount(selectedCase.case?.total_exposure, 'billion')}</span>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">충당금 적립</span>
+                        <span className="font-medium">{formatAmount(selectedCase.case?.provision_amount, 'billion')}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">담보 가치</span>
+                        <span className="font-medium">{formatAmount(selectedCase.case?.secured_amount, 'billion')}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-gray-600">무담보 익스포저</span>
+                        <span className="font-medium text-red-600">
+                          {formatAmount((selectedCase.case?.total_exposure || 0) - (selectedCase.case?.secured_amount || 0), 'billion')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <p className="text-sm text-blue-700 mb-2">현재 전략</p>
+                    <p className="text-xl font-bold text-blue-800">{selectedCase.case?.strategy || '-'}</p>
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-sm text-gray-600">예상 회수율</span>
+                      <span className={`text-lg font-semibold ${
+                        (selectedCase.case?.expected_recovery_rate || 0) >= 0.7 ? 'text-green-600' :
+                        (selectedCase.case?.expected_recovery_rate || 0) >= 0.5 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {formatPercent((selectedCase.case?.expected_recovery_rate || 0) * 100)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {selectedCase.case?.assigned_workout_officer && (
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500 mb-1">담당자</p>
+                      <p className="text-sm font-medium text-gray-700">{selectedCase.case.assigned_workout_officer}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right: Recovery Scenarios */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                    <TrendingUp className="mr-2 text-green-600" size={20} />
+                    회수 시나리오 분석
+                  </h3>
+
+                  {scenarios.length > 0 ? (
+                    <div className="space-y-3">
+                      {scenarios.map((scenario: any) => (
+                        <div
+                          key={scenario.scenario_id}
+                          className={`p-4 rounded-lg border-2 transition-all ${
+                            scenario.is_recommended
+                              ? 'border-green-500 bg-green-50 shadow-md'
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold text-gray-900">{scenario.scenario_name}</span>
+                            {scenario.is_recommended && (
+                              <span className="px-2 py-1 bg-green-500 text-white rounded text-xs font-bold flex items-center">
+                                <CheckCircle size={12} className="mr-1" />
+                                추천
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 mb-3">{scenario.scenario_type}</p>
+
+                          <div className="grid grid-cols-3 gap-3 text-sm">
+                            <div className="p-2 bg-white rounded border">
+                              <p className="text-xs text-gray-500">예상회수액</p>
+                              <p className="font-bold text-green-600">{formatAmount(scenario.recovery_amount, 'billion')}</p>
+                            </div>
+                            <div className="p-2 bg-white rounded border">
+                              <p className="text-xs text-gray-500">기대가치</p>
+                              <p className="font-bold">{formatAmount(scenario.expected_value, 'billion')}</p>
+                            </div>
+                            <div className="p-2 bg-white rounded border">
+                              <p className="text-xs text-gray-500">NPV</p>
+                              <p className="font-bold text-blue-600">{formatAmount(scenario.npv, 'billion')}</p>
+                            </div>
+                          </div>
+
+                          <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between text-xs text-gray-500">
+                            <span className="flex items-center">
+                              <Clock size={12} className="mr-1" />
+                              {scenario.recovery_timeline_months}개월
+                            </span>
+                            <span>비용: {formatAmount(scenario.total_cost, 'million')}</span>
+                            <span>성공확률: {formatPercent((scenario.probability || 0) * 100)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400">
+                      <TrendingUp size={48} className="mx-auto mb-3 text-gray-300" />
+                      <p>회수 시나리오 데이터가 없습니다</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+              <button
+                onClick={closeCaseModal}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
                 닫기
               </button>
-            }
-          >
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500">케이스 개시일</p>
-                  <p className="text-sm font-medium">{selectedCase.case?.case_open_date || '-'}</p>
-                </div>
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500">케이스 상태</p>
-                  <p className="text-sm font-medium">{selectedCase.case?.case_status || '-'}</p>
-                </div>
-              </div>
-
-              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-red-700">총 익스포저</span>
-                  <span className="text-xl font-bold text-red-600">{formatAmount(selectedCase.case?.total_exposure, 'billion')}</span>
-                </div>
-                <div className="mt-2 flex items-center justify-between text-sm">
-                  <span className="text-gray-600">충당금 적립</span>
-                  <span>{formatAmount(selectedCase.case?.provision_amount, 'billion')}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">담보 가치</span>
-                  <span>{formatAmount(selectedCase.case?.secured_amount, 'billion')}</span>
-                </div>
-              </div>
-
-              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-sm text-blue-700 mb-2">현재 전략</p>
-                <p className="text-lg font-semibold text-blue-800">{selectedCase.case?.strategy || '-'}</p>
-                <p className="text-sm text-gray-600 mt-2">예상 회수율: {formatPercent((selectedCase.case?.expected_recovery?.rate || 0) * 100)}</p>
-              </div>
-
-              {selectedCase.case?.assigned_officer && (
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500 mb-1">담당자</p>
-                  <p className="text-sm text-gray-700">{selectedCase.case.assigned_officer}</p>
-                </div>
-              )}
             </div>
-          </Card>
-
-          {/* Recovery Scenarios */}
-          <Card
-            title="회수 시나리오 분석"
-            headerAction={<HelpButton onClick={() => openFeatureModal('recovery_scenario')} size="sm" />}
-          >
-            <div className="space-y-4">
-              {scenarios.map((scenario: any) => (
-                <div
-                  key={scenario.scenario_id}
-                  className={`p-4 rounded-lg border ${
-                    scenario.is_recommended ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-gray-900">{scenario.scenario_name}</span>
-                    {scenario.is_recommended && (
-                      <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
-                        추천
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-600 mb-3">{scenario.scenario_type}</p>
-
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div>
-                      <p className="text-xs text-gray-500">예상회수액</p>
-                      <p className="font-semibold text-green-600">{formatAmount(scenario.recovery_amount, 'billion')}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">기대가치</p>
-                      <p className="font-semibold">{formatAmount(scenario.expected_value, 'billion')}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">NPV</p>
-                      <p className="font-semibold text-blue-600">{formatAmount(scenario.npv, 'billion')}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-                    <span>예상기간: {scenario.recovery_timeline_months}개월</span>
-                    <span>비용: {formatAmount(scenario.total_cost, 'million')}</span>
-                    <span>확률: {formatPercent((scenario.probability || 0) * 100)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
+          </div>
         </div>
       )}
 
@@ -395,8 +471,8 @@ export default function Workout() {
 
       {/* Feature Modal */}
       <FeatureModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        isOpen={featureModalOpen}
+        onClose={() => setFeatureModalOpen(false)}
         feature={featureInfo}
       />
     </div>
