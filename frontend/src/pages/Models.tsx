@@ -1042,12 +1042,12 @@ function ModelSpecsModal({ specs, onClose }: { specs: any; onClose: () => void }
             </div>
           </section>
 
-          {/* 이론적 배경 */}
+          {/* Description (이론적 배경) */}
           {s.theoretical_background && (
             <section className="mb-8">
               <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
                 <BookOpen className="mr-2 text-purple-600" size={20} />
-                이론적 배경
+                Description
               </h3>
               <div className="bg-gray-50 rounded-lg p-4 prose prose-sm max-w-none">
                 <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
@@ -1057,12 +1057,12 @@ function ModelSpecsModal({ specs, onClose }: { specs: any; onClose: () => void }
             </section>
           )}
 
-          {/* 수학 공식 */}
+          {/* Formula (수학 공식) */}
           {s.formulas && Object.keys(s.formulas).length > 0 && (
             <section className="mb-8">
               <h3 className="text-lg font-bold text-gray-900 mb-3 flex items-center">
                 <span className="mr-2 text-green-600 text-xl">∑</span>
-                수학 공식
+                Formula
               </h3>
               <div className="space-y-4">
                 {Object.values(s.formulas).map((f: any, index: number) => (
