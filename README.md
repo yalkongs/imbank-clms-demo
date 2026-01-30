@@ -1,8 +1,8 @@
-# iM뱅크 CLMS 데모 시스템
+# iM뱅크 기업여신관리시스템 PoC
 
-**Corporate Loan Management System Demo**
+**Corporate Loan Management System **
 
-기업여신심사시스템의 핵심 기능을 시연하는 데모 애플리케이션입니다.
+기업여신심사시스템의 핵심 기능을 시연하는 PoC 애플리케이션입니다.
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
@@ -355,14 +355,6 @@ python generate_data.py
 이 프로젝트는 데모 및 교육 목적으로 제작되었습니다.
 
 MIT License
-
----
-
-## 문의
-
-- **프로젝트**: iM뱅크 CLMS 데모 시스템
-- **버전**: 1.0.0
-- **최종 업데이트**: 2024-01-30
 
 ---
 
