@@ -46,7 +46,7 @@ export default function Capital() {
     try {
       const [posRes, trendRes, budgetRes, effRes] = await Promise.all([
         capitalApi.getPosition(),
-        capitalApi.getTrend(12),
+        capitalApi.getTrend(24),
         capitalApi.getBudget(),
         capitalApi.getEfficiency()
       ]);

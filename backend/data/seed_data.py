@@ -518,8 +518,8 @@ def seed_capital_data(conn):
          0.0700)                                        # 레버리지비율 7.0%
     ]
 
-    # 월별 자본 추이 (12개월)
-    for i in range(1, 13):
+    # 월별 자본 추이 (과거 26개월, 2023-12부터)
+    for i in range(1, 27):
         date = datetime.now() - timedelta(days=30*i)
         variation = random.uniform(0.97, 1.03)
         cet1_v = CET1 * variation

@@ -54,7 +54,7 @@ def get_capital_position(db: Session = Depends(get_db)):
 
 
 @router.get("/trend")
-def get_capital_trend(months: int = 12, db: Session = Depends(get_db)):
+def get_capital_trend(months: int = 24, db: Session = Depends(get_db)):
     """자본비율 추이"""
     results = db.execute(text(f"""
         SELECT base_date, bis_ratio, cet1_ratio, tier1_ratio, leverage_ratio,
@@ -66,7 +66,7 @@ def get_capital_trend(months: int = 12, db: Session = Depends(get_db)):
 
     return [
         {
-            "period": r[0],
+            "period": r[0][:7] if r[0] else r[0],  # YYYY-MM 포맷
             "bis_ratio": round(float(r[1]) * 100, 2) if r[1] else 0,
             "cet1_ratio": round(float(r[2]) * 100, 2) if r[2] else 0,
             "tier1_ratio": round(float(r[3]) * 100, 2) if r[3] else 0,
