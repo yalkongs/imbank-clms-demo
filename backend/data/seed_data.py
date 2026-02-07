@@ -129,7 +129,12 @@ def seed_customers(conn, count=100):
     cursor = conn.cursor()
     customers = []
 
-    size_distribution = [('LARGE', 10), ('MEDIUM', 25), ('SMALL', 50), ('SOHO', 15)]
+    size_distribution = [
+        ('LARGE', int(count * 0.10)),
+        ('MEDIUM', int(count * 0.25)),
+        ('SMALL', int(count * 0.50)),
+        ('SOHO', count - int(count * 0.10) - int(count * 0.25) - int(count * 0.50)),
+    ]
 
     customer_id = 1
     for size, cnt in size_distribution:
@@ -1045,7 +1050,7 @@ def main():
         seed_master_data(conn)
 
         # 고객 및 그룹
-        customers = seed_customers(conn, 100)
+        customers = seed_customers(conn, 400)
         seed_borrower_groups(conn, customers)
 
         # 여신 데이터
