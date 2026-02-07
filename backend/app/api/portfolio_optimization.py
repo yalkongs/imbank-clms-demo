@@ -224,7 +224,7 @@ async def get_optimization_result(run_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/latest-recommendations")
-async def get_latest_recommendations(db: Session = Depends(get_db)):
+async def get_latest_recommendations(region: str = Query(None), db: Session = Depends(get_db)):
     """최신 최적화 추천"""
     # 최신 실행
     latest_run = db.execute(text("""
@@ -288,7 +288,7 @@ async def get_latest_recommendations(db: Session = Depends(get_db)):
 
 
 @router.get("/current-vs-optimal")
-async def get_current_vs_optimal(db: Session = Depends(get_db)):
+async def get_current_vs_optimal(region: str = Query(None), db: Session = Depends(get_db)):
     """현재 vs 최적 포트폴리오 비교"""
     # 최신 최적화 결과
     latest = db.execute(text("""

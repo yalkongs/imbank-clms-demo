@@ -71,14 +71,14 @@ export const capitalApi = {
   getTrend: (months?: number) => api.get('/capital/trend', { params: { months } }),
   getBudget: () => api.get('/capital/budget'),
   simulate: (data: any) => api.get('/capital/simulate', { params: { new_exposure: data.amount, pd: data.pd, lgd: data.lgd } }),
-  getEfficiency: () => api.get('/capital/efficiency'),
+  getEfficiency: (region?: string) => api.get('/capital/efficiency', { params: region ? { region } : undefined }),
 };
 
 // Portfolio API
 export const portfolioApi = {
-  getStrategyMatrix: () => api.get('/portfolio/strategy-matrix'),
-  getConcentration: () => api.get('/portfolio/concentration'),
-  getIndustryDetail: (code: string) => api.get(`/portfolio/industry/${code}`),
+  getStrategyMatrix: (region?: string) => api.get('/portfolio/strategy-matrix', { params: region ? { region } : undefined }),
+  getConcentration: (region?: string) => api.get('/portfolio/concentration', { params: region ? { region } : undefined }),
+  getIndustryDetail: (code: string, region?: string) => api.get(`/portfolio/industry/${code}`, { params: region ? { region } : undefined }),
 };
 
 // Limits API
@@ -136,18 +136,18 @@ export const customersApi = {
 // Capital Optimizer API (자본활용성 최적화)
 export const capitalOptimizerApi = {
   // RWA 최적화 분석
-  getRwaOptimization: () => api.get('/capital-optimizer/rwa-optimization'),
+  getRwaOptimization: (region?: string) => api.get('/capital-optimizer/rwa-optimization', { params: region ? { region } : undefined }),
   // 자본배분 최적화
-  getAllocationOptimization: () => api.get('/capital-optimizer/allocation-optimizer'),
+  getAllocationOptimization: (region?: string) => api.get('/capital-optimizer/allocation-optimizer', { params: region ? { region } : undefined }),
   // 동적 가격제안
   getPricingSuggestion: (applicationId: string, targetRaroc?: number) =>
     api.get(`/capital-optimizer/pricing-suggestion/${applicationId}`, {
       params: targetRaroc ? { target_raroc: targetRaroc } : undefined
     }),
   // 포트폴리오 리밸런싱 제안
-  getRebalancingSuggestions: () => api.get('/capital-optimizer/rebalancing-suggestions'),
+  getRebalancingSuggestions: (region?: string) => api.get('/capital-optimizer/rebalancing-suggestions', { params: region ? { region } : undefined }),
   // 효율성 대시보드
-  getEfficiencyDashboard: () => api.get('/capital-optimizer/efficiency-dashboard'),
+  getEfficiencyDashboard: (region?: string) => api.get('/capital-optimizer/efficiency-dashboard', { params: region ? { region } : undefined }),
 };
 
 // EWS Advanced API (조기경보 고도화)
@@ -208,8 +208,8 @@ export const portfolioOptimizationApi = {
   getFeatureDescription: (featureId: string) => api.get(`/portfolio-optimization/feature-description/${featureId}`),
   getOptimizationRuns: () => api.get('/portfolio-optimization/optimization-runs'),
   getOptimizationResult: (runId: string) => api.get(`/portfolio-optimization/optimization-result/${runId}`),
-  getLatestRecommendations: () => api.get('/portfolio-optimization/latest-recommendations'),
-  getCurrentVsOptimal: () => api.get('/portfolio-optimization/current-vs-optimal'),
+  getLatestRecommendations: (region?: string) => api.get('/portfolio-optimization/latest-recommendations', { params: region ? { region } : undefined }),
+  getCurrentVsOptimal: (region?: string) => api.get('/portfolio-optimization/current-vs-optimal', { params: region ? { region } : undefined }),
   getConstraints: () => api.get('/portfolio-optimization/constraints'),
   getDashboard: () => api.get('/portfolio-optimization/dashboard'),
 };

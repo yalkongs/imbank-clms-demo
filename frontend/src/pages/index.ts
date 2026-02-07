@@ -18,3 +18,4 @@ export { default as PortfolioOptimization } from './PortfolioOptimization';
 export { default as Workout } from './Workout';
 export { default as ESG } from './ESG';
 export { default as ALM } from './ALM';
+export { default as CustomerBrowser } from './CustomerBrowser';

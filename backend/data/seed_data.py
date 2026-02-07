@@ -57,6 +57,31 @@ PRODUCTS = [
 COMPANY_PREFIXES = ['삼성', '현대', '코리아', '한국', '동양', '대한', '서울', '글로벌', '유니온', '테크', '스마트', '퓨처', '넥스트', '하이', '메가']
 COMPANY_SUFFIXES = ['전자', '테크', '시스템', '솔루션', '개발', '산업', '건설', '무역', '유통', '물류', '바이오', '파트너스', '홀딩스', '인베스트', 'E&C']
 
+# 지역별 주소 및 region 코드
+REGION_ADDRESSES = {
+    'CAPITAL': [
+        '서울시 강남구', '서울시 서초구', '서울시 영등포구', '서울시 중구', '서울시 종로구',
+        '경기도 성남시', '경기도 수원시', '경기도 용인시', '인천시 남동구', '인천시 연수구'
+    ],
+    'DAEGU_GB': [
+        '대구시 수성구', '대구시 달서구', '대구시 북구', '경북 포항시', '경북 구미시',
+        '경북 경주시', '경북 김천시'
+    ],
+    'BUSAN_GN': [
+        '부산시 해운대구', '부산시 남구', '부산시 사하구', '경남 창원시', '경남 김해시',
+        '울산시 남구', '울산시 울주군'
+    ],
+}
+
+def get_region_and_address():
+    """지역 코드와 주소를 랜덤으로 반환"""
+    region = random.choices(
+        ['CAPITAL', 'DAEGU_GB', 'BUSAN_GN'],
+        weights=[50, 25, 25]
+    )[0]
+    address = random.choice(REGION_ADDRESSES[region])
+    return region, address
+
 def generate_uuid():
     return str(uuid.uuid4())[:8].upper()
 
@@ -130,6 +155,7 @@ def seed_customers(conn, count=100):
 
             cust_id = f"CUST{customer_id:05d}"
             establish_year = random.randint(1980, 2020)
+            region, address = get_region_and_address()
 
             customers.append((
                 cust_id,
@@ -145,7 +171,8 @@ def seed_customers(conn, count=100):
                 revenue * 100000000,
                 employees,
                 'LISTED' if random.random() < 0.2 else 'UNLISTED',
-                f"서울시 {random.choice(['강남구', '서초구', '영등포구', '중구', '종로구'])}",
+                address,
+                region,
                 f"RM{random.randint(1,20):03d}",
                 f"BR{random.randint(1,50):03d}",
             ))
@@ -155,8 +182,8 @@ def seed_customers(conn, count=100):
         INSERT OR REPLACE INTO customer
         (customer_id, customer_name, customer_name_eng, biz_reg_no, corp_reg_no,
          establish_date, industry_code, industry_name, size_category, asset_size,
-         revenue_size, employee_count, listing_status, address, rm_id, branch_code)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         revenue_size, employee_count, listing_status, address, region, rm_id, branch_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, customers)
 
     conn.commit()
@@ -338,16 +365,17 @@ def seed_facilities_and_applications(conn, customers):
 
         pd = GRADE_PD_MAP[grade]
         lgd = random.uniform(0.30, 0.45)
+        region, address = get_region_and_address()
 
         # 고객 추가
         cursor.execute("""
             INSERT OR REPLACE INTO customer
             (customer_id, customer_name, biz_reg_no, industry_code, industry_name,
-             size_category, asset_size, revenue_size, employee_count, rm_id, branch_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             size_category, asset_size, revenue_size, employee_count, address, region, rm_id, branch_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (cust_id, f"(주){name}", generate_biz_reg_no(), ind_code,
               industry_name_map.get(ind_code, name),
-              size, amount * 3, amount * 2, random.randint(50, 500), 'RM001', 'BR001'))
+              size, amount * 3, amount * 2, random.randint(50, 500), address, region, 'RM001', 'BR001'))
 
         applications.append((
             app_id, datetime.now().strftime('%Y-%m-%d'), 'NEW', cust_id, None,
@@ -411,23 +439,44 @@ def seed_capital_data(conn):
     """자본 현황 데이터 생성"""
     cursor = conn.cursor()
 
-    # 현재 자본 포지션
+    # iM뱅크 2024년말 공시 기준 자본 포지션
+    # BIS 16.63%, Tier1 14.62%, CET1 14.32% (금융감독원 공시)
+    # 총자산 ~82조원 기준 RWA 48조원 역산
+    CET1 = 6_874_000_000_000    # 6조 8,740억원 (CET1비율 14.32% × RWA 48조)
+    AT1  =   144_000_000_000    # 1,440억원
+    T2   =   964_000_000_000    # 9,640억원
+    TOTAL_CAP = CET1 + AT1 + T2 # 7조 9,820억원
+    CR_RWA = 43_200_000_000_000 # 43.2조원 (신용위험, 총RWA의 90%)
+    MR_RWA =  1_200_000_000_000 # 1.2조원 (시장위험)
+    OR_RWA =  3_600_000_000_000 # 3.6조원 (운영위험)
+    TOTAL_RWA = CR_RWA + MR_RWA + OR_RWA  # 48조원
+
     capital_data = [
         ('CAP001', datetime.now().strftime('%Y-%m-%d'),
-         1850000000000, 200000000000, 450000000000, 2500000000000,  # 자본
-         14500000000000, 800000000000, 1200000000000, 16500000000000,  # RWA
-         0.1515, 0.1121, 0.1242, 0.0620)  # 비율
+         CET1, AT1, T2, TOTAL_CAP,
+         CR_RWA, MR_RWA, OR_RWA, TOTAL_RWA,
+         round(TOTAL_CAP / TOTAL_RWA, 4),              # BIS비율 16.63%
+         round(CET1 / TOTAL_RWA, 4),                   # CET1비율 14.32%
+         round((CET1 + AT1) / TOTAL_RWA, 4),           # Tier1비율 14.62%
+         0.0700)                                        # 레버리지비율 7.0%
     ]
 
     # 월별 자본 추이 (12개월)
     for i in range(1, 13):
         date = datetime.now() - timedelta(days=30*i)
         variation = random.uniform(0.97, 1.03)
+        cet1_v = CET1 * variation
+        total_cap_v = cet1_v + AT1 + T2
+        cr_rwa_v = CR_RWA * variation
+        total_rwa_v = cr_rwa_v + MR_RWA + OR_RWA
         capital_data.append((
             f"CAP{i+1:03d}", date.strftime('%Y-%m-%d'),
-            1850000000000 * variation, 200000000000, 450000000000, 2500000000000 * variation,
-            14500000000000 * variation, 800000000000, 1200000000000, 16500000000000 * variation,
-            0.1515 * variation, 0.1121 * variation, 0.1242 * variation, 0.0620 * variation
+            cet1_v, AT1, T2, total_cap_v,
+            cr_rwa_v, MR_RWA, OR_RWA, total_rwa_v,
+            round(total_cap_v / total_rwa_v, 4),
+            round(cet1_v / total_rwa_v, 4),
+            round((cet1_v + AT1) / total_rwa_v, 4),
+            0.0700 * variation
         ))
 
     cursor.executemany("""
@@ -447,9 +496,9 @@ def seed_capital_budget(conn):
 
     budgets = []
 
-    # 산업별 예산
+    # 산업별 예산 (총 RWA 48조 기준, 산업당 2조~6조 배분)
     for ind_code, ind_name, _, _, _, _ in INDUSTRIES:
-        budget_amt = random.uniform(500, 2000) * 100000000  # 500억~2000억
+        budget_amt = random.uniform(20000, 60000) * 100000000  # 2조~6조
         used_pct = random.uniform(0.5, 0.95)
 
         budgets.append((
@@ -459,9 +508,9 @@ def seed_capital_budget(conn):
             0.12, 0.015, 'ACTIVE'
         ))
 
-    # 등급별 예산
+    # 등급별 예산 (등급군당 5조~15조 배분)
     for grade in ['AAA_AA', 'A', 'BBB', 'BB', 'B_Below']:
-        budget_amt = random.uniform(1000, 5000) * 100000000
+        budget_amt = random.uniform(50000, 150000) * 100000000  # 5조~15조
         used_pct = random.uniform(0.5, 0.9)
 
         budgets.append((

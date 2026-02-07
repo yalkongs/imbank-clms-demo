@@ -83,6 +83,13 @@ function formatAmount(value: number, unit: 'won' | 'billion' | 'million' = 'bill
   return value.toLocaleString();
 }
 
+const REGIONS = [
+  { value: '', label: '전체 지역' },
+  { value: 'CAPITAL', label: '수도권' },
+  { value: 'DAEGU_GB', label: '대구경북' },
+  { value: 'BUSAN_GN', label: '부산경남' },
+];
+
 export default function CapitalOptimizer() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'rwa' | 'allocation' | 'rebalancing'>('dashboard');
   const [loading, setLoading] = useState(true);
@@ -90,6 +97,7 @@ export default function CapitalOptimizer() {
   const [rwaData, setRwaData] = useState<any>(null);
   const [allocationData, setAllocationData] = useState<any>(null);
   const [rebalancingData, setRebalancingData] = useState<any>(null);
+  const [region, setRegion] = useState('');
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     collateral: true,
     upgrade: true,
@@ -101,14 +109,19 @@ export default function CapitalOptimizer() {
     loadData();
   }, []);
 
+  useEffect(() => {
+    loadData();
+  }, [region]);
+
   const loadData = async () => {
     setLoading(true);
     try {
+      const r = region || undefined;
       const [dashboard, rwa, allocation, rebalancing] = await Promise.all([
-        capitalOptimizerApi.getEfficiencyDashboard(),
-        capitalOptimizerApi.getRwaOptimization(),
-        capitalOptimizerApi.getAllocationOptimization(),
-        capitalOptimizerApi.getRebalancingSuggestions()
+        capitalOptimizerApi.getEfficiencyDashboard(r),
+        capitalOptimizerApi.getRwaOptimization(r),
+        capitalOptimizerApi.getAllocationOptimization(r),
+        capitalOptimizerApi.getRebalancingSuggestions(r)
       ]);
       setDashboardData(dashboard.data);
       setRwaData(rwa.data);
@@ -148,13 +161,24 @@ export default function CapitalOptimizer() {
           <h1 className="text-2xl font-bold text-gray-900">자본활용성 최적화</h1>
           <p className="text-sm text-gray-500 mt-1">Capital Efficiency Optimizer - RWA 최적화, 자본배분 효율화, 포트폴리오 리밸런싱</p>
         </div>
-        <button
-          onClick={loadData}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <RefreshCw size={16} />
-          새로고침
-        </button>
+        <div className="flex items-center gap-3">
+          <select
+            value={region}
+            onChange={(e) => setRegion(e.target.value)}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {REGIONS.map(r => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={loadData}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <RefreshCw size={16} />
+            새로고침
+          </button>
+        </div>
       </div>
 
       {/* 탭 네비게이션 */}

@@ -11,6 +11,13 @@ import { Card, StatCard, GaugeCard, TrendChart, DonutChart, GroupedBarChart, COL
 import { capitalApi } from '../utils/api';
 import { formatAmount, formatPercent, formatNumber, formatInputAmount, parseFormattedNumber } from '../utils/format';
 
+const REGIONS = [
+  { value: '', label: '전체 지역' },
+  { value: 'CAPITAL', label: '수도권' },
+  { value: 'DAEGU_GB', label: '대구경북' },
+  { value: 'BUSAN_GN', label: '부산경남' },
+];
+
 export default function Capital() {
   const [loading, setLoading] = useState(true);
   const [position, setPosition] = useState<any>(null);
@@ -18,6 +25,7 @@ export default function Capital() {
   const [budget, setBudget] = useState<any>(null);
   const [efficiency, setEfficiency] = useState<any>(null);
   const [simulation, setSimulation] = useState<any>(null);
+  const [region, setRegion] = useState('');
 
   // 시뮬레이션 입력
   const [simInput, setSimInput] = useState({
@@ -29,6 +37,10 @@ export default function Capital() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    loadEfficiency();
+  }, [region]);
 
   const loadData = async () => {
     try {
@@ -46,6 +58,15 @@ export default function Capital() {
       console.error('Capital data load error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadEfficiency = async () => {
+    try {
+      const effRes = await capitalApi.getEfficiency(region || undefined);
+      setEfficiency(effRes.data);
+    } catch (error) {
+      console.error('Efficiency data load error:', error);
     }
   };
 
@@ -369,6 +390,18 @@ export default function Capital() {
       </Card>
 
       {/* 자본 효율성 분석 */}
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-lg font-semibold text-gray-800">자본 효율성 분석</h2>
+        <select
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {REGIONS.map(r => (
+            <option key={r.value} value={r.value}>{r.label}</option>
+          ))}
+        </select>
+      </div>
       <div className="grid grid-cols-2 gap-6">
         {/* 산업별 RAROC */}
         <Card title="산업별 자본 효율성 (RAROC)">

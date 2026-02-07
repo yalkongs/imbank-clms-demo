@@ -1,11 +1,12 @@
 """
 자본관리 API
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from ..core.database import get_db
 from ..services.calculations import calculate_capital_ratios
+from .region_helper import get_industry_portfolio_for_efficiency
 
 router = APIRouter(prefix="/api/capital", tags=["Capital"])
 
@@ -21,20 +22,18 @@ def get_capital_position(db: Session = Depends(get_db)):
     if not result:
         return None
 
-    # 데이터가 십억원 단위로 저장되어 있으므로 원 단위로 변환 (십억원 * 1,000,000,000)
-    UNIT = 1_000_000_000  # 십억원 -> 원
     return {
         "position_id": result[0],
         "base_date": result[1],
-        "cet1_capital": float(result[2]) * UNIT if result[2] else 0,
-        "at1_capital": float(result[3]) * UNIT if result[3] else 0,
-        "tier1_capital": (float(result[2]) + float(result[3])) * UNIT if result[2] and result[3] else 0,
-        "tier2_capital": float(result[4]) * UNIT if result[4] else 0,
-        "total_capital": float(result[5]) * UNIT if result[5] else 0,
-        "credit_rwa": float(result[6]) * UNIT if result[6] else 0,
-        "market_rwa": float(result[7]) * UNIT if result[7] else 0,
-        "operational_rwa": float(result[8]) * UNIT if result[8] else 0,
-        "total_rwa": float(result[9]) * UNIT if result[9] else 0,
+        "cet1_capital": float(result[2]) if result[2] else 0,
+        "at1_capital": float(result[3]) if result[3] else 0,
+        "tier1_capital": (float(result[2]) + float(result[3])) if result[2] and result[3] else 0,
+        "tier2_capital": float(result[4]) if result[4] else 0,
+        "total_capital": float(result[5]) if result[5] else 0,
+        "credit_rwa": float(result[6]) if result[6] else 0,
+        "market_rwa": float(result[7]) if result[7] else 0,
+        "operational_rwa": float(result[8]) if result[8] else 0,
+        "total_rwa": float(result[9]) if result[9] else 0,
         "bis_ratio": float(result[10]) if result[10] else 0,
         "cet1_ratio": float(result[11]) if result[11] else 0,
         "tier1_ratio": float(result[12]) if result[12] else 0,
@@ -65,7 +64,6 @@ def get_capital_trend(months: int = 12, db: Session = Depends(get_db)):
         LIMIT {months}
     """)).fetchall()
 
-    UNIT = 1_000_000_000  # 십억원 -> 원
     return [
         {
             "period": r[0],
@@ -73,8 +71,8 @@ def get_capital_trend(months: int = 12, db: Session = Depends(get_db)):
             "cet1_ratio": float(r[2]) if r[2] else 0,
             "tier1_ratio": float(r[3]) if r[3] else 0,
             "leverage_ratio": float(r[4]) if r[4] else 0,
-            "total_capital": float(r[5]) * UNIT if r[5] else 0,
-            "total_rwa": float(r[6]) * UNIT if r[6] else 0
+            "total_capital": float(r[5]) if r[5] else 0,
+            "total_rwa": float(r[6]) if r[6] else 0
         }
         for r in reversed(results)
     ]
@@ -213,19 +211,13 @@ def simulate_capital_impact(
 
 
 @router.get("/efficiency")
-def get_capital_efficiency(db: Session = Depends(get_db)):
+def get_capital_efficiency(region: str = Query(None), db: Session = Depends(get_db)):
     """자본 효율성 분석"""
 
-    # 산업별 RAROC
-    by_industry = db.execute(text("""
-        SELECT segment_type, segment_code, segment_name,
-               total_exposure, total_rwa, total_el, total_revenue, raroc
-        FROM portfolio_summary
-        WHERE segment_type = 'INDUSTRY'
-        ORDER BY raroc DESC
-    """)).fetchall()
+    # 산업별 RAROC (region 필터 적용)
+    by_industry = get_industry_portfolio_for_efficiency(db, region)
 
-    # 등급별 RAROC
+    # 등급별 RAROC (region 필터 시에도 portfolio_summary 사용 - 등급은 지역 무관)
     by_rating = db.execute(text("""
         SELECT segment_type, segment_code, segment_name,
                total_exposure, total_rwa, total_el, total_revenue, raroc

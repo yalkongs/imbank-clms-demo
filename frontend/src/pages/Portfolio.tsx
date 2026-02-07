@@ -11,22 +11,37 @@ import { Card, StatCard, Table, CellFormatters, DonutChart, GroupedBarChart, COL
 import { portfolioApi } from '../utils/api';
 import { formatAmount, formatPercent, getStrategyColorClass, getStrategyLabel } from '../utils/format';
 
+const REGIONS = [
+  { value: '', label: '전체 지역' },
+  { value: 'CAPITAL', label: '수도권' },
+  { value: 'DAEGU_GB', label: '대구경북' },
+  { value: 'BUSAN_GN', label: '부산경남' },
+];
+
 export default function Portfolio() {
   const [loading, setLoading] = useState(true);
   const [strategyMatrix, setStrategyMatrix] = useState<any>(null);
   const [concentration, setConcentration] = useState<any>(null);
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const [industryDetail, setIndustryDetail] = useState<any>(null);
+  const [region, setRegion] = useState('');
 
   useEffect(() => {
     loadData();
   }, []);
 
+  useEffect(() => {
+    loadData();
+    if (selectedIndustry) {
+      loadIndustryDetail(selectedIndustry);
+    }
+  }, [region]);
+
   const loadData = async () => {
     try {
       const [matrixRes, concRes] = await Promise.all([
-        portfolioApi.getStrategyMatrix(),
-        portfolioApi.getConcentration()
+        portfolioApi.getStrategyMatrix(region || undefined),
+        portfolioApi.getConcentration(region || undefined)
       ]);
       setStrategyMatrix(matrixRes.data);
       setConcentration(concRes.data);
@@ -40,7 +55,7 @@ export default function Portfolio() {
   const loadIndustryDetail = async (code: string) => {
     setSelectedIndustry(code);
     try {
-      const response = await portfolioApi.getIndustryDetail(code);
+      const response = await portfolioApi.getIndustryDetail(code, region || undefined);
       setIndustryDetail(response.data);
     } catch (error) {
       console.error('Industry detail load error:', error);
@@ -83,6 +98,15 @@ export default function Portfolio() {
           <h1 className="text-2xl font-bold text-gray-900">포트폴리오 전략</h1>
           <p className="text-sm text-gray-500 mt-1">업종별/등급별 여신 전략 및 집중도 관리</p>
         </div>
+        <select
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {REGIONS.map(r => (
+            <option key={r.value} value={r.value}>{r.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* 집중도 요약 */}

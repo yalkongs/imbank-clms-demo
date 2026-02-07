@@ -18,7 +18,8 @@ import {
   PortfolioOptimization,
   Workout,
   ESG,
-  ALM
+  ALM,
+  CustomerBrowser
 } from './pages';
 
 function App() {
@@ -43,6 +44,7 @@ function App() {
         <Route path="workout" element={<Workout />} />
         <Route path="esg" element={<ESG />} />
         <Route path="alm" element={<ALM />} />
+        <Route path="customer-browser" element={<CustomerBrowser />} />
       </Route>
     </Routes>
   );

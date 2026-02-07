@@ -20,7 +20,8 @@ import {
   Layers,
   Briefcase,
   Leaf,
-  TrendingDown
+  TrendingDown,
+  Search
 } from 'lucide-react';
 
 interface NavItem {
@@ -75,6 +76,12 @@ const navGroups: NavGroup[] = [
     items: [
       { path: '/esg', label: 'ESG리스크', icon: <Leaf size={20} /> },
       { path: '/models', label: '모델관리', icon: <Brain size={20} /> },
+    ]
+  },
+  {
+    title: '조회',
+    items: [
+      { path: '/customer-browser', label: '고객정보조회', icon: <Search size={20} /> },
     ]
   },
 ];

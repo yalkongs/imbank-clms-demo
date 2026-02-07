@@ -1,16 +1,17 @@
 """
 포트폴리오 전략 API
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from ..core.database import get_db
+from .region_helper import get_concentration_by_region
 
 router = APIRouter(prefix="/api/portfolio", tags=["Portfolio"])
 
 
 @router.get("/strategy-matrix")
-def get_strategy_matrix(db: Session = Depends(get_db)):
+def get_strategy_matrix(region: str = Query(None), db: Session = Depends(get_db)):
     """산업-등급 전략 매트릭스"""
     results = db.execute(text("""
         SELECT industry_code, industry_name, rating_bucket, strategy_code, pricing_adj_bp
@@ -56,13 +57,23 @@ def get_strategy_matrix(db: Session = Depends(get_db)):
         }
 
     # 전략별 익스포저 분포 계산
-    strategy_exposure = db.execute(text("""
-        SELECT irs.strategy_code, SUM(ps.total_exposure) as exposure
-        FROM industry_rating_strategy irs
-        JOIN portfolio_summary ps ON irs.industry_code = ps.segment_code
-        WHERE ps.segment_type = 'INDUSTRY' AND irs.rating_bucket = 'AAA_AA'
-        GROUP BY irs.strategy_code
-    """)).fetchall()
+    if region:
+        strategy_exposure = db.execute(text("""
+            SELECT irs.strategy_code, COALESCE(SUM(f.outstanding_amount), 0) as exposure
+            FROM industry_rating_strategy irs
+            JOIN customer c ON irs.industry_code = c.industry_code
+            JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+            WHERE irs.rating_bucket = 'AAA_AA' AND c.region = :region
+            GROUP BY irs.strategy_code
+        """), {"region": region}).fetchall()
+    else:
+        strategy_exposure = db.execute(text("""
+            SELECT irs.strategy_code, SUM(ps.total_exposure) as exposure
+            FROM industry_rating_strategy irs
+            JOIN portfolio_summary ps ON irs.industry_code = ps.segment_code
+            WHERE ps.segment_type = 'INDUSTRY' AND irs.rating_bucket = 'AAA_AA'
+            GROUP BY irs.strategy_code
+        """)).fetchall()
 
     strategy_distribution = [
         {"strategy": r[0], "exposure": r[1] or 0}
@@ -131,48 +142,52 @@ def get_portfolio_summary(db: Session = Depends(get_db)):
 
 
 @router.get("/concentration")
-def get_concentration_analysis(db: Session = Depends(get_db)):
+def get_concentration_analysis(region: str = Query(None), db: Session = Depends(get_db)):
     """집중도 분석"""
+    region_clause, region_params = get_concentration_by_region(db, region)
 
     # 상위 10 고객
-    top_customers = db.execute(text("""
+    top_customers = db.execute(text(f"""
         SELECT c.customer_id, c.customer_name, c.industry_name,
                SUM(f.outstanding_amount) as exposure
         FROM facility f
         JOIN customer c ON f.customer_id = c.customer_id
-        WHERE f.status = 'ACTIVE'
+        WHERE f.status = 'ACTIVE' {region_clause}
         GROUP BY c.customer_id
         ORDER BY exposure DESC
         LIMIT 10
-    """)).fetchall()
+    """), region_params).fetchall()
 
     # 상위 5 그룹
-    top_groups = db.execute(text("""
+    top_groups = db.execute(text(f"""
         SELECT bg.group_id, bg.group_name, SUM(f.outstanding_amount) as exposure
         FROM borrower_group bg
         JOIN borrower_group_member bgm ON bg.group_id = bgm.group_id
         JOIN facility f ON bgm.customer_id = f.customer_id
-        WHERE f.status = 'ACTIVE'
+        JOIN customer c ON bgm.customer_id = c.customer_id
+        WHERE f.status = 'ACTIVE' {region_clause}
         GROUP BY bg.group_id
         ORDER BY exposure DESC
         LIMIT 5
-    """)).fetchall()
+    """), region_params).fetchall()
 
     # 산업별 집중도
-    industry_conc = db.execute(text("""
+    industry_conc = db.execute(text(f"""
         SELECT c.industry_name, SUM(f.outstanding_amount) as exposure,
                COUNT(DISTINCT c.customer_id) as customer_count
         FROM facility f
         JOIN customer c ON f.customer_id = c.customer_id
-        WHERE f.status = 'ACTIVE'
+        WHERE f.status = 'ACTIVE' {region_clause}
         GROUP BY c.industry_name
         ORDER BY exposure DESC
-    """)).fetchall()
+    """), region_params).fetchall()
 
     # 총 익스포저
-    total = db.execute(text("""
-        SELECT SUM(outstanding_amount) FROM facility WHERE status = 'ACTIVE'
-    """)).fetchone()
+    total = db.execute(text(f"""
+        SELECT SUM(f.outstanding_amount)
+        FROM facility f
+        {'JOIN customer c ON f.customer_id = c.customer_id WHERE f.status = \'ACTIVE\' ' + region_clause if region else 'WHERE f.status = \'ACTIVE\''}
+    """), region_params).fetchone()
 
     total_exposure = total[0] if total[0] else 1
 
@@ -292,8 +307,10 @@ def get_exposure_distribution(db: Session = Depends(get_db)):
 
 
 @router.get("/industry/{industry_code}")
-def get_industry_detail(industry_code: str, db: Session = Depends(get_db)):
+def get_industry_detail(industry_code: str, region: str = Query(None), db: Session = Depends(get_db)):
     """산업별 상세 현황"""
+    region_clause, region_params = get_concentration_by_region(db, region)
+    base_params = {"code": industry_code, **region_params}
 
     # 산업 정보
     industry = db.execute(text("""
@@ -307,24 +324,59 @@ def get_industry_detail(industry_code: str, db: Session = Depends(get_db)):
         WHERE industry_code = :code
     """), {"code": industry_code}).fetchall()
 
-    # 포트폴리오 요약
-    summary = db.execute(text("""
-        SELECT * FROM portfolio_summary
-        WHERE segment_type = 'INDUSTRY' AND segment_code = :code
-    """), {"code": industry_code}).fetchone()
+    # 포트폴리오 요약 (region 지정 시 직접 집계)
+    if region:
+        summary_row = db.execute(text(f"""
+            SELECT
+                c.industry_code, c.industry_name,
+                COUNT(DISTINCT c.customer_id) as exposure_count,
+                COALESCE(SUM(f.outstanding_amount), 0) as total_exposure,
+                COALESCE(SUM(rp.rwa), 0) as total_rwa,
+                COALESCE(SUM(rp.expected_loss), 0) as total_el,
+                AVG(COALESCE(rp.pit_pd, rp.ttc_pd)) as avg_pd,
+                AVG(rp.lgd) as avg_lgd,
+                AVG(f.final_rate) as weighted_rate,
+                COALESCE(SUM(f.outstanding_amount * f.final_rate), 0) as total_revenue,
+                CASE
+                    WHEN SUM(rp.rwa) * 0.08 > 0
+                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                    ELSE 0
+                END as raroc
+            FROM customer c
+            JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+            LEFT JOIN loan_application la ON f.application_id = la.application_id
+            LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
+            WHERE c.industry_code = :code {region_clause}
+            GROUP BY c.industry_code, c.industry_name
+        """), base_params).fetchone()
+        # Build a mock summary tuple matching portfolio_summary columns order:
+        # 0:summary_id, 1:base_date, 2:segment_type, 3:segment_code, 4:segment_name,
+        # 5:exposure_count, 6:total_exposure, 7:total_rwa, 8:total_el,
+        # 9:avg_pd, 10:avg_lgd, 11:weighted_rate, 12:total_revenue, 13:raroc
+        if summary_row:
+            summary = (None, None, 'INDUSTRY', summary_row[0], summary_row[1],
+                       summary_row[2], summary_row[3], summary_row[4], summary_row[5],
+                       summary_row[6], summary_row[7], summary_row[8], summary_row[9], summary_row[10])
+        else:
+            summary = None
+    else:
+        summary = db.execute(text("""
+            SELECT * FROM portfolio_summary
+            WHERE segment_type = 'INDUSTRY' AND segment_code = :code
+        """), {"code": industry_code}).fetchone()
 
     # 해당 산업 고객 목록
-    customers = db.execute(text("""
+    customers = db.execute(text(f"""
         SELECT c.customer_id, c.customer_name, c.size_category,
                cr.final_grade, SUM(f.outstanding_amount) as exposure
         FROM customer c
         LEFT JOIN facility f ON c.customer_id = f.customer_id
         LEFT JOIN credit_rating_result cr ON c.customer_id = cr.customer_id
-        WHERE c.industry_code = :code AND f.status = 'ACTIVE'
+        WHERE c.industry_code = :code AND f.status = 'ACTIVE' {region_clause}
         GROUP BY c.customer_id
         ORDER BY exposure DESC
         LIMIT 20
-    """), {"code": industry_code}).fetchall()
+    """), base_params).fetchall()
 
     # 한도 현황
     limit_info = db.execute(text("""
@@ -335,7 +387,7 @@ def get_industry_detail(industry_code: str, db: Session = Depends(get_db)):
     """), {"code": industry_code}).fetchone()
 
     # 등급별 분포 계산
-    grade_distribution = db.execute(text("""
+    grade_distribution = db.execute(text(f"""
         SELECT cr.final_grade, COUNT(*) as cnt, SUM(f.outstanding_amount) as exposure
         FROM customer c
         JOIN facility f ON c.customer_id = f.customer_id
@@ -344,10 +396,10 @@ def get_industry_detail(industry_code: str, db: Session = Depends(get_db)):
             FROM credit_rating_result
             GROUP BY customer_id
         ) cr ON c.customer_id = cr.customer_id
-        WHERE c.industry_code = :code AND f.status = 'ACTIVE'
+        WHERE c.industry_code = :code AND f.status = 'ACTIVE' {region_clause}
         GROUP BY cr.final_grade
         ORDER BY cr.final_grade
-    """), {"code": industry_code}).fetchall()
+    """), base_params).fetchall()
 
     total_exposure = sum(g[2] or 0 for g in grade_distribution) if grade_distribution else 1
 

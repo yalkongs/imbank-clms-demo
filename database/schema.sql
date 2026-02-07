@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS customer (
     employee_count INTEGER,
     listing_status TEXT,
     address TEXT,
+    region TEXT,
     rm_id TEXT,
     branch_code TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -592,6 +593,7 @@ CREATE TABLE IF NOT EXISTS portfolio_summary (
 -- 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_customer_industry ON customer(industry_code);
 CREATE INDEX IF NOT EXISTS idx_customer_size ON customer(size_category);
+CREATE INDEX IF NOT EXISTS idx_customer_region ON customer(region);
 CREATE INDEX IF NOT EXISTS idx_application_customer ON loan_application(customer_id);
 CREATE INDEX IF NOT EXISTS idx_application_status ON loan_application(status);
 CREATE INDEX IF NOT EXISTS idx_application_date ON loan_application(application_date);

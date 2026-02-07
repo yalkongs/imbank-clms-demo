@@ -254,6 +254,29 @@ def get_customer_detail(customer_id: str, db: Session = Depends(get_db)):
         WHERE la.customer_id = :cust_id
     """), {"cust_id": customer_id}).fetchone()
 
+    # 담보 정보
+    collaterals = db.execute(text("""
+        SELECT col.collateral_id, col.collateral_type, col.collateral_subtype,
+               col.original_value, col.current_value, col.ltv, col.valuation_date,
+               col.priority_rank, f.facility_id
+        FROM collateral col
+        JOIN facility f ON col.facility_id = f.facility_id
+        WHERE f.customer_id = :cust_id
+        ORDER BY col.current_value DESC
+    """), {"cust_id": customer_id}).fetchall()
+
+    # 여신 신청 이력
+    applications = db.execute(text("""
+        SELECT la.application_id, la.application_date, la.application_type,
+               p.product_name, la.requested_amount, la.status, la.current_stage,
+               la.purpose_detail
+        FROM loan_application la
+        LEFT JOIN product_master p ON la.product_code = p.product_code
+        WHERE la.customer_id = :cust_id
+        ORDER BY la.application_date DESC
+        LIMIT 20
+    """), {"cust_id": customer_id}).fetchall()
+
     # 한도 관련 정보
     limit_info = db.execute(text("""
         SELECT ld.limit_name, ld.limit_amount, le.exposure_amount, le.utilization_rate
@@ -321,5 +344,32 @@ def get_customer_detail(customer_id: str, db: Session = Depends(get_db)):
             "limit_amount": limit_info[1] if limit_info else None,
             "exposure_amount": limit_info[2] if limit_info else None,
             "utilization_rate": limit_info[3] if limit_info else None
-        } if limit_info else None
+        } if limit_info else None,
+        "collaterals": [
+            {
+                "collateral_id": c[0],
+                "collateral_type": c[1],
+                "collateral_subtype": c[2],
+                "original_value": c[3],
+                "current_value": c[4],
+                "ltv": c[5],
+                "valuation_date": str(c[6]) if c[6] else None,
+                "priority_rank": c[7],
+                "facility_id": c[8]
+            }
+            for c in collaterals
+        ],
+        "applications": [
+            {
+                "application_id": a[0],
+                "application_date": str(a[1]) if a[1] else None,
+                "application_type": a[2],
+                "product_name": a[3],
+                "requested_amount": a[4],
+                "status": a[5],
+                "current_stage": a[6],
+                "purpose_detail": a[7]
+            }
+            for a in applications
+        ]
     }

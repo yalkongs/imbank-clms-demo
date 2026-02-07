@@ -11,13 +11,19 @@ from sqlalchemy import text
 from ..core.database import get_db
 from typing import List, Optional
 import math
+from .region_helper import (
+    get_industry_portfolio_with_rwa_density,
+    get_industry_portfolio_for_efficiency,
+    get_portfolio_aggregates,
+    get_rwa_density_aggregate,
+)
 
 router = APIRouter(prefix="/api/capital-optimizer", tags=["Capital Optimizer"])
 
 
 # ===== 1. RWA 최적화 분석 =====
 @router.get("/rwa-optimization")
-def get_rwa_optimization_analysis(db: Session = Depends(get_db)):
+def get_rwa_optimization_analysis(region: str = Query(None), db: Session = Depends(get_db)):
     """
     RWA 최적화 기회 분석
     - RWA 밀도가 높은 세그먼트 식별
@@ -25,15 +31,8 @@ def get_rwa_optimization_analysis(db: Session = Depends(get_db)):
     - 등급 개선 대상 식별
     """
 
-    # 1. 산업별 RWA 밀도 분석
-    industry_density = db.execute(text("""
-        SELECT segment_name, segment_code, total_exposure, total_rwa,
-               ROUND(total_rwa * 100.0 / NULLIF(total_exposure, 0), 2) as rwa_density,
-               raroc
-        FROM portfolio_summary
-        WHERE segment_type = 'INDUSTRY'
-        ORDER BY total_rwa * 100.0 / NULLIF(total_exposure, 0) DESC
-    """)).fetchall()
+    # 1. 산업별 RWA 밀도 분석 (region 필터 적용)
+    industry_density = get_industry_portfolio_with_rwa_density(db, region)
 
     # 2. 등급별 RWA 밀도 분석
     rating_density = db.execute(text("""
@@ -160,7 +159,7 @@ def get_rwa_optimization_analysis(db: Session = Depends(get_db)):
 
 # ===== 2. 자본배분 최적화 =====
 @router.get("/allocation-optimizer")
-def get_allocation_optimization(db: Session = Depends(get_db)):
+def get_allocation_optimization(region: str = Query(None), db: Session = Depends(get_db)):
     """
     자본배분 최적화 분석
     - 세그먼트별 RAROC 대비 자본배분 적정성
@@ -178,12 +177,8 @@ def get_allocation_optimization(db: Session = Depends(get_db)):
         ORDER BY segment_type, rwa_budget DESC
     """)).fetchall()
 
-    # 산업별 실제 RAROC
-    industry_raroc = db.execute(text("""
-        SELECT segment_name, segment_code, total_exposure, total_rwa, raroc
-        FROM portfolio_summary
-        WHERE segment_type = 'INDUSTRY'
-    """)).fetchall()
+    # 산업별 실제 RAROC (region 필터 적용)
+    industry_raroc = get_industry_portfolio_for_efficiency(db, region)
 
     # 허들레이트
     hurdle = db.execute(text("""
@@ -199,8 +194,8 @@ def get_allocation_optimization(db: Session = Depends(get_db)):
     total_rwa_budget = sum(b[3] for b in budgets if b[3])
     total_rwa_used = sum(b[4] for b in budgets if b[4])
 
-    # 산업별 RAROC 매핑
-    raroc_map = {r[1]: r[4] for r in industry_raroc}
+    # 산업별 RAROC 매핑 (index: 1=segment_code, 7=raroc)
+    raroc_map = {r[1]: r[7] for r in industry_raroc}
 
     for b in budgets:
         if b[2] == 'INDUSTRY':
@@ -455,7 +450,7 @@ def get_dynamic_pricing_suggestion(
 
 # ===== 4. 포트폴리오 리밸런싱 제안 =====
 @router.get("/rebalancing-suggestions")
-def get_rebalancing_suggestions(db: Session = Depends(get_db)):
+def get_rebalancing_suggestions(region: str = Query(None), db: Session = Depends(get_db)):
     """
     포트폴리오 리밸런싱 제안
     - 전략 매트릭스 기반 조정 방향
@@ -464,17 +459,46 @@ def get_rebalancing_suggestions(db: Session = Depends(get_db)):
     """
 
     # 산업별 현황과 전략
-    industry_status = db.execute(text("""
-        SELECT ps.segment_name, ps.segment_code, ps.total_exposure, ps.total_rwa, ps.raroc,
-               irs.strategy_code, irs.pricing_adj_bp,
-               ld.limit_amount, le.exposure_amount, le.utilization_rate
-        FROM portfolio_summary ps
-        LEFT JOIN industry_rating_strategy irs ON ps.segment_code = irs.industry_code AND irs.rating_bucket = 'A'
-        LEFT JOIN limit_definition ld ON ld.dimension_type = 'INDUSTRY' AND ld.dimension_code = ps.segment_code
-        LEFT JOIN limit_exposure le ON ld.limit_id = le.limit_id
-        WHERE ps.segment_type = 'INDUSTRY'
-        ORDER BY ps.total_exposure DESC
-    """)).fetchall()
+    if region:
+        industry_status = db.execute(text("""
+            SELECT
+                c.industry_name as segment_name,
+                c.industry_code as segment_code,
+                COALESCE(SUM(f.outstanding_amount), 0) as total_exposure,
+                COALESCE(SUM(rp.rwa), 0) as total_rwa,
+                CASE
+                    WHEN SUM(rp.rwa) * 0.08 > 0
+                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                    ELSE 0
+                END as raroc,
+                irs.strategy_code,
+                irs.pricing_adj_bp,
+                ld.limit_amount,
+                le.exposure_amount,
+                le.utilization_rate
+            FROM customer c
+            JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+            LEFT JOIN loan_application la ON f.application_id = la.application_id
+            LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
+            LEFT JOIN industry_rating_strategy irs ON c.industry_code = irs.industry_code AND irs.rating_bucket = 'A'
+            LEFT JOIN limit_definition ld ON ld.dimension_type = 'INDUSTRY' AND ld.dimension_code = c.industry_code
+            LEFT JOIN limit_exposure le ON ld.limit_id = le.limit_id
+            WHERE c.region = :region
+            GROUP BY c.industry_code, c.industry_name, irs.strategy_code, irs.pricing_adj_bp, ld.limit_amount, le.exposure_amount, le.utilization_rate
+            ORDER BY total_exposure DESC
+        """), {"region": region}).fetchall()
+    else:
+        industry_status = db.execute(text("""
+            SELECT ps.segment_name, ps.segment_code, ps.total_exposure, ps.total_rwa, ps.raroc,
+                   irs.strategy_code, irs.pricing_adj_bp,
+                   ld.limit_amount, le.exposure_amount, le.utilization_rate
+            FROM portfolio_summary ps
+            LEFT JOIN industry_rating_strategy irs ON ps.segment_code = irs.industry_code AND irs.rating_bucket = 'A'
+            LEFT JOIN limit_definition ld ON ld.dimension_type = 'INDUSTRY' AND ld.dimension_code = ps.segment_code
+            LEFT JOIN limit_exposure le ON ld.limit_id = le.limit_id
+            WHERE ps.segment_type = 'INDUSTRY'
+            ORDER BY ps.total_exposure DESC
+        """)).fetchall()
 
     # 집중도 분석
     total_exposure = sum(r[2] for r in industry_status if r[2])
@@ -602,7 +626,7 @@ def get_rebalancing_suggestions(db: Session = Depends(get_db)):
 
 # ===== 5. 자본효율성 종합 대시보드 =====
 @router.get("/efficiency-dashboard")
-def get_efficiency_dashboard(db: Session = Depends(get_db)):
+def get_efficiency_dashboard(region: str = Query(None), db: Session = Depends(get_db)):
     """
     자본효율성 종합 대시보드
     - 핵심 KPI
@@ -616,14 +640,8 @@ def get_efficiency_dashboard(db: Session = Depends(get_db)):
         FROM capital_position ORDER BY base_date DESC LIMIT 1
     """)).fetchone()
 
-    # 포트폴리오 RAROC
-    portfolio_raroc = db.execute(text("""
-        SELECT SUM(total_revenue) / SUM(total_rwa * 0.08) as portfolio_raroc,
-               SUM(total_exposure) as total_exposure,
-               SUM(total_rwa) as total_rwa,
-               SUM(total_el) as total_el
-        FROM portfolio_summary WHERE segment_type = 'INDUSTRY'
-    """)).fetchone()
+    # 포트폴리오 RAROC (region 필터 적용)
+    portfolio_raroc = get_portfolio_aggregates(db, region)
 
     # RAROC 분포
     raroc_dist = db.execute(text("""
@@ -641,11 +659,8 @@ def get_efficiency_dashboard(db: Session = Depends(get_db)):
         FROM capital_budget WHERE status = 'ACTIVE'
     """)).fetchone()
 
-    # RWA 밀도 (평균)
-    rwa_density = db.execute(text("""
-        SELECT SUM(total_rwa) / SUM(total_exposure) as avg_density
-        FROM portfolio_summary WHERE segment_type = 'INDUSTRY'
-    """)).fetchone()
+    # RWA 밀도 (평균) - region 필터 적용
+    rwa_density = get_rwa_density_aggregate(db, region)
 
     # 한도 경보 현황
     limit_alerts = db.execute(text("""
@@ -653,16 +668,13 @@ def get_efficiency_dashboard(db: Session = Depends(get_db)):
         FROM limit_exposure WHERE status IN ('WARNING', 'ALERT')
     """)).fetchone()
 
-    # 단위 변환: DB는 십억원, 프론트엔드는 원 단위 기대
-    UNIT = 1_000_000_000  # 십억원 -> 원
-
     return {
         "capital_metrics": {
-            "total_capital": capital[0] * UNIT if capital else 0,
-            "total_rwa": capital[1] * UNIT if capital else 0,
-            "bis_ratio": round(capital[2], 2) if capital and capital[2] else 0,  # DB에 이미 % 값으로 저장
+            "total_capital": capital[0] if capital else 0,
+            "total_rwa": capital[1] if capital else 0,
+            "bis_ratio": round(capital[2], 2) if capital and capital[2] else 0,
             "cet1_ratio": round(capital[3], 2) if capital and capital[3] else 0,
-            "capital_buffer": round((capital[2] / 100 - 0.105) * capital[1] * UNIT, 0) if capital else 0  # 규제 대비 여유
+            "capital_buffer": round((capital[2] / 100 - 0.105) * capital[1], 0) if capital else 0
         },
         "efficiency_metrics": {
             "portfolio_raroc": round(portfolio_raroc[0], 2) if portfolio_raroc and portfolio_raroc[0] else 0,  # DB에 이미 % 값으로 저장
