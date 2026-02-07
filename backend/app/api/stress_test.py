@@ -92,12 +92,11 @@ def get_scenario_result(scenario_id: str, db: Session = Depends(get_db)):
     if not capital:
         return {"error": "No capital data"}
 
-    # 단위 변환: DB는 억원 단위, 비율은 이미 % 값
-    UNIT = 100_000_000  # 억원 -> 원
-    total_capital = float(capital[0]) * UNIT
-    base_rwa = float(capital[3]) * UNIT
-    base_bis = float(capital[4])  # DB에 이미 % 값으로 저장 (예: 14.5 = 14.5%)
-    base_tier1 = float(capital[5])
+    # DB는 원 단위, 비율은 소수(0.1663)로 저장
+    total_capital = float(capital[0])
+    base_rwa = float(capital[3])
+    base_bis = float(capital[4]) * 100   # 소수 → %
+    base_tier1 = float(capital[5]) * 100  # 소수 → %
 
     # 포트폴리오 집계
     portfolio = db.execute(text("""
@@ -189,10 +188,10 @@ def get_scenario_result(scenario_id: str, db: Session = Depends(get_db)):
             "base_el": base_el,
             "stressed_el": stressed_el,
             "el_increase": el_increase,
-            "base_bis_ratio": base_bis,  # DB에 이미 % 값으로 저장
-            "stressed_bis_ratio": stressed_bis * 100,  # stressed_bis는 소수 계산 결과이므로 * 100
-            "capital_ratio_impact": (stressed_bis * 100 - base_bis),
-            "base_tier1_ratio": base_tier1,  # DB에 이미 % 값으로 저장
+            "base_bis_ratio": base_bis,
+            "stressed_bis_ratio": stressed_bis * 100,
+            "capital_ratio_impact": stressed_bis * 100 - base_bis,
+            "base_tier1_ratio": base_tier1,
             "stressed_tier1_ratio": stressed_tier1 * 100
         },
         "by_industry": sorted(industry_results, key=lambda x: x['rwa_increase_rate'], reverse=True)
@@ -233,10 +232,9 @@ def compare_scenarios(db: Session = Depends(get_db)):
         ORDER BY base_date DESC LIMIT 1
     """)).fetchone()
 
-    # 단위 변환: DB는 억원 단위
-    UNIT = 100_000_000  # 억원 -> 원
-    total_capital = float(capital[0]) * UNIT if capital else 2500000000000
-    base_rwa = float(capital[1]) * UNIT if capital else 16500000000000
+    # DB는 원 단위
+    total_capital = float(capital[0]) if capital else 7982000000000
+    base_rwa = float(capital[1]) if capital else 48000000000000
 
     stress_factors = {
         'BASELINE': 1.0, 'MILD': 1.1, 'MODERATE': 1.25, 'SEVERE': 1.4, 'EXTREME': 1.6

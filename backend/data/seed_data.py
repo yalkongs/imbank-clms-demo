@@ -435,6 +435,58 @@ def seed_facilities_and_applications(conn, customers):
     conn.commit()
     print(f"여신약정 {len(facilities)}건, 신청 {len(applications)}건 생성 완료")
 
+
+def seed_collateral(conn):
+    """담보 데이터 생성"""
+    cursor = conn.cursor()
+
+    # 담보가 있는 여신 조회
+    cursor.execute("""
+        SELECT la.application_id, f.facility_id, f.outstanding_amount, f.approved_amount,
+               la.collateral_type, la.collateral_value
+        FROM loan_application la
+        JOIN facility f ON la.application_id = f.application_id
+        WHERE la.collateral_type IS NOT NULL AND la.collateral_type != 'NONE'
+          AND la.collateral_value > 0
+    """)
+    facilities_with_collateral = cursor.fetchall()
+
+    collaterals = []
+    subtypes = {
+        'REAL_ESTATE': ['아파트', '오피스', '상가', '토지', '공장'],
+        'DEPOSIT': ['정기예금', '적금', 'CD'],
+        'SECURITIES': ['상장주식', '채권', '펀드'],
+    }
+
+    for i, (app_id, fac_id, outstanding, approved, col_type, col_value) in enumerate(facilities_with_collateral):
+        subtype = random.choice(subtypes.get(col_type, ['기타']))
+        current_value = col_value * random.uniform(0.85, 1.1)
+        ltv = outstanding / current_value if current_value > 0 else 0
+
+        collaterals.append((
+            f"COL{i+1:06d}",
+            app_id,
+            fac_id,
+            col_type,
+            subtype,
+            col_value,
+            round(current_value, 0),
+            round(ltv, 4),
+            (datetime.now() - timedelta(days=random.randint(0, 90))).strftime('%Y-%m-%d'),
+            1
+        ))
+
+    cursor.executemany("""
+        INSERT OR REPLACE INTO collateral
+        (collateral_id, application_id, facility_id, collateral_type, collateral_subtype,
+         original_value, current_value, ltv, valuation_date, priority_rank)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, collaterals)
+
+    conn.commit()
+    print(f"담보 {len(collaterals)}건 생성 완료")
+
+
 def seed_capital_data(conn):
     """자본 현황 데이터 생성"""
     cursor = conn.cursor()
@@ -998,6 +1050,9 @@ def main():
 
         # 여신 데이터
         seed_facilities_and_applications(conn, customers)
+
+        # 담보 데이터
+        seed_collateral(conn)
 
         # 전략계층 데이터
         seed_capital_data(conn)
