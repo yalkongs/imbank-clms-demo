@@ -16,6 +16,7 @@ from .region_helper import (
     get_industry_portfolio_for_efficiency,
     get_portfolio_aggregates,
     get_rwa_density_aggregate,
+    COST_RATE,
 )
 
 router = APIRouter(prefix="/api/capital-optimizer", tags=["Capital Optimizer"])
@@ -34,18 +35,39 @@ def get_rwa_optimization_analysis(region: str = Query(None), db: Session = Depen
     # 1. 산업별 RWA 밀도 분석 (region 필터 적용)
     industry_density = get_industry_portfolio_with_rwa_density(db, region)
 
-    # 2. 등급별 RWA 밀도 분석
-    rating_density = db.execute(text("""
-        SELECT segment_name, segment_code, total_exposure, total_rwa,
-               ROUND(total_rwa * 100.0 / NULLIF(total_exposure, 0), 2) as rwa_density,
-               avg_pd, avg_lgd
-        FROM portfolio_summary
-        WHERE segment_type = 'RATING'
-        ORDER BY segment_code
-    """)).fetchall()
+    # 2. 등급별 RWA 밀도 분석 (region 필터 적용)
+    if region:
+        rating_density = db.execute(text("""
+            SELECT cr.final_grade as segment_name, cr.final_grade as segment_code,
+                   COALESCE(SUM(f.outstanding_amount), 0) as total_exposure,
+                   COALESCE(SUM(rp.rwa), 0) as total_rwa,
+                   ROUND(COALESCE(SUM(rp.rwa), 0) * 100.0 / NULLIF(SUM(f.outstanding_amount), 0), 2) as rwa_density,
+                   AVG(COALESCE(rp.pit_pd, rp.ttc_pd)) as avg_pd,
+                   AVG(rp.lgd) as avg_lgd
+            FROM customer c
+            JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+            LEFT JOIN loan_application la ON f.application_id = la.application_id
+            LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
+            LEFT JOIN credit_rating_result cr ON c.customer_id = cr.customer_id
+                AND cr.rating_date = (SELECT MAX(rating_date) FROM credit_rating_result WHERE customer_id = c.customer_id)
+            WHERE c.region = :region AND cr.final_grade IS NOT NULL
+            GROUP BY cr.final_grade
+            ORDER BY cr.final_grade
+        """), {"region": region}).fetchall()
+    else:
+        rating_density = db.execute(text("""
+            SELECT segment_name, segment_code, total_exposure, total_rwa,
+                   ROUND(total_rwa * 100.0 / NULLIF(total_exposure, 0), 2) as rwa_density,
+                   avg_pd, avg_lgd
+            FROM portfolio_summary
+            WHERE segment_type = 'RATING'
+            ORDER BY segment_code
+        """)).fetchall()
 
-    # 3. 담보 미활용 여신 (높은 LGD)
-    high_lgd_exposures = db.execute(text("""
+    # 3. 담보 미활용 여신 (높은 LGD) - region 필터 적용
+    region_cond_lgd = "AND c.region = :region" if region else ""
+    lgd_params = {"region": region} if region else {}
+    high_lgd_exposures = db.execute(text(f"""
         SELECT la.application_id, c.customer_name, c.industry_name,
                la.requested_amount, COALESCE(rp.pit_pd, rp.ttc_pd) as pd, rp.lgd, rp.rwa,
                cr.final_grade
@@ -53,13 +75,15 @@ def get_rwa_optimization_analysis(region: str = Query(None), db: Session = Depen
         JOIN customer c ON la.customer_id = c.customer_id
         JOIN risk_parameter rp ON la.application_id = rp.application_id
         LEFT JOIN credit_rating_result cr ON la.application_id = cr.application_id
-        WHERE rp.lgd > 0.45 AND la.status = 'APPROVED'
+        WHERE rp.lgd > 0.45 AND la.status = 'APPROVED' {region_cond_lgd}
         ORDER BY rp.lgd DESC, la.requested_amount DESC
         LIMIT 20
-    """)).fetchall()
+    """), lgd_params).fetchall()
 
-    # 4. 등급 업그레이드 잠재 고객 (BBB급 중 재무개선 가능성)
-    upgrade_candidates = db.execute(text("""
+    # 4. 등급 업그레이드 잠재 고객 (BBB급 중 재무개선 가능성) - region 필터 적용
+    region_cond_upg = "AND c.region = :region" if region else ""
+    upg_params = {"region": region} if region else {}
+    upgrade_candidates = db.execute(text(f"""
         SELECT c.customer_id, c.customer_name, c.industry_name,
                cr.final_grade, cr.pd_value,
                SUM(f.outstanding_amount) as total_exposure,
@@ -69,16 +93,16 @@ def get_rwa_optimization_analysis(region: str = Query(None), db: Session = Depen
         LEFT JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
         WHERE cr.final_grade IN ('BBB+', 'BBB', 'BBB-')
         AND cr.rating_date = (SELECT MAX(rating_date) FROM credit_rating_result WHERE customer_id = c.customer_id)
-        AND c.asset_size > 100000000000  -- 1000억 이상
+        AND c.asset_size > 100000000000 {region_cond_upg}
         GROUP BY c.customer_id
-        HAVING SUM(f.outstanding_amount) > 10000000000  -- 100억 이상 익스포저
+        HAVING SUM(f.outstanding_amount) > 10000000000
         ORDER BY SUM(f.outstanding_amount) DESC
         LIMIT 15
-    """)).fetchall()
+    """), upg_params).fetchall()
 
     # 5. RWA 절감 기회 계산
     total_rwa = sum(r[3] for r in industry_density if r[3])
-    high_density_rwa = sum(r[3] for r in industry_density if r[4] and r[4] > 60)  # 60% 이상
+    high_density_rwa = sum(r[3] for r in industry_density if r[4] and r[4] > 44)  # 44% 이상
 
     # 담보 추가시 LGD 35%로 가정한 RWA 절감 잠재액
     potential_lgd_reduction = sum(
@@ -111,7 +135,7 @@ def get_rwa_optimization_analysis(region: str = Query(None), db: Session = Depen
                 "rwa": r[3],
                 "rwa_density": r[4],
                 "raroc": round(r[5] * 100, 2) if r[5] else 0,
-                "optimization_priority": "HIGH" if r[4] and r[4] > 65 else "MEDIUM" if r[4] and r[4] > 50 else "LOW"
+                "optimization_priority": "HIGH" if r[4] and r[4] > 45 else "MEDIUM" if r[4] and r[4] > 42 else "LOW"
             }
             for r in industry_density
         ],
@@ -468,7 +492,7 @@ def get_rebalancing_suggestions(region: str = Query(None), db: Session = Depends
                 COALESCE(SUM(rp.rwa), 0) as total_rwa,
                 CASE
                     WHEN SUM(rp.rwa) * 0.08 > 0
-                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
                     ELSE 0
                 END as raroc,
                 irs.strategy_code,
@@ -486,7 +510,7 @@ def get_rebalancing_suggestions(region: str = Query(None), db: Session = Depends
             WHERE c.region = :region
             GROUP BY c.industry_code, c.industry_name, irs.strategy_code, irs.pricing_adj_bp, ld.limit_amount, le.exposure_amount, le.utilization_rate
             ORDER BY total_exposure DESC
-        """), {"region": region}).fetchall()
+        """), {"region": region, "cost_rate": COST_RATE}).fetchall()
     else:
         industry_status = db.execute(text("""
             SELECT ps.segment_name, ps.segment_code, ps.total_exposure, ps.total_rwa, ps.raroc,
@@ -576,11 +600,11 @@ def get_rebalancing_suggestions(region: str = Query(None), db: Session = Depends
             action["priority"] = "MEDIUM"
 
         # 6. RWA 밀도가 높은 경우
-        elif rwa_density > 65:
+        elif rwa_density > 44:
             action["actions"].append({
                 "type": "OPTIMIZE_RWA",
                 "description": "RWA 밀도 개선 - 담보 확보 또는 등급 개선",
-                "target": f"RWA 밀도 {rwa_density:.0f}% → 50% 이하"
+                "target": f"RWA 밀도 {rwa_density:.0f}% → 42% 이하"
             })
             action["priority"] = "MEDIUM"
 
@@ -643,15 +667,28 @@ def get_efficiency_dashboard(region: str = Query(None), db: Session = Depends(ge
     # 포트폴리오 RAROC (region 필터 적용)
     portfolio_raroc = get_portfolio_aggregates(db, region)
 
-    # RAROC 분포
-    raroc_dist = db.execute(text("""
-        SELECT
-            SUM(CASE WHEN expected_raroc >= 0.15 THEN 1 ELSE 0 END) as above_target,
-            SUM(CASE WHEN expected_raroc >= 0.12 AND expected_raroc < 0.15 THEN 1 ELSE 0 END) as meet_hurdle,
-            SUM(CASE WHEN expected_raroc < 0.12 THEN 1 ELSE 0 END) as below_hurdle,
-            COUNT(*) as total
-        FROM pricing_result
-    """)).fetchone()
+    # RAROC 분포 (region 필터 적용)
+    if region:
+        raroc_dist = db.execute(text("""
+            SELECT
+                SUM(CASE WHEN pr.expected_raroc >= 0.15 THEN 1 ELSE 0 END) as above_target,
+                SUM(CASE WHEN pr.expected_raroc >= 0.12 AND pr.expected_raroc < 0.15 THEN 1 ELSE 0 END) as meet_hurdle,
+                SUM(CASE WHEN pr.expected_raroc < 0.12 THEN 1 ELSE 0 END) as below_hurdle,
+                COUNT(*) as total
+            FROM pricing_result pr
+            JOIN facility f ON pr.application_id = f.application_id
+            JOIN customer c ON f.customer_id = c.customer_id
+            WHERE c.region = :region
+        """), {"region": region}).fetchone()
+    else:
+        raroc_dist = db.execute(text("""
+            SELECT
+                SUM(CASE WHEN expected_raroc >= 0.15 THEN 1 ELSE 0 END) as above_target,
+                SUM(CASE WHEN expected_raroc >= 0.12 AND expected_raroc < 0.15 THEN 1 ELSE 0 END) as meet_hurdle,
+                SUM(CASE WHEN expected_raroc < 0.12 THEN 1 ELSE 0 END) as below_hurdle,
+                COUNT(*) as total
+            FROM pricing_result
+        """)).fetchone()
 
     # 자본예산 소진율
     budget_util = db.execute(text("""
@@ -677,7 +714,7 @@ def get_efficiency_dashboard(region: str = Query(None), db: Session = Depends(ge
             "capital_buffer": round((capital[2] - 0.105) * capital[1], 0) if capital else 0
         },
         "efficiency_metrics": {
-            "portfolio_raroc": round(portfolio_raroc[0], 2) if portfolio_raroc and portfolio_raroc[0] else 0,  # DB에 이미 % 값으로 저장
+            "portfolio_raroc": round(portfolio_raroc[0] * 100, 2) if portfolio_raroc and portfolio_raroc[0] else 0,
             "rwa_density": round(rwa_density[0] * 100, 1) if rwa_density and rwa_density[0] else 0,
             "budget_utilization": round(budget_util[0] * 100, 1) if budget_util and budget_util[0] else 0,
             "expected_loss_rate": round(portfolio_raroc[3] / portfolio_raroc[1] * 100, 3) if portfolio_raroc and portfolio_raroc[1] else 0

@@ -1,8 +1,11 @@
 """
 iM뱅크 CLMS 데모 시스템 - FastAPI 메인 애플리케이션
 """
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 
 from .core.database import engine, Base
@@ -78,37 +81,22 @@ app.include_router(esg.router)
 app.include_router(alm.router)
 
 
-@app.get("/")
-def root():
-    """API 루트 - 시스템 상태 확인"""
-    return {
-        "system": "iM뱅크 CLMS 데모",
-        "status": "running",
-        "version": "1.0.0",
-        "endpoints": {
-            "dashboard": "/api/dashboard",
-            "applications": "/api/applications",
-            "capital": "/api/capital",
-            "capital-optimizer": "/api/capital-optimizer",
-            "portfolio": "/api/portfolio",
-            "limits": "/api/limits",
-            "stress-test": "/api/stress-test",
-            "models": "/api/models",
-            "model-inference": "/api/models/inference",
-            "customers": "/api/customers",
-            "ews-advanced": "/api/ews-advanced",
-            "dynamic-limits": "/api/dynamic-limits",
-            "customer-profitability": "/api/customer-profitability",
-            "collateral-monitoring": "/api/collateral-monitoring",
-            "portfolio-optimization": "/api/portfolio-optimization",
-            "workout": "/api/workout",
-            "esg": "/api/esg",
-            "alm": "/api/alm"
-        }
-    }
-
-
 @app.get("/health")
 def health_check():
     """헬스체크 엔드포인트"""
     return {"status": "healthy"}
+
+
+# 프론트엔드 빌드 파일 서빙
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend", "dist")
+
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="static")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """SPA 라우팅 - 모든 비-API 경로를 index.html로"""
+        file_path = os.path.join(FRONTEND_DIR, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))

@@ -42,6 +42,7 @@ def get_applications(
     stage: Optional[str] = None,
     priority: Optional[str] = None,
     assigned_to: Optional[str] = None,
+    region: Optional[str] = None,
     limit: int = Query(50, le=200),
     db: Session = Depends(get_db)
 ):
@@ -68,8 +69,11 @@ def get_applications(
     params = {}
 
     if status:
-        query += " AND a.status = :status"
-        params["status"] = status
+        if status == 'PENDING':
+            query += " AND a.status IN ('RECEIVED', 'REVIEWING')"
+        else:
+            query += " AND a.status = :status"
+            params["status"] = status
     if stage:
         query += " AND a.current_stage = :stage"
         params["stage"] = stage
@@ -79,6 +83,9 @@ def get_applications(
     if assigned_to:
         query += " AND a.assigned_to = :assigned_to"
         params["assigned_to"] = assigned_to
+    if region:
+        query += " AND c.region = :region"
+        params["region"] = region
 
     query += """
         ORDER BY
@@ -185,48 +192,53 @@ def get_pending_applications(db: Session = Depends(get_db)):
 
 
 @router.get("/summary")
-def get_applications_summary(db: Session = Depends(get_db)):
+def get_applications_summary(region: Optional[str] = None, db: Session = Depends(get_db)):
     """심사 현황 요약 대시보드"""
 
+    region_cond = " AND c.region = :region" if region else ""
+    region_join = " JOIN customer c ON la.customer_id = c.customer_id" if region else ""
+    rp = {"region": region} if region else {}
+
     # 상태별 건수
-    by_status = db.execute(text("""
-        SELECT status, COUNT(*), SUM(requested_amount)
-        FROM loan_application
-        GROUP BY status
-    """)).fetchall()
+    by_status = db.execute(text(f"""
+        SELECT la.status, COUNT(*), SUM(la.requested_amount)
+        FROM loan_application la {region_join}
+        WHERE 1=1 {region_cond}
+        GROUP BY la.status
+    """), rp).fetchall()
 
     # 단계별 건수
-    by_stage = db.execute(text("""
-        SELECT current_stage, COUNT(*), SUM(requested_amount)
-        FROM loan_application
-        WHERE status IN ('RECEIVED', 'REVIEWING')
-        GROUP BY current_stage
-    """)).fetchall()
+    by_stage = db.execute(text(f"""
+        SELECT la.current_stage, COUNT(*), SUM(la.requested_amount)
+        FROM loan_application la {region_join}
+        WHERE la.status IN ('RECEIVED', 'REVIEWING') {region_cond}
+        GROUP BY la.current_stage
+    """), rp).fetchall()
 
     # 우선순위별 건수
-    by_priority = db.execute(text("""
-        SELECT priority, COUNT(*), SUM(requested_amount)
-        FROM loan_application
-        WHERE status IN ('RECEIVED', 'REVIEWING')
-        GROUP BY priority
-    """)).fetchall()
+    by_priority = db.execute(text(f"""
+        SELECT la.priority, COUNT(*), SUM(la.requested_amount)
+        FROM loan_application la {region_join}
+        WHERE la.status IN ('RECEIVED', 'REVIEWING') {region_cond}
+        GROUP BY la.priority
+    """), rp).fetchall()
 
     # 금일 접수/처리 현황
-    today_stats = db.execute(text("""
+    today_stats = db.execute(text(f"""
         SELECT
-            (SELECT COUNT(*) FROM loan_application WHERE date(application_date) = date('now')) as today_received,
-            (SELECT COUNT(*) FROM loan_application WHERE date(updated_at) = date('now') AND status IN ('APPROVED', 'REJECTED')) as today_processed,
-            (SELECT COUNT(*) FROM loan_application WHERE status IN ('RECEIVED', 'REVIEWING')) as pending_total,
-            (SELECT COUNT(*) FROM loan_application WHERE status IN ('RECEIVED', 'REVIEWING') AND priority = 'HIGH') as pending_high_priority
-    """)).fetchone()
+            (SELECT COUNT(*) FROM loan_application la {region_join} WHERE date(la.application_date) = date('now') {region_cond}) as today_received,
+            (SELECT COUNT(*) FROM loan_application la {region_join} WHERE date(la.updated_at) = date('now') AND la.status IN ('APPROVED', 'REJECTED') {region_cond}) as today_processed,
+            (SELECT COUNT(*) FROM loan_application la {region_join} WHERE la.status IN ('RECEIVED', 'REVIEWING') {region_cond}) as pending_total,
+            (SELECT COUNT(*) FROM loan_application la {region_join} WHERE la.status IN ('RECEIVED', 'REVIEWING') AND la.priority = 'HIGH' {region_cond}) as pending_high_priority
+    """), rp).fetchone()
 
     # 평균 처리 시간 (최근 30일)
-    avg_processing = db.execute(text("""
-        SELECT AVG(julianday(updated_at) - julianday(application_date))
-        FROM loan_application
-        WHERE status IN ('APPROVED', 'REJECTED')
-        AND updated_at >= date('now', '-30 days')
-    """)).scalar()
+    avg_processing = db.execute(text(f"""
+        SELECT AVG(julianday(la.updated_at) - julianday(la.application_date))
+        FROM loan_application la {region_join}
+        WHERE la.status IN ('APPROVED', 'REJECTED')
+        AND la.updated_at >= date('now', '-30 days') {region_cond}
+    """), rp).scalar()
 
     return {
         "by_status": [{"status": r[0], "count": r[1], "amount": r[2]} for r in by_status],

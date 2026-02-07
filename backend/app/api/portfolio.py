@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from ..core.database import get_db
-from .region_helper import get_concentration_by_region
+from .region_helper import get_concentration_by_region, COST_RATE
 
 router = APIRouter(prefix="/api/portfolio", tags=["Portfolio"])
 
@@ -306,6 +306,115 @@ def get_exposure_distribution(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/industry-region-analysis")
+def get_industry_region_analysis(db: Session = Depends(get_db)):
+    """산업별 지역간 리스크 지표 비교 분석"""
+
+    # 모든 산업 × 지역 조합의 핵심 지표를 한 번에 집계
+    rows = db.execute(text("""
+        SELECT
+            c.industry_code,
+            c.industry_name,
+            c.region,
+            COUNT(DISTINCT c.customer_id) as customer_count,
+            COALESCE(SUM(f.outstanding_amount), 0) as total_exposure,
+            COALESCE(SUM(rp.rwa), 0) as total_rwa,
+            COALESCE(SUM(rp.expected_loss), 0) as total_el,
+            AVG(COALESCE(rp.pit_pd, rp.ttc_pd)) as avg_pd,
+            AVG(rp.lgd) as avg_lgd,
+            AVG(f.final_rate) as avg_rate,
+            CASE
+                WHEN SUM(rp.rwa) * 0.08 > 0
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                ELSE 0
+            END as raroc,
+            ROUND(COALESCE(SUM(rp.rwa), 0) * 100.0 / NULLIF(SUM(f.outstanding_amount), 0), 2) as rwa_density
+        FROM customer c
+        JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+        LEFT JOIN loan_application la ON f.application_id = la.application_id
+        LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
+        WHERE c.region IS NOT NULL AND c.industry_code IS NOT NULL
+        GROUP BY c.industry_code, c.industry_name, c.region
+        ORDER BY c.industry_name, c.region
+    """), {"cost_rate": COST_RATE}).fetchall()
+
+    # 전체(전국) 산업별 집계
+    totals = db.execute(text("""
+        SELECT
+            c.industry_code,
+            c.industry_name,
+            COUNT(DISTINCT c.customer_id) as customer_count,
+            COALESCE(SUM(f.outstanding_amount), 0) as total_exposure,
+            COALESCE(SUM(rp.rwa), 0) as total_rwa,
+            COALESCE(SUM(rp.expected_loss), 0) as total_el,
+            AVG(COALESCE(rp.pit_pd, rp.ttc_pd)) as avg_pd,
+            AVG(rp.lgd) as avg_lgd,
+            AVG(f.final_rate) as avg_rate,
+            CASE
+                WHEN SUM(rp.rwa) * 0.08 > 0
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                ELSE 0
+            END as raroc,
+            ROUND(COALESCE(SUM(rp.rwa), 0) * 100.0 / NULLIF(SUM(f.outstanding_amount), 0), 2) as rwa_density
+        FROM customer c
+        JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+        LEFT JOIN loan_application la ON f.application_id = la.application_id
+        LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
+        WHERE c.industry_code IS NOT NULL
+        GROUP BY c.industry_code, c.industry_name
+        ORDER BY total_exposure DESC
+    """), {"cost_rate": COST_RATE}).fetchall()
+
+    def fmt(r, base):
+        """지표 딕셔너리 생성 (base: customer_count 컬럼의 인덱스)"""
+        return {
+            "customer_count": r[base],
+            "total_exposure": float(r[base + 1]) if r[base + 1] else 0,
+            "total_rwa": float(r[base + 2]) if r[base + 2] else 0,
+            "total_el": float(r[base + 3]) if r[base + 3] else 0,
+            "avg_pd": float(r[base + 4]) if r[base + 4] else 0,
+            "avg_lgd": float(r[base + 5]) if r[base + 5] else 0,
+            "avg_rate": float(r[base + 6]) if r[base + 6] else 0,
+            "raroc": float(r[base + 7]) * 100 if r[base + 7] else 0,
+            "rwa_density": float(r[base + 8]) if r[base + 8] else 0,
+        }
+
+    # 산업별로 지역 데이터 병합
+    industry_map = {}
+    for r in totals:
+        # totals: industry_code(0), industry_name(1), customer_count(2), ...
+        industry_map[r[0]] = {
+            "industry_code": r[0],
+            "industry_name": r[1],
+            "total": fmt(r, base=2),
+            "regions": {}
+        }
+
+    for r in rows:
+        # rows: industry_code(0), industry_name(1), region(2), customer_count(3), ...
+        ind_code = r[0]
+        region = r[2]
+        if ind_code in industry_map:
+            industry_map[ind_code]["regions"][region] = fmt(r, base=3)
+
+    # 지역 데이터가 없는 경우 빈 값으로 채우기
+    empty = {"customer_count": 0, "total_exposure": 0, "total_rwa": 0, "total_el": 0,
+             "avg_pd": 0, "avg_lgd": 0, "avg_rate": 0, "raroc": 0, "rwa_density": 0}
+    for ind in industry_map.values():
+        for rgn in ["CAPITAL", "DAEGU_GB", "BUSAN_GN"]:
+            if rgn not in ind["regions"]:
+                ind["regions"][rgn] = dict(empty)
+
+    return {
+        "industries": list(industry_map.values()),
+        "regions": [
+            {"code": "CAPITAL", "name": "수도권"},
+            {"code": "DAEGU_GB", "name": "대구경북"},
+            {"code": "BUSAN_GN", "name": "부산경남"},
+        ]
+    }
+
+
 @router.get("/industry/{industry_code}")
 def get_industry_detail(industry_code: str, region: str = Query(None), db: Session = Depends(get_db)):
     """산업별 상세 현황"""
@@ -339,7 +448,7 @@ def get_industry_detail(industry_code: str, region: str = Query(None), db: Sessi
                 COALESCE(SUM(f.outstanding_amount * f.final_rate), 0) as total_revenue,
                 CASE
                     WHEN SUM(rp.rwa) * 0.08 > 0
-                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * {COST_RATE} - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
                     ELSE 0
                 END as raroc
             FROM customer c

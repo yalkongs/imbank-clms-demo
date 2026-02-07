@@ -7,7 +7,7 @@ import {
   PieChart,
   ArrowRight
 } from 'lucide-react';
-import { Card, StatCard, GroupedBarChart, DonutChart, TrendChart, COLORS, FeatureModal, HelpButton } from '../components';
+import { Card, StatCard, GroupedBarChart, DonutChart, TrendChart, COLORS, FeatureModal, HelpButton, RegionFilter } from '../components';
 import { portfolioOptimizationApi } from '../utils/api';
 import { formatAmount, formatPercent } from '../utils/format';
 
@@ -121,15 +121,7 @@ export default function PortfolioOptimization() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">효율적 프론티어 기반 최적 자산배분 도출</p>
         </div>
-        <select
-          value={region}
-          onChange={(e) => setRegion(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {REGIONS.map(r => (
-            <option key={r.value} value={r.value}>{r.label}</option>
-          ))}
-        </select>
+        <RegionFilter value={region} onChange={setRegion} />
       </div>
 
       {/* Summary Stats */}

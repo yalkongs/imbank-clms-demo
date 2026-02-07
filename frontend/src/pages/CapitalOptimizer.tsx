@@ -39,6 +39,7 @@ import {
   Line
 } from 'recharts';
 import { capitalOptimizerApi } from '../utils/api';
+import { RegionFilter } from '../components';
 
 const COLORS = {
   primary: '#1e40af',
@@ -106,15 +107,15 @@ export default function CapitalOptimizer() {
   });
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, []);
 
   useEffect(() => {
-    loadData();
+    loadData(false);
   }, [region]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showFullLoader = false) => {
+    if (showFullLoader) setLoading(true);
     try {
       const r = region || undefined;
       const [dashboard, rwa, allocation, rebalancing] = await Promise.all([
@@ -162,15 +163,7 @@ export default function CapitalOptimizer() {
           <p className="text-sm text-gray-500 mt-1">Capital Efficiency Optimizer - RWA 최적화, 자본배분 효율화, 포트폴리오 리밸런싱</p>
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={region}
-            onChange={(e) => setRegion(e.target.value)}
-            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {REGIONS.map(r => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
+          <RegionFilter value={region} onChange={setRegion} />
           <button
             onClick={loadData}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

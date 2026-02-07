@@ -9,9 +9,16 @@ import {
   BarChart3,
   Search
 } from 'lucide-react';
-import { Card, StatCard, Table, CellFormatters, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton } from '../components';
+import { Card, StatCard, Table, CellFormatters, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton, RegionFilter } from '../components';
 import { ewsAdvancedApi } from '../utils/api';
 import { formatAmount, formatPercent } from '../utils/format';
+
+const REGIONS = [
+  { value: '', label: '전체 지역' },
+  { value: 'CAPITAL', label: '수도권' },
+  { value: 'DAEGU_GB', label: '대구경북' },
+  { value: 'BUSAN_GN', label: '부산경남' },
+];
 
 export default function EWSAdvanced() {
   const [loading, setLoading] = useState(true);
@@ -23,18 +30,20 @@ export default function EWSAdvanced() {
   const [supplyChain, setSupplyChain] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [featureInfo, setFeatureInfo] = useState<any>(null);
+  const [region, setRegion] = useState('');
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [region]);
 
   const loadData = async () => {
+    const r = region || undefined;
     try {
       const [dashRes, indRes, scoreRes, signalRes] = await Promise.all([
-        ewsAdvancedApi.getDashboard(),
+        ewsAdvancedApi.getDashboard(r),
         ewsAdvancedApi.getIndicators(),
-        ewsAdvancedApi.getCompositeScores({ limit: 20 }),
-        ewsAdvancedApi.getExternalSignals()
+        ewsAdvancedApi.getCompositeScores({ limit: 20, region: r }),
+        ewsAdvancedApi.getExternalSignals({ region: r })
       ]);
       setDashboard(dashRes.data);
       setIndicators(indRes.data.indicators || []);
@@ -95,6 +104,7 @@ export default function EWSAdvanced() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">선행지표, 공급망 분석, 외부 신호 통합 모니터링</p>
         </div>
+        <RegionFilter value={region} onChange={setRegion} />
       </div>
 
       {/* Summary Stats */}

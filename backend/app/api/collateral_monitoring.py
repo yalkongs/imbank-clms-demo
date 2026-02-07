@@ -123,7 +123,7 @@ async def get_feature_description(feature_id: str):
 
 @router.get("/real-estate-index")
 async def get_real_estate_index(
-    region_code: Optional[str] = None,
+    region: Optional[str] = None,
     property_type: Optional[str] = None,
     months: int = Query(12, le=24),
     db: Session = Depends(get_db)
@@ -137,9 +137,9 @@ async def get_real_estate_index(
     """
     params = {}
 
-    if region_code:
+    if region:
         query += " AND region_code = :region_code"
-        params["region_code"] = region_code
+        params["region_code"] = region
     if property_type:
         query += " AND property_type = :property_type"
         params["property_type"] = property_type
@@ -163,12 +163,17 @@ async def get_real_estate_index(
         })
 
     # 지역별 최신 인덱스 요약
-    latest_by_region = db.execute(text("""
+    summary_query = """
         SELECT region_code, property_type, index_value, mom_change
         FROM real_estate_index
         WHERE reference_date = (SELECT MAX(reference_date) FROM real_estate_index)
-        ORDER BY region_code, property_type
-    """))
+    """
+    summary_params = {}
+    if region:
+        summary_query += " AND region_code = :region_code"
+        summary_params["region_code"] = region
+    summary_query += " ORDER BY region_code, property_type"
+    latest_by_region = db.execute(text(summary_query), summary_params)
 
     summary = {}
     for row in latest_by_region:
@@ -249,6 +254,7 @@ async def get_collateral_alerts(
     status: Optional[str] = Query(None, description="OPEN, IN_PROGRESS, RESOLVED"),
     severity: Optional[str] = Query(None, description="LOW, MEDIUM, HIGH, CRITICAL"),
     alert_type: Optional[str] = None,
+    region: str = Query(None),
     limit: int = Query(100, le=500),
     db: Session = Depends(get_db)
 ):
@@ -276,6 +282,9 @@ async def get_collateral_alerts(
     if alert_type:
         query += " AND ca.alert_type = :alert_type"
         params["alert_type"] = alert_type
+    if region:
+        query += " AND cust.region = :region"
+        params["region"] = region
 
     query += " ORDER BY ca.alert_date DESC LIMIT :limit"
     params["limit"] = limit
@@ -322,25 +331,37 @@ async def get_collateral_alerts(
 
 
 @router.get("/ltv-analysis")
-async def get_ltv_analysis(db: Session = Depends(get_db)):
+async def get_ltv_analysis(
+    region: str = Query(None),
+    db: Session = Depends(get_db)
+):
     """LTV 분포 분석"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     # LTV 구간별 분포
     ltv_distribution = db.execute(text("""
         SELECT
             CASE
-                WHEN ltv < 0.5 THEN '0-50%'
-                WHEN ltv < 0.6 THEN '50-60%'
-                WHEN ltv < 0.7 THEN '60-70%'
-                WHEN ltv < 0.8 THEN '70-80%'
+                WHEN col.ltv < 0.5 THEN '0-50%'
+                WHEN col.ltv < 0.6 THEN '50-60%'
+                WHEN col.ltv < 0.7 THEN '60-70%'
+                WHEN col.ltv < 0.8 THEN '70-80%'
                 ELSE '80%+'
             END as ltv_bucket,
             COUNT(*) as count,
-            SUM(current_value) as total_collateral_value
-        FROM collateral
-        WHERE ltv IS NOT NULL
+            SUM(col.current_value) as total_collateral_value
+        FROM collateral col
+        JOIN facility f ON col.facility_id = f.facility_id
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE col.ltv IS NOT NULL
+    """ + region_cond + """
         GROUP BY ltv_bucket
         ORDER BY ltv_bucket
-    """))
+    """), rp)
 
     distribution = []
     for row in ltv_distribution:
@@ -352,11 +373,14 @@ async def get_ltv_analysis(db: Session = Depends(get_db)):
 
     # 담보 유형별 평균 LTV
     by_type = db.execute(text("""
-        SELECT collateral_type, AVG(ltv) as avg_ltv, COUNT(*) as count
-        FROM collateral
-        WHERE ltv IS NOT NULL
-        GROUP BY collateral_type
-    """))
+        SELECT col.collateral_type, AVG(col.ltv) as avg_ltv, COUNT(*) as count
+        FROM collateral col
+        JOIN facility f ON col.facility_id = f.facility_id
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE col.ltv IS NOT NULL
+    """ + region_cond + """
+        GROUP BY col.collateral_type
+    """), rp)
 
     by_collateral_type = []
     for row in by_type:
@@ -368,15 +392,16 @@ async def get_ltv_analysis(db: Session = Depends(get_db)):
 
     # 고 LTV 담보 (80% 이상)
     high_ltv = db.execute(text("""
-        SELECT c.collateral_id, c.collateral_type, c.current_value, c.ltv,
-               f.outstanding_amount, cust.customer_name
-        FROM collateral c
-        LEFT JOIN facility f ON c.facility_id = f.facility_id
-        LEFT JOIN customer cust ON f.customer_id = cust.customer_id
-        WHERE c.ltv >= 0.8
-        ORDER BY c.ltv DESC
+        SELECT col.collateral_id, col.collateral_type, col.current_value, col.ltv,
+               f.outstanding_amount, c.customer_name
+        FROM collateral col
+        JOIN facility f ON col.facility_id = f.facility_id
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE col.ltv >= 0.8
+    """ + region_cond + """
+        ORDER BY col.ltv DESC
         LIMIT 20
-    """))
+    """), rp)
 
     high_ltv_collaterals = []
     for row in high_ltv:
@@ -397,41 +422,57 @@ async def get_ltv_analysis(db: Session = Depends(get_db)):
 
 
 @router.get("/dashboard")
-async def get_collateral_dashboard(db: Session = Depends(get_db)):
+async def get_collateral_dashboard(
+    region: str = Query(None),
+    db: Session = Depends(get_db)
+):
     """담보 모니터링 대시보드"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     # 전체 담보 요약
     summary = db.execute(text("""
         SELECT
             COUNT(*) as total_count,
-            SUM(current_value) as total_value,
-            AVG(ltv) as avg_ltv,
-            SUM(CASE WHEN ltv >= 0.8 THEN 1 ELSE 0 END) as high_ltv_count
-        FROM collateral
-        WHERE current_value > 0
-    """)).fetchone()
+            SUM(col.current_value) as total_value,
+            AVG(col.ltv) as avg_ltv,
+            SUM(CASE WHEN col.ltv >= 0.8 THEN 1 ELSE 0 END) as high_ltv_count
+        FROM collateral col
+        JOIN facility f ON col.facility_id = f.facility_id
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE col.current_value > 0
+    """ + region_cond), rp).fetchone()
 
     # 미해결 경보
     open_alerts = db.execute(text("""
-        SELECT severity, COUNT(*) as count
-        FROM collateral_alert
-        WHERE status != 'RESOLVED'
-        GROUP BY severity
-    """))
+        SELECT ca.severity, COUNT(*) as count
+        FROM collateral_alert ca
+        JOIN collateral col ON ca.collateral_id = col.collateral_id
+        JOIN facility f ON col.facility_id = f.facility_id
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE ca.status != 'RESOLVED'
+    """ + region_cond + """
+        GROUP BY ca.severity
+    """), rp)
 
     alerts_by_severity = {row[0]: row[1] for row in open_alerts}
 
     # 최근 가치 변동 (하락)
     recent_declines = db.execute(text("""
-        SELECT c.collateral_type, cust.customer_name,
+        SELECT col.collateral_type, c.customer_name,
                cvh.change_pct, cvh.valuation_date
         FROM collateral_valuation_history cvh
-        JOIN collateral c ON cvh.collateral_id = c.collateral_id
-        LEFT JOIN facility f ON c.facility_id = f.facility_id
-        LEFT JOIN customer cust ON f.customer_id = cust.customer_id
+        JOIN collateral col ON cvh.collateral_id = col.collateral_id
+        JOIN facility f ON col.facility_id = f.facility_id
+        JOIN customer c ON f.customer_id = c.customer_id
         WHERE cvh.change_pct < -5
+    """ + region_cond + """
         ORDER BY cvh.valuation_date DESC
         LIMIT 10
-    """))
+    """), rp)
 
     significant_declines = []
     for row in recent_declines:

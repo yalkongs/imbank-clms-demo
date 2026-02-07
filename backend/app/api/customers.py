@@ -16,6 +16,7 @@ def get_customers(
     search: str = Query(None),
     industry_code: str = Query(None),
     size_category: str = Query(None),
+    region: str = Query(None),
     sort_by: str = Query("customer_name"),
     sort_order: str = Query("asc"),
     db: Session = Depends(get_db)
@@ -54,6 +55,11 @@ def get_customers(
     if size_category:
         conditions.append("c.size_category = :size_category")
         params["size_category"] = size_category
+
+    # 지역 필터
+    if region:
+        conditions.append("c.region = :region")
+        params["region"] = region
 
     # WHERE 절 조합
     where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
@@ -123,47 +129,52 @@ def get_customers(
 
 
 @router.get("/summary")
-def get_customers_summary(db: Session = Depends(get_db)):
+def get_customers_summary(region: str = Query(None), db: Session = Depends(get_db)):
     """고객 현황 요약"""
 
+    region_cond = " AND c.region = :region" if region else ""
+    region_cond_bare = " WHERE c.region = :region" if region else ""
+    rp = {"region": region} if region else {}
+
     # 전체 고객 수
-    total_count = db.execute(text("SELECT COUNT(*) FROM customer")).scalar()
+    total_count = db.execute(text(f"SELECT COUNT(*) FROM customer c{region_cond_bare}"), rp).scalar()
 
     # 규모별 분포
-    by_size = db.execute(text("""
-        SELECT size_category, COUNT(*) as count
-        FROM customer
-        WHERE size_category IS NOT NULL
-        GROUP BY size_category
-    """)).fetchall()
+    by_size = db.execute(text(f"""
+        SELECT c.size_category, COUNT(*) as count
+        FROM customer c
+        WHERE c.size_category IS NOT NULL {region_cond}
+        GROUP BY c.size_category
+    """), rp).fetchall()
 
     # 업종별 상위 10개
-    by_industry = db.execute(text("""
-        SELECT industry_code, industry_name, COUNT(*) as count
-        FROM customer
-        WHERE industry_code IS NOT NULL
-        GROUP BY industry_code
+    by_industry = db.execute(text(f"""
+        SELECT c.industry_code, c.industry_name, COUNT(*) as count
+        FROM customer c
+        WHERE c.industry_code IS NOT NULL {region_cond}
+        GROUP BY c.industry_code
         ORDER BY count DESC
         LIMIT 10
-    """)).fetchall()
+    """), rp).fetchall()
 
     # 신용등급별 분포
-    by_rating = db.execute(text("""
+    by_rating = db.execute(text(f"""
         SELECT cr.final_grade, COUNT(DISTINCT c.customer_id) as count
         FROM customer c
         LEFT JOIN credit_rating_result cr ON c.customer_id = cr.customer_id
             AND cr.rating_date = (SELECT MAX(rating_date) FROM credit_rating_result WHERE customer_id = c.customer_id)
-        WHERE cr.final_grade IS NOT NULL
+        WHERE cr.final_grade IS NOT NULL {region_cond}
         GROUP BY cr.final_grade
         ORDER BY cr.final_grade
-    """)).fetchall()
+    """), rp).fetchall()
 
     # 총 여신잔액
-    total_exposure = db.execute(text("""
-        SELECT COALESCE(SUM(outstanding_amount), 0)
-        FROM facility
-        WHERE status = 'ACTIVE'
-    """)).scalar()
+    total_exposure = db.execute(text(f"""
+        SELECT COALESCE(SUM(f.outstanding_amount), 0)
+        FROM facility f
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE f.status = 'ACTIVE' {region_cond}
+    """), rp).scalar()
 
     return {
         "total_customers": total_count,

@@ -7,9 +7,9 @@ import {
   Building2,
   BarChart3
 } from 'lucide-react';
-import { Card, StatCard, Table, CellFormatters, DonutChart, GroupedBarChart, COLORS } from '../components';
+import { Card, StatCard, Table, CellFormatters, DonutChart, GroupedBarChart, COLORS, RegionFilter } from '../components';
 import { portfolioApi } from '../utils/api';
-import { formatAmount, formatPercent, getStrategyColorClass, getStrategyLabel } from '../utils/format';
+import { formatAmount, formatPercent, formatRatio, getStrategyColorClass, getStrategyLabel } from '../utils/format';
 
 const REGIONS = [
   { value: '', label: '전체 지역' },
@@ -25,6 +25,9 @@ export default function Portfolio() {
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
   const [industryDetail, setIndustryDetail] = useState<any>(null);
   const [region, setRegion] = useState('');
+  const [regionAnalysis, setRegionAnalysis] = useState<any>(null);
+  const [selectedMetric, setSelectedMetric] = useState<string>('avg_pd');
+  const [showRegionAnalysis, setShowRegionAnalysis] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -39,12 +42,14 @@ export default function Portfolio() {
 
   const loadData = async () => {
     try {
-      const [matrixRes, concRes] = await Promise.all([
+      const [matrixRes, concRes, regionRes] = await Promise.all([
         portfolioApi.getStrategyMatrix(region || undefined),
-        portfolioApi.getConcentration(region || undefined)
+        portfolioApi.getConcentration(region || undefined),
+        portfolioApi.getIndustryRegionAnalysis()
       ]);
       setStrategyMatrix(matrixRes.data);
       setConcentration(concRes.data);
+      setRegionAnalysis(regionRes.data);
     } catch (error) {
       console.error('Portfolio data load error:', error);
     } finally {
@@ -98,15 +103,7 @@ export default function Portfolio() {
           <h1 className="text-2xl font-bold text-gray-900">포트폴리오 전략</h1>
           <p className="text-sm text-gray-500 mt-1">업종별/등급별 여신 전략 및 집중도 관리</p>
         </div>
-        <select
-          value={region}
-          onChange={(e) => setRegion(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {REGIONS.map(r => (
-            <option key={r.value} value={r.value}>{r.label}</option>
-          ))}
-        </select>
+        <RegionFilter value={region} onChange={setRegion} />
       </div>
 
       {/* 집중도 요약 */}
@@ -273,6 +270,153 @@ export default function Portfolio() {
           </div>
         </Card>
       </div>
+
+      {/* 지역별 산업 리스크 비교 분석 */}
+      <Card
+        title="지역별 산업 리스크 비교 분석"
+        headerAction={
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedMetric}
+              onChange={(e) => setSelectedMetric(e.target.value)}
+              className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="avg_pd">평균 PD</option>
+              <option value="avg_lgd">평균 LGD</option>
+              <option value="raroc">RAROC</option>
+              <option value="rwa_density">RWA 밀도</option>
+              <option value="total_exposure">익스포저</option>
+              <option value="customer_count">고객 수</option>
+            </select>
+            <button
+              onClick={() => setShowRegionAnalysis(!showRegionAnalysis)}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            >
+              {showRegionAnalysis ? '요약 보기' : '상세 보기'}
+            </button>
+          </div>
+        }
+      >
+        {regionAnalysis?.industries && (
+          <>
+            {/* 요약 비교 테이블 */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b bg-gray-50">
+                    <th className="px-3 py-2 text-left font-semibold text-gray-700 w-32">업종</th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700" colSpan={2}>
+                      <span className="text-blue-600">수도권</span>
+                    </th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700" colSpan={2}>
+                      <span className="text-green-600">대구경북</span>
+                    </th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-700" colSpan={2}>
+                      <span className="text-orange-600">부산경남</span>
+                    </th>
+                    <th className="px-3 py-2 text-center font-semibold text-gray-500">전국</th>
+                  </tr>
+                  <tr className="border-b bg-gray-50">
+                    <th className="px-3 py-1"></th>
+                    {['수도권', '대구경북', '부산경남'].map(r => (
+                      <React.Fragment key={r}>
+                        <th className="px-2 py-1 text-center text-gray-500 font-normal">
+                          {selectedMetric === 'total_exposure' ? '익스포저' :
+                           selectedMetric === 'customer_count' ? '고객수' :
+                           selectedMetric === 'avg_pd' ? 'PD' :
+                           selectedMetric === 'avg_lgd' ? 'LGD' :
+                           selectedMetric === 'raroc' ? 'RAROC' : 'RWA밀도'}
+                        </th>
+                        {showRegionAnalysis && (
+                          <th className="px-2 py-1 text-center text-gray-500 font-normal">고객수</th>
+                        )}
+                      </React.Fragment>
+                    ))}
+                    <th className="px-2 py-1 text-center text-gray-500 font-normal">
+                      {selectedMetric === 'total_exposure' ? '익스포저' :
+                       selectedMetric === 'customer_count' ? '고객수' :
+                       selectedMetric === 'avg_pd' ? 'PD' :
+                       selectedMetric === 'avg_lgd' ? 'LGD' :
+                       selectedMetric === 'raroc' ? 'RAROC' : 'RWA밀도'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {regionAnalysis.industries.map((ind: any) => {
+                    const regions = ['CAPITAL', 'DAEGU_GB', 'BUSAN_GN'];
+                    const regionColors = ['text-blue-700', 'text-green-700', 'text-orange-700'];
+
+                    const formatMetric = (val: number, metric: string) => {
+                      if (metric === 'total_exposure') return formatAmount(val, 'billion');
+                      if (metric === 'customer_count') return val.toLocaleString();
+                      if (metric === 'raroc') return formatPercent(val);
+                      if (metric === 'rwa_density') return formatPercent(val);
+                      if (metric === 'avg_pd') return formatRatio(val);
+                      if (metric === 'avg_lgd') return formatRatio(val);
+                      return val.toFixed(2);
+                    };
+
+                    // 지역 간 최대/최소 찾기 (색상 하이라이트용)
+                    const vals = regions.map(rgn => ind.regions[rgn]?.[selectedMetric] || 0);
+                    const maxVal = Math.max(...vals);
+                    const minVal = Math.min(...vals.filter(v => v > 0));
+
+                    return (
+                      <tr key={ind.industry_code} className="border-b hover:bg-gray-50">
+                        <td className="px-3 py-2 font-medium text-gray-900">{ind.industry_name}</td>
+                        {regions.map((rgn, idx) => {
+                          const data = ind.regions[rgn] || {};
+                          const val = data[selectedMetric] || 0;
+                          const isMax = val === maxVal && maxVal > 0;
+                          const isMin = val === minVal && minVal > 0 && maxVal !== minVal;
+                          const highlight = selectedMetric === 'raroc'
+                            ? (isMax ? 'bg-green-50 font-semibold' : isMin ? 'bg-red-50' : '')
+                            : selectedMetric === 'total_exposure' || selectedMetric === 'customer_count'
+                            ? (isMax ? 'bg-blue-50 font-semibold' : '')
+                            : (isMin ? 'bg-green-50 font-semibold' : isMax ? 'bg-red-50' : '');
+
+                          return (
+                            <React.Fragment key={rgn}>
+                              <td className={`px-2 py-2 text-center ${regionColors[idx]} ${highlight}`}>
+                                {val > 0 ? formatMetric(val, selectedMetric) : '-'}
+                              </td>
+                              {showRegionAnalysis && (
+                                <td className="px-2 py-2 text-center text-gray-500">
+                                  {data.customer_count || 0}
+                                </td>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                        <td className="px-2 py-2 text-center text-gray-600 bg-gray-50">
+                          {formatMetric(ind.total[selectedMetric] || 0, selectedMetric)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* 범례 */}
+            <div className="mt-3 flex items-center justify-end gap-4 text-xs text-gray-500">
+              {selectedMetric === 'raroc' ? (
+                <>
+                  <span className="flex items-center"><span className="w-3 h-3 bg-green-50 border border-green-200 rounded mr-1"></span>최고 수익성</span>
+                  <span className="flex items-center"><span className="w-3 h-3 bg-red-50 border border-red-200 rounded mr-1"></span>최저 수익성</span>
+                </>
+              ) : selectedMetric === 'total_exposure' || selectedMetric === 'customer_count' ? (
+                <span className="flex items-center"><span className="w-3 h-3 bg-blue-50 border border-blue-200 rounded mr-1"></span>최대</span>
+              ) : (
+                <>
+                  <span className="flex items-center"><span className="w-3 h-3 bg-green-50 border border-green-200 rounded mr-1"></span>가장 우량</span>
+                  <span className="flex items-center"><span className="w-3 h-3 bg-red-50 border border-red-200 rounded mr-1"></span>리스크 높음</span>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </Card>
 
       {/* 업종 상세 (선택 시) */}
       {industryDetail && (

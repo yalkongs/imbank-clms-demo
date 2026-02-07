@@ -14,6 +14,13 @@ import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, Help
 import { workoutApi } from '../utils/api';
 import { formatAmount, formatPercent } from '../utils/format';
 
+const REGIONS = [
+  { value: '', label: '전체 지역' },
+  { value: 'CAPITAL', label: '수도권' },
+  { value: 'DAEGU_GB', label: '대구경북' },
+  { value: 'BUSAN_GN', label: '부산경남' },
+];
+
 export default function Workout() {
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<any>(null);
@@ -24,16 +31,18 @@ export default function Workout() {
   const [caseModalOpen, setCaseModalOpen] = useState(false);
   const [featureModalOpen, setFeatureModalOpen] = useState(false);
   const [featureInfo, setFeatureInfo] = useState<any>(null);
+  const [region, setRegion] = useState('');
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [region]);
 
   const loadData = async () => {
+    const r = region || undefined;
     try {
       const [dashRes, casesRes, histRes] = await Promise.all([
-        workoutApi.getDashboard(),
-        workoutApi.getCases(),
+        workoutApi.getDashboard(r),
+        workoutApi.getCases({ region: r }),
         workoutApi.getRestructuringHistory()
       ]);
       setDashboard(dashRes.data);
@@ -105,6 +114,15 @@ export default function Workout() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">부실채권 관리 및 회수 시나리오 분석</p>
         </div>
+        <select
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {REGIONS.map((r) => (
+            <option key={r.value} value={r.value}>{r.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* Summary Stats */}

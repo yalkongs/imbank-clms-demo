@@ -32,17 +32,19 @@ api.interceptors.response.use(
 
 // Dashboard API
 export const dashboardApi = {
-  getSummary: () => api.get('/dashboard/summary'),
-  getEWSAlerts: () => api.get('/dashboard/ews-alerts'),
-  getKPIs: () => api.get('/dashboard/kpis'),
+  getSummary: (region?: string) => api.get('/dashboard/summary', { params: region ? { region } : undefined }),
+  getEWSAlerts: (region?: string) => api.get('/dashboard/ews-alerts', { params: region ? { region } : undefined }),
+  getKPIs: (region?: string) => api.get('/dashboard/kpis', { params: region ? { region } : undefined }),
+  getCapitalTrend: () => api.get('/dashboard/capital-trend'),
+  getPortfolioDistribution: (region?: string) => api.get('/dashboard/portfolio-distribution', { params: region ? { region } : undefined }),
 };
 
 // Applications API
 export const applicationsApi = {
-  getAll: (params?: { status?: string; stage?: string; priority?: string; limit?: number }) =>
+  getAll: (params?: { status?: string; stage?: string; priority?: string; region?: string; limit?: number }) =>
     api.get('/applications', { params }),
   getPending: () => api.get('/applications/pending'),
-  getSummary: () => api.get('/applications/summary'),
+  getSummary: (region?: string) => api.get('/applications/summary', { params: region ? { region } : undefined }),
   getById: (id: string) => api.get(`/applications/${id}`),
   simulate: (id: string, params?: { amount?: number; rate?: number; tenor?: number }) =>
     api.get(`/applications/${id}/simulate`, { params }),
@@ -79,6 +81,7 @@ export const portfolioApi = {
   getStrategyMatrix: (region?: string) => api.get('/portfolio/strategy-matrix', { params: region ? { region } : undefined }),
   getConcentration: (region?: string) => api.get('/portfolio/concentration', { params: region ? { region } : undefined }),
   getIndustryDetail: (code: string, region?: string) => api.get(`/portfolio/industry/${code}`, { params: region ? { region } : undefined }),
+  getIndustryRegionAnalysis: () => api.get('/portfolio/industry-region-analysis'),
 };
 
 // Limits API
@@ -125,11 +128,12 @@ export const customersApi = {
     search?: string;
     industry_code?: string;
     size_category?: string;
+    region?: string;
     sort_by?: string;
     sort_order?: string;
   }) => api.get('/customers', { params }),
   getById: (id: string) => api.get(`/customers/${id}`),
-  getSummary: () => api.get('/customers/summary'),
+  getSummary: (region?: string) => api.get('/customers/summary', { params: region ? { region } : undefined }),
   getIndustries: () => api.get('/customers/industries'),
 };
 
@@ -157,11 +161,11 @@ export const ewsAdvancedApi = {
   getIndicatorValues: (customerId: string, months?: number) =>
     api.get(`/ews-advanced/indicator-values/${customerId}`, { params: months ? { months } : undefined }),
   getSupplyChain: (customerId: string) => api.get(`/ews-advanced/supply-chain/${customerId}`),
-  getExternalSignals: (signalType?: string) =>
-    api.get('/ews-advanced/external-signals', { params: signalType ? { signal_type: signalType } : undefined }),
-  getCompositeScores: (params?: { min_score?: number; limit?: number }) =>
+  getExternalSignals: (params?: { signal_type?: string; region?: string }) =>
+    api.get('/ews-advanced/external-signals', { params }),
+  getCompositeScores: (params?: { min_score?: number; limit?: number; region?: string }) =>
     api.get('/ews-advanced/composite-scores', { params }),
-  getDashboard: () => api.get('/ews-advanced/dashboard'),
+  getDashboard: (region?: string) => api.get('/ews-advanced/dashboard', { params: region ? { region } : undefined }),
 };
 
 // Dynamic Limits API (동적 한도관리)
@@ -180,14 +184,14 @@ export const dynamicLimitsApi = {
 // Customer Profitability API (고객 수익성 분석)
 export const customerProfitabilityApi = {
   getFeatureDescription: (featureId: string) => api.get(`/customer-profitability/feature-description/${featureId}`),
-  getRankings: (params?: { sort_by?: string; limit?: number }) =>
+  getRankings: (params?: { sort_by?: string; limit?: number; region?: string }) =>
     api.get('/customer-profitability/rankings', { params }),
   getCustomer: (customerId: string) => api.get(`/customer-profitability/customer/${customerId}`),
-  getCrossSellOpportunities: (params?: { status?: string; min_probability?: number }) =>
+  getCrossSellOpportunities: (params?: { status?: string; min_probability?: number; region?: string }) =>
     api.get('/customer-profitability/cross-sell-opportunities', { params }),
-  getChurnRisk: (minRisk?: number) =>
-    api.get('/customer-profitability/churn-risk', { params: minRisk ? { min_risk: minRisk } : undefined }),
-  getDashboard: () => api.get('/customer-profitability/dashboard'),
+  getChurnRisk: (params?: { min_risk?: number; region?: string }) =>
+    api.get('/customer-profitability/churn-risk', { params }),
+  getDashboard: (region?: string) => api.get('/customer-profitability/dashboard', { params: region ? { region } : undefined }),
 };
 
 // Collateral Monitoring API (담보 모니터링)
@@ -197,10 +201,10 @@ export const collateralMonitoringApi = {
     api.get('/collateral-monitoring/real-estate-index', { params: region ? { region } : undefined }),
   getValuationHistory: (collateralId: string, months?: number) =>
     api.get(`/collateral-monitoring/valuation-history/${collateralId}`, { params: months ? { months } : undefined }),
-  getAlerts: (params?: { alert_type?: string; status?: string }) =>
+  getAlerts: (params?: { alert_type?: string; status?: string; region?: string }) =>
     api.get('/collateral-monitoring/alerts', { params }),
-  getLtvAnalysis: () => api.get('/collateral-monitoring/ltv-analysis'),
-  getDashboard: () => api.get('/collateral-monitoring/dashboard'),
+  getLtvAnalysis: (region?: string) => api.get('/collateral-monitoring/ltv-analysis', { params: region ? { region } : undefined }),
+  getDashboard: (region?: string) => api.get('/collateral-monitoring/dashboard', { params: region ? { region } : undefined }),
 };
 
 // Portfolio Optimization API (포트폴리오 최적화)
@@ -217,25 +221,25 @@ export const portfolioOptimizationApi = {
 // Workout API (Workout 관리)
 export const workoutApi = {
   getFeatureDescription: (featureId: string) => api.get(`/workout/feature-description/${featureId}`),
-  getCases: (params?: { status?: string; priority?: string }) =>
+  getCases: (params?: { status?: string; priority?: string; region?: string }) =>
     api.get('/workout/cases', { params }),
   getCase: (caseId: string) => api.get(`/workout/case/${caseId}`),
   getScenarios: (caseId: string) => api.get(`/workout/scenarios/${caseId}`),
   getRestructuringHistory: (customerId?: string) =>
     api.get('/workout/restructuring-history', { params: customerId ? { customer_id: customerId } : undefined }),
-  getDashboard: () => api.get('/workout/dashboard'),
+  getDashboard: (region?: string) => api.get('/workout/dashboard', { params: region ? { region } : undefined }),
 };
 
 // ESG API (ESG 리스크 관리)
 export const esgApi = {
   getFeatureDescription: (featureId: string) => api.get(`/esg/feature-description/${featureId}`),
-  getAssessments: (params?: { min_score?: number; limit?: number }) =>
+  getAssessments: (params?: { min_score?: number; limit?: number; region?: string }) =>
     api.get('/esg/assessments', { params }),
   getAssessment: (customerId: string) => api.get(`/esg/assessment/${customerId}`),
   getGreenFinance: (productType?: string) =>
     api.get('/esg/green-finance', { params: productType ? { product_type: productType } : undefined }),
-  getGradeDistribution: () => api.get('/esg/grade-distribution'),
-  getDashboard: () => api.get('/esg/dashboard'),
+  getGradeDistribution: (region?: string) => api.get('/esg/grade-distribution', { params: region ? { region } : undefined }),
+  getDashboard: (region?: string) => api.get('/esg/dashboard', { params: region ? { region } : undefined }),
 };
 
 // ALM API (금리 리스크 관리)

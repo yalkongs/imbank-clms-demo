@@ -251,6 +251,7 @@ async def get_external_signals(
     customer_id: Optional[str] = None,
     signal_type: Optional[str] = None,
     severity: Optional[str] = None,
+    region: str = Query(None),
     limit: int = Query(50, le=200),
     db: Session = Depends(get_db)
 ):
@@ -275,6 +276,9 @@ async def get_external_signals(
     if severity:
         query += " AND ees.severity = :severity"
         params["severity"] = severity
+    if region:
+        query += " AND c.region = :region"
+        params["region"] = region
 
     query += " ORDER BY ees.signal_date DESC LIMIT :limit"
     params["limit"] = limit
@@ -306,10 +310,17 @@ async def get_composite_scores(
     risk_level: Optional[str] = None,
     min_score: Optional[float] = None,
     max_score: Optional[float] = None,
+    region: str = Query(None),
     limit: int = Query(100, le=500),
     db: Session = Depends(get_db)
 ):
     """종합 EWS 점수 조회"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     query = """
         SELECT ecs.score_id, ecs.customer_id, c.customer_name, c.industry_name,
                ecs.score_date, ecs.financial_score, ecs.operational_score,
@@ -330,6 +341,9 @@ async def get_composite_scores(
     if max_score is not None:
         query += " AND ecs.composite_score <= :max_score"
         params["max_score"] = max_score
+    if region:
+        query += " AND c.region = :region"
+        params["region"] = region
 
     query += " ORDER BY ecs.composite_score ASC LIMIT :limit"
     params["limit"] = limit
@@ -355,13 +369,15 @@ async def get_composite_scores(
         })
 
     # 요약 통계
-    summary_result = db.execute(text("""
-        SELECT risk_level, COUNT(*) as count,
-               AVG(composite_score) as avg_score,
-               AVG(predicted_default_prob) as avg_pd
-        FROM ews_composite_score
-        GROUP BY risk_level
-    """))
+    summary_result = db.execute(text(f"""
+        SELECT ecs.risk_level, COUNT(*) as count,
+               AVG(ecs.composite_score) as avg_score,
+               AVG(ecs.predicted_default_prob) as avg_pd
+        FROM ews_composite_score ecs
+        JOIN customer c ON ecs.customer_id = c.customer_id
+        WHERE 1=1{region_cond}
+        GROUP BY ecs.risk_level
+    """), rp)
 
     summary = {}
     for row in summary_result:
@@ -375,37 +391,54 @@ async def get_composite_scores(
 
 
 @router.get("/dashboard")
-async def get_ews_dashboard(db: Session = Depends(get_db)):
+async def get_ews_dashboard(
+    region: str = Query(None),
+    db: Session = Depends(get_db)
+):
     """EWS 대시보드 요약"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     # 위험 등급별 분포
-    risk_dist = db.execute(text("""
-        SELECT risk_level, COUNT(*) as count
-        FROM ews_composite_score
-        GROUP BY risk_level
-    """))
+    risk_dist = db.execute(text(f"""
+        SELECT ecs.risk_level, COUNT(*) as count
+        FROM ews_composite_score ecs
+        JOIN customer c ON ecs.customer_id = c.customer_id
+        WHERE 1=1{region_cond}
+        GROUP BY ecs.risk_level
+    """), rp)
 
     risk_distribution = {row[0]: row[1] for row in risk_dist}
 
     # 평균 복합점수
-    avg_score = db.execute(text("""
-        SELECT AVG(composite_score) FROM ews_composite_score
-    """)).fetchone()
+    avg_score = db.execute(text(f"""
+        SELECT AVG(ecs.composite_score)
+        FROM ews_composite_score ecs
+        JOIN customer c ON ecs.customer_id = c.customer_id
+        WHERE 1=1{region_cond}
+    """), rp).fetchone()
 
     # 외부 신호 총 개수
-    signal_count = db.execute(text("""
-        SELECT COUNT(*) FROM ews_external_signal
-    """)).fetchone()
+    signal_count = db.execute(text(f"""
+        SELECT COUNT(*)
+        FROM ews_external_signal ees
+        JOIN customer c ON ees.customer_id = c.customer_id
+        WHERE 1=1{region_cond}
+    """), rp).fetchone()
 
     # 최근 외부 신호 (심각도 높은 것)
-    recent_signals = db.execute(text("""
+    recent_signals = db.execute(text(f"""
         SELECT ees.signal_date, c.customer_name, ees.signal_type,
                ees.severity, ees.title
         FROM ews_external_signal ees
         JOIN customer c ON ees.customer_id = c.customer_id
-        WHERE ees.severity IN ('HIGH', 'CRITICAL')
+        WHERE ees.severity IN ('HIGH', 'CRITICAL'){region_cond}
         ORDER BY ees.signal_date DESC
         LIMIT 10
-    """))
+    """), rp)
 
     critical_signals = []
     for row in recent_signals:
@@ -418,15 +451,15 @@ async def get_ews_dashboard(db: Session = Depends(get_db)):
         })
 
     # 워치리스트 (HIGH, CRITICAL)
-    watchlist = db.execute(text("""
+    watchlist = db.execute(text(f"""
         SELECT c.customer_id, c.customer_name, c.industry_name,
                ecs.composite_score, ecs.risk_level, ecs.recommendation
         FROM ews_composite_score ecs
         JOIN customer c ON ecs.customer_id = c.customer_id
-        WHERE ecs.risk_level IN ('HIGH', 'CRITICAL')
+        WHERE ecs.risk_level IN ('HIGH', 'CRITICAL'){region_cond}
         ORDER BY ecs.composite_score ASC
         LIMIT 20
-    """))
+    """), rp)
 
     watch_customers = []
     for row in watchlist:

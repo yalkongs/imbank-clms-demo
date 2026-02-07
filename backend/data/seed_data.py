@@ -54,33 +54,79 @@ PRODUCTS = [
 ]
 
 # 고객명 생성용
-COMPANY_PREFIXES = ['삼성', '현대', '코리아', '한국', '동양', '대한', '서울', '글로벌', '유니온', '테크', '스마트', '퓨처', '넥스트', '하이', '메가']
-COMPANY_SUFFIXES = ['전자', '테크', '시스템', '솔루션', '개발', '산업', '건설', '무역', '유통', '물류', '바이오', '파트너스', '홀딩스', '인베스트', 'E&C']
+COMPANY_PREFIXES = [
+    '삼성', '현대', '코리아', '한국', '동양', '대한', '서울', '글로벌', '유니온', '테크',
+    '스마트', '퓨처', '넥스트', '하이', '메가', '대구', '경북', '포항', '구미', '영남',
+    '신라', '팔공', '금호', '성서', '비슬', '아이엠', '디지털', '그린', '블루', '에이스',
+    '제일', '우진', '태영', '성진', '동아', '남성', '신흥', '창조', '혁신', '미래'
+]
+COMPANY_SUFFIXES = [
+    '전자', '테크', '시스템', '솔루션', '개발', '산업', '건설', '무역', '유통', '물류',
+    '바이오', '파트너스', '홀딩스', '인베스트', 'E&C', '섬유', '금속', '정밀', '엔지니어링',
+    '에너지', '플랜트', '소재', '케미칼', '메디컬', '로보틱스', '오토', '모빌리티', '푸드', '커머스'
+]
 
 # 지역별 주소 및 region 코드
 REGION_ADDRESSES = {
     'CAPITAL': [
         '서울시 강남구', '서울시 서초구', '서울시 영등포구', '서울시 중구', '서울시 종로구',
-        '경기도 성남시', '경기도 수원시', '경기도 용인시', '인천시 남동구', '인천시 연수구'
+        '서울시 마포구', '서울시 송파구', '서울시 강서구',
+        '경기도 성남시', '경기도 수원시', '경기도 용인시', '경기도 화성시', '경기도 안양시',
+        '인천시 남동구', '인천시 연수구'
     ],
     'DAEGU_GB': [
-        '대구시 수성구', '대구시 달서구', '대구시 북구', '경북 포항시', '경북 구미시',
-        '경북 경주시', '경북 김천시'
+        '대구시 수성구', '대구시 달서구', '대구시 북구', '대구시 동구', '대구시 서구',
+        '대구시 중구', '대구시 남구', '대구시 달성군',
+        '경북 포항시', '경북 구미시', '경북 경주시', '경북 김천시',
+        '경북 안동시', '경북 영천시', '경북 경산시', '경북 상주시', '경북 칠곡군'
     ],
     'BUSAN_GN': [
-        '부산시 해운대구', '부산시 남구', '부산시 사하구', '경남 창원시', '경남 김해시',
+        '부산시 해운대구', '부산시 남구', '부산시 사하구', '부산시 동래구', '부산시 부산진구',
+        '경남 창원시', '경남 김해시', '경남 양산시', '경남 거제시',
         '울산시 남구', '울산시 울주군'
     ],
 }
 
 def get_region_and_address():
-    """지역 코드와 주소를 랜덤으로 반환"""
+    """지역 코드와 주소를 랜덤으로 반환 (iM뱅크 거점: 대구경북 70%)"""
     region = random.choices(
         ['CAPITAL', 'DAEGU_GB', 'BUSAN_GN'],
-        weights=[50, 25, 25]
+        weights=[20, 70, 10]
     )[0]
     address = random.choice(REGION_ADDRESSES[region])
     return region, address
+
+# 지역별 등급 가중치 (수도권 > 대구경북 > 부산경남 건전성 순)
+REGION_GRADE_WEIGHTS = {
+    # 수도권: 우량 등급 비중 높음
+    'CAPITAL': {
+        'LARGE':  [0.15, 0.20, 0.25, 0.18, 0.10, 0.07, 0.03, 0.01, 0.01],
+        'MEDIUM': [0.05, 0.10, 0.15, 0.20, 0.20, 0.15, 0.10, 0.03, 0.02],
+        'SMALL':  [0.02, 0.05, 0.10, 0.15, 0.20, 0.20, 0.15, 0.08, 0.05],
+        'SOHO':   [0.01, 0.02, 0.05, 0.10, 0.18, 0.25, 0.20, 0.12, 0.07],
+    },
+    # 대구경북: 중간 수준
+    'DAEGU_GB': {
+        'LARGE':  [0.08, 0.12, 0.18, 0.20, 0.17, 0.12, 0.08, 0.03, 0.02],
+        'MEDIUM': [0.02, 0.05, 0.10, 0.15, 0.22, 0.20, 0.15, 0.07, 0.04],
+        'SMALL':  [0.01, 0.02, 0.05, 0.10, 0.15, 0.22, 0.22, 0.14, 0.09],
+        'SOHO':   [0.00, 0.01, 0.03, 0.07, 0.12, 0.20, 0.25, 0.18, 0.14],
+    },
+    # 부산경남: 상대적 저건전성
+    'BUSAN_GN': {
+        'LARGE':  [0.05, 0.08, 0.12, 0.18, 0.20, 0.17, 0.12, 0.05, 0.03],
+        'MEDIUM': [0.01, 0.03, 0.06, 0.10, 0.18, 0.25, 0.20, 0.10, 0.07],
+        'SMALL':  [0.00, 0.01, 0.03, 0.06, 0.12, 0.20, 0.25, 0.20, 0.13],
+        'SOHO':   [0.00, 0.00, 0.02, 0.04, 0.08, 0.15, 0.25, 0.25, 0.21],
+    },
+}
+
+# 지역별 LGD 범위 (수도권 담보 가치 높고 회수율 양호)
+REGION_LGD = {
+    'CAPITAL':  {'secured': (0.18, 0.32), 'unsecured': (0.38, 0.50)},
+    'DAEGU_GB': {'secured': (0.25, 0.40), 'unsecured': (0.45, 0.58)},
+    'BUSAN_GN': {'secured': (0.30, 0.48), 'unsecured': (0.50, 0.65)},
+}
 
 def generate_uuid():
     return str(uuid.uuid4())[:8].upper()
@@ -251,10 +297,11 @@ def seed_facilities_and_applications(conn, customers):
 
     grades = list(GRADE_PD_MAP.keys())
 
-    # 기존 포트폴리오 (약정 완료): 500건
-    for i in range(500):
+    # 기존 포트폴리오 (약정 완료): 1200건
+    for i in range(1200):
         cust = random.choice(customers)
         product = random.choice(PRODUCTS)
+        region = cust[14]  # customer region
 
         # 규모별 금액 범위
         if cust[8] == 'LARGE':
@@ -266,15 +313,11 @@ def seed_facilities_and_applications(conn, customers):
         else:
             amount = random.uniform(1, 20) * 100000000
 
-        # 등급 배정 (규모/산업별 가중치)
-        if cust[8] == 'LARGE':
-            grade_weights = [0.1, 0.15, 0.2, 0.2, 0.15, 0.1, 0.05, 0.03, 0.02]
-        elif cust[8] == 'MEDIUM':
-            grade_weights = [0.02, 0.05, 0.1, 0.15, 0.2, 0.2, 0.15, 0.08, 0.05]
-        else:
-            grade_weights = [0.01, 0.02, 0.05, 0.1, 0.15, 0.2, 0.2, 0.15, 0.12]
+        # 등급 배정 (규모 + 지역별 가중치)
+        size_key = cust[8] if cust[8] in ('LARGE', 'MEDIUM', 'SMALL', 'SOHO') else 'SMALL'
+        grade_weights = REGION_GRADE_WEIGHTS.get(region, REGION_GRADE_WEIGHTS['DAEGU_GB']).get(size_key, REGION_GRADE_WEIGHTS['DAEGU_GB']['SMALL'])
 
-        grade_weights = grade_weights + [0] * (len(grades) - len(grade_weights))
+        grade_weights = list(grade_weights) + [0] * (len(grades) - len(grade_weights))
         grade = random.choices(grades, weights=grade_weights[:len(grades)])[0]
         pd = GRADE_PD_MAP[grade]
 
@@ -287,14 +330,15 @@ def seed_facilities_and_applications(conn, customers):
         tenor_months = (maturity_date - contract_date).days // 30
         outstanding = amount * random.uniform(0.3, 1.0)
 
-        # 담보 정보
+        # 담보 정보 + 지역별 LGD 차등
         collateral_type = random.choice(['REAL_ESTATE', 'DEPOSIT', 'SECURITIES', 'NONE'])
+        lgd_range = REGION_LGD.get(region, REGION_LGD['DAEGU_GB'])
         if collateral_type != 'NONE':
             collateral_value = amount * random.uniform(1.0, 1.5)
-            lgd = random.uniform(0.20, 0.40)
+            lgd = random.uniform(*lgd_range['secured'])
         else:
             collateral_value = 0
-            lgd = random.uniform(0.45, 0.60)
+            lgd = random.uniform(*lgd_range['unsecured'])
 
         # 금리 계산
         base_rate = 0.035  # 3.5%
@@ -925,63 +969,96 @@ def seed_ftp_and_spreads(conn):
     print(f"FTP {len(ftp_rates)}건, 스프레드 {len(spreads)}건, Hurdle Rate {len(hurdle_rates)}건 생성 완료")
 
 def seed_portfolio_summary(conn):
-    """포트폴리오 요약 데이터 생성"""
+    """포트폴리오 요약 데이터 생성 - 실제 DB 데이터에서 집계"""
     cursor = conn.cursor()
+    base_date = datetime.now().strftime('%Y-%m-%d')
 
-    summaries = []
+    # 기존 데이터 삭제
+    cursor.execute("DELETE FROM portfolio_summary")
 
-    # 산업별 요약
-    for ind_code, ind_name, _, _, _, _ in INDUSTRIES:
-        exposure = random.uniform(1000, 5000) * 100000000
-        rwa = exposure * random.uniform(0.4, 0.8)
-        el = exposure * random.uniform(0.005, 0.02)
-        revenue = exposure * random.uniform(0.04, 0.06)
-        ec = rwa * 0.08
-        raroc = (revenue - el) / ec if ec > 0 else 0
-
-        summaries.append((
-            f'SUM_IND_{ind_code}', datetime.now().strftime('%Y-%m-%d'),
-            'INDUSTRY', ind_code, ind_name,
-            random.randint(20, 100), exposure, rwa, el,
-            random.uniform(0.01, 0.05), random.uniform(0.30, 0.50),
-            random.uniform(0.04, 0.06), revenue, raroc
-        ))
-
-    # 등급별 요약
-    grade_buckets = [
-        ('AAA_AA', 'AAA~AA 등급'),
-        ('A', 'A 등급'),
-        ('BBB', 'BBB 등급'),
-        ('BB', 'BB 등급'),
-        ('B_Below', 'B 이하')
-    ]
-
-    for code, name in grade_buckets:
-        exposure = random.uniform(500, 3000) * 100000000
-        rwa = exposure * random.uniform(0.3, 0.9)
-        el = exposure * random.uniform(0.002, 0.03)
-        revenue = exposure * random.uniform(0.035, 0.07)
-        ec = rwa * 0.08
-        raroc = (revenue - el) / ec if ec > 0 else 0
-
-        summaries.append((
-            f'SUM_GRADE_{code}', datetime.now().strftime('%Y-%m-%d'),
-            'RATING', code, name,
-            random.randint(30, 150), exposure, rwa, el,
-            random.uniform(0.005, 0.10), random.uniform(0.30, 0.55),
-            random.uniform(0.04, 0.065), revenue, raroc
-        ))
-
-    cursor.executemany("""
-        INSERT OR REPLACE INTO portfolio_summary
+    # 산업별 요약 - 실제 데이터에서 집계
+    cursor.execute("""
+        INSERT INTO portfolio_summary
         (summary_id, base_date, segment_type, segment_code, segment_name,
          exposure_count, total_exposure, total_rwa, total_el,
          avg_pd, avg_lgd, weighted_rate, total_revenue, raroc)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, summaries)
+        SELECT
+            'SUM_IND_' || c.industry_code,
+            ?,
+            'INDUSTRY',
+            c.industry_code,
+            c.industry_name,
+            COUNT(DISTINCT c.customer_id),
+            COALESCE(SUM(f.outstanding_amount), 0),
+            COALESCE(SUM(rp.rwa), 0),
+            COALESCE(SUM(rp.expected_loss), 0),
+            AVG(COALESCE(rp.pit_pd, rp.ttc_pd)),
+            AVG(rp.lgd),
+            AVG(f.final_rate),
+            COALESCE(SUM(f.outstanding_amount * f.final_rate), 0),
+            CASE
+                WHEN SUM(rp.rwa) * 0.08 > 0
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.048 - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                ELSE 0
+            END
+        FROM customer c
+        JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+        LEFT JOIN loan_application la ON f.application_id = la.application_id
+        LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
+        WHERE c.industry_code IS NOT NULL
+        GROUP BY c.industry_code, c.industry_name
+    """, (base_date,))
+
+    ind_count = cursor.rowcount
+
+    # 등급별 요약 - 실제 데이터에서 집계
+    grade_buckets = {
+        'AAA_AA': ('AAA~AA 등급', ['AAA', 'AA+', 'AA', 'AA-']),
+        'A': ('A 등급', ['A+', 'A', 'A-']),
+        'BBB': ('BBB 등급', ['BBB+', 'BBB', 'BBB-']),
+        'BB': ('BB 등급', ['BB+', 'BB', 'BB-']),
+        'B_Below': ('B 이하', ['B+', 'B', 'B-', 'CCC+', 'CCC', 'CCC-', 'CC', 'C', 'D']),
+    }
+
+    rating_count = 0
+    for bucket_code, (bucket_name, grades) in grade_buckets.items():
+        placeholders = ','.join(['?'] * len(grades))
+        cursor.execute(f"""
+            INSERT INTO portfolio_summary
+            (summary_id, base_date, segment_type, segment_code, segment_name,
+             exposure_count, total_exposure, total_rwa, total_el,
+             avg_pd, avg_lgd, weighted_rate, total_revenue, raroc)
+            SELECT
+                'SUM_GRADE_{bucket_code}',
+                ?,
+                'RATING',
+                '{bucket_code}',
+                '{bucket_name}',
+                COUNT(DISTINCT c.customer_id),
+                COALESCE(SUM(f.outstanding_amount), 0),
+                COALESCE(SUM(rp.rwa), 0),
+                COALESCE(SUM(rp.expected_loss), 0),
+                AVG(COALESCE(rp.pit_pd, rp.ttc_pd)),
+                AVG(rp.lgd),
+                AVG(f.final_rate),
+                COALESCE(SUM(f.outstanding_amount * f.final_rate), 0),
+                CASE
+                    WHEN SUM(rp.rwa) * 0.08 > 0
+                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.048 - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                    ELSE 0
+                END
+            FROM customer c
+            JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+            LEFT JOIN loan_application la ON f.application_id = la.application_id
+            LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
+            LEFT JOIN credit_rating_result cr ON c.customer_id = cr.customer_id
+                AND cr.rating_date = (SELECT MAX(rating_date) FROM credit_rating_result WHERE customer_id = c.customer_id)
+            WHERE cr.final_grade IN ({placeholders})
+        """, (base_date, *grades))
+        rating_count += 1
 
     conn.commit()
-    print(f"포트폴리오 요약 {len(summaries)}건 생성 완료")
+    print(f"포트폴리오 요약 {ind_count + rating_count}건 생성 완료 (실제 데이터 기반)")
 
 def seed_ews_alerts(conn):
     """EWS 경보 데이터 생성"""
@@ -1050,7 +1127,7 @@ def main():
         seed_master_data(conn)
 
         # 고객 및 그룹
-        customers = seed_customers(conn, 400)
+        customers = seed_customers(conn, 1000)
         seed_borrower_groups(conn, customers)
 
         # 여신 데이터

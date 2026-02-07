@@ -375,6 +375,7 @@ def generate_dynamic_limit_adjustments(conn):
 def generate_customer_profitability(conn):
     """고객 종합 수익성 데이터 생성"""
     cursor = conn.cursor()
+    cursor.execute("DELETE FROM customer_profitability")
     cursor.execute("""
         SELECT c.customer_id, c.size_category,
                COALESCE(SUM(f.outstanding_amount), 0) as total_loan
@@ -631,18 +632,35 @@ def generate_collateral_valuations(conn):
 # ============================================
 
 def generate_portfolio_optimization(conn):
-    """포트폴리오 최적화 결과 생성"""
+    """포트폴리오 최적화 결과 생성 - 실제 DB 산업 데이터 기반"""
     cursor = conn.cursor()
 
-    # 최적화 실행
+    # 기존 데이터 삭제
+    cursor.execute("DELETE FROM optimal_allocation")
+    cursor.execute("DELETE FROM portfolio_optimization_run")
+
+    # 실제 산업별 현황 조회
+    cursor.execute("""
+        SELECT c.industry_code, c.industry_name,
+               COALESCE(SUM(f.outstanding_amount), 0) as exposure,
+               COALESCE(SUM(rp.rwa), 0) as rwa,
+               COALESCE(SUM(rp.expected_loss), 0) as el,
+               COALESCE(SUM(f.outstanding_amount * f.final_rate), 0) as revenue,
+               CASE WHEN SUM(rp.rwa) * 0.08 > 0
+               THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.048 - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+               ELSE 0 END as raroc
+        FROM customer c
+        JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+        LEFT JOIN loan_application la ON f.application_id = la.application_id
+        LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
+        WHERE c.industry_code IS NOT NULL
+        GROUP BY c.industry_code, c.industry_name
+        ORDER BY exposure DESC
+    """)
+    industries = cursor.fetchall()
+
     runs = []
     allocations = []
-
-    industries = [
-        ('MFG001', '반도체'), ('MFG003', '2차전지'), ('MFG009', '의약품'),
-        ('SVC001', 'IT서비스'), ('SVC003', '플랫폼'), ('CON001', '종합건설'),
-        ('REA001', '부동산개발'), ('FIN001', '캐피탈')
-    ]
 
     for i in range(5):
         run_id = f"OPT_{generate_uuid()}"
@@ -651,17 +669,20 @@ def generate_portfolio_optimization(conn):
         current_portfolio = {}
         optimal_portfolio = {}
 
-        for code, name in industries:
-            current_exp = random.uniform(100, 500) * 1e9
-            optimal_exp = current_exp * random.uniform(0.8, 1.2)
-            current_raroc = random.uniform(10, 25)
-            optimal_raroc = current_raroc * random.uniform(1.0, 1.15)
+        for ind in industries:
+            code, name = ind[0], ind[1]
+            current_exp = ind[2]  # 실제 익스포저
+            current_raroc = ind[6] * 100  # 비율 → 퍼센트
+
+            # 최적 배분: 현재 대비 ±20% 범위에서 조정
+            optimal_exp = current_exp * random.uniform(0.85, 1.15)
+            optimal_raroc = current_raroc * random.uniform(1.01, 1.10)
 
             current_portfolio[code] = current_exp
             optimal_portfolio[code] = optimal_exp
 
             change_amount = optimal_exp - current_exp
-            recommendation = '확대' if change_amount > 0 else '축소' if change_amount < 0 else '유지'
+            recommendation = '확대' if change_amount > current_exp * 0.03 else '축소' if change_amount < -current_exp * 0.03 else '유지'
 
             allocations.append((
                 f"OA_{generate_uuid()}",
@@ -672,23 +693,23 @@ def generate_portfolio_optimization(conn):
                 round(current_exp, 0),
                 round(optimal_exp, 0),
                 round(change_amount, 0),
-                round(change_amount / current_exp * 100, 2),
+                round(change_amount / current_exp * 100, 2) if current_exp > 0 else 0,
                 round(current_raroc, 2),
                 round(optimal_raroc, 2),
                 recommendation,
                 random.randint(1, 5)
             ))
 
-        total_improvement = random.uniform(5, 15)
+        total_improvement = random.uniform(3, 10)
 
         runs.append((
             run_id,
             run_date,
             random.choice(['RAROC_MAX', 'RWA_MIN', 'RISK_PARITY']),
-            round(random.uniform(15, 20), 2),
+            round(random.uniform(150, 170), 2),  # 목적함수 값 (RAROC %)
             json.dumps({'bis_min': 0.11, 'hhi_max': 0.25, 'single_max': 0.1}),
-            json.dumps(current_portfolio),
-            json.dumps(optimal_portfolio),
+            json.dumps({k: round(v, 0) for k, v in current_portfolio.items()}),
+            json.dumps({k: round(v, 0) for k, v in optimal_portfolio.items()}),
             round(total_improvement, 2),
             'COMPLETED'
         ))

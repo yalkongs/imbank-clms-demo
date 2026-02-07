@@ -142,10 +142,17 @@ async def get_feature_description(feature_id: str):
 async def get_workout_cases(
     status: Optional[str] = None,
     strategy: Optional[str] = None,
+    region: str = Query(None),
     limit: int = Query(50, le=200),
     db: Session = Depends(get_db)
 ):
     """Workout 케이스 목록"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     query = """
         SELECT wc.case_id, wc.customer_id, c.customer_name, c.industry_name,
                wc.case_open_date, wc.case_status, wc.total_exposure,
@@ -165,10 +172,11 @@ async def get_workout_cases(
         query += " AND wc.strategy = :strategy"
         params["strategy"] = strategy
 
+    query += region_cond
     query += " ORDER BY wc.case_open_date DESC LIMIT :limit"
     params["limit"] = limit
 
-    result = db.execute(text(query), params)
+    result = db.execute(text(query), {**params, **rp})
 
     cases = []
     for row in result:
@@ -192,9 +200,12 @@ async def get_workout_cases(
     # 상태별 요약
     status_summary = db.execute(text("""
         SELECT case_status, COUNT(*) as count, SUM(total_exposure) as total_exposure
-        FROM workout_case
+        FROM workout_case wc
+        JOIN customer c ON wc.customer_id = c.customer_id
+        WHERE 1=1
+    """ + region_cond + """
         GROUP BY case_status
-    """))
+    """), rp)
 
     summary = {}
     for row in status_summary:
@@ -394,25 +405,39 @@ async def get_restructuring_history(
 
 
 @router.get("/dashboard")
-async def get_workout_dashboard(db: Session = Depends(get_db)):
+async def get_workout_dashboard(
+    region: str = Query(None),
+    db: Session = Depends(get_db)
+):
     """Workout 대시보드"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     # 전체 요약
     summary = db.execute(text("""
         SELECT
             COUNT(*) as total_cases,
-            SUM(total_exposure) as total_exposure,
-            SUM(provision_amount) as total_provision,
-            AVG(expected_recovery_rate) as avg_expected_recovery,
-            SUM(CASE WHEN case_status IN ('OPEN', 'IN_PROGRESS') THEN 1 ELSE 0 END) as active_cases
-        FROM workout_case
-    """)).fetchone()
+            SUM(wc.total_exposure) as total_exposure,
+            SUM(wc.provision_amount) as total_provision,
+            AVG(wc.expected_recovery_rate) as avg_expected_recovery,
+            SUM(CASE WHEN wc.case_status IN ('OPEN', 'IN_PROGRESS') THEN 1 ELSE 0 END) as active_cases
+        FROM workout_case wc
+        JOIN customer c ON wc.customer_id = c.customer_id
+        WHERE 1=1
+    """ + region_cond), rp).fetchone()
 
     # 전략별 분포
     by_strategy = db.execute(text("""
-        SELECT strategy, COUNT(*) as count, SUM(total_exposure) as exposure
-        FROM workout_case
-        GROUP BY strategy
-    """))
+        SELECT wc.strategy, COUNT(*) as count, SUM(wc.total_exposure) as exposure
+        FROM workout_case wc
+        JOIN customer c ON wc.customer_id = c.customer_id
+        WHERE 1=1
+    """ + region_cond + """
+        GROUP BY wc.strategy
+    """), rp)
 
     strategy_breakdown = []
     for row in by_strategy:
@@ -429,9 +454,10 @@ async def get_workout_dashboard(db: Session = Depends(get_db)):
         FROM workout_case wc
         JOIN customer c ON wc.customer_id = c.customer_id
         WHERE wc.case_status IN ('RECOVERED', 'LIQUIDATED')
+    """ + region_cond + """
         ORDER BY wc.closed_date DESC
         LIMIT 5
-    """))
+    """), rp)
 
     recent_recoveries = []
     for row in recent_closed:

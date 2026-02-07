@@ -96,7 +96,7 @@ def get_limits_summary(db: Session = Depends(get_db)):
                 "count": r[1],
                 "total_limit": r[2],
                 "total_exposure": r[3],
-                "utilization": r[3] / r[2] * 100 if r[2] else 0
+                "utilization": (r[3] or 0) / r[2] * 100 if r[2] else 0
             }
             for r in by_type
         ],

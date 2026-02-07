@@ -7,7 +7,7 @@ import {
   Calculator,
   PieChart as PieChartIcon
 } from 'lucide-react';
-import { Card, StatCard, GaugeCard, TrendChart, DonutChart, GroupedBarChart, COLORS } from '../components';
+import { Card, StatCard, GaugeCard, TrendChart, DonutChart, GroupedBarChart, COLORS, RegionFilter } from '../components';
 import { capitalApi } from '../utils/api';
 import { formatAmount, formatPercent, formatNumber, formatInputAmount, parseFormattedNumber } from '../utils/format';
 
@@ -392,15 +392,7 @@ export default function Capital() {
       {/* 자본 효율성 분석 */}
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-lg font-semibold text-gray-800">자본 효율성 분석</h2>
-        <select
-          value={region}
-          onChange={(e) => setRegion(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {REGIONS.map(r => (
-            <option key={r.value} value={r.value}>{r.label}</option>
-          ))}
-        </select>
+        <RegionFilter value={region} onChange={setRegion} />
       </div>
       <div className="grid grid-cols-2 gap-6">
         {/* 산업별 RAROC */}

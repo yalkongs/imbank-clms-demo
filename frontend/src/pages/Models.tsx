@@ -78,6 +78,7 @@ export default function Models() {
       setBacktestData(response.data);
     } catch (error) {
       console.error('Backtest data load error:', error);
+      setBacktestData({ backtest_results: [], summary: {}, alerts: [] });
     }
   };
 
@@ -87,6 +88,7 @@ export default function Models() {
       setOverridePerformance(response.data);
     } catch (error) {
       console.error('Override performance load error:', error);
+      setOverridePerformance({ outcome_distribution: [], accuracy_by_direction: [], error_analysis: {}, details: [] });
     }
   };
 
@@ -96,6 +98,7 @@ export default function Models() {
       setVintageData(response.data);
     } catch (error) {
       console.error('Vintage data load error:', error);
+      setVintageData({ vintages: [], summary_by_type: [], monthly_trend: [] });
     }
   };
 

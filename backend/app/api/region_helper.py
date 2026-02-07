@@ -9,6 +9,11 @@ from sqlalchemy import text
 
 VALID_REGIONS = {'CAPITAL', 'DAEGU_GB', 'BUSAN_GN'}
 
+# RAROC 계산용 비용률 상수 (calculations.py calculate_raroc()와 일관)
+FUNDING_RATE = 0.043   # 조달비용 4.3% (기본 3.5% + FTP 0.8%)
+OPEX_RATE = 0.005      # 운영비 0.5%
+COST_RATE = FUNDING_RATE + OPEX_RATE  # 4.8%
+
 
 def get_industry_portfolio(db: Session, region: str = None):
     """
@@ -44,7 +49,7 @@ def get_industry_portfolio(db: Session, region: str = None):
             COALESCE(SUM(f.outstanding_amount * f.final_rate), 0) as total_revenue,
             CASE
                 WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
                 ELSE 0
             END as raroc
         FROM customer c
@@ -54,7 +59,7 @@ def get_industry_portfolio(db: Session, region: str = None):
         WHERE c.region = :region
         GROUP BY c.industry_code, c.industry_name
         ORDER BY total_exposure DESC
-    """), {"region": region}).fetchall()
+    """), {"region": region, "cost_rate": COST_RATE}).fetchall()
 
     return [_format_dynamic_row(r) for r in rows]
 
@@ -88,7 +93,7 @@ def get_industry_portfolio_for_efficiency(db: Session, region: str = None):
             COALESCE(SUM(f.outstanding_amount * f.final_rate), 0) as total_revenue,
             CASE
                 WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
                 ELSE 0
             END as raroc
         FROM customer c
@@ -98,7 +103,7 @@ def get_industry_portfolio_for_efficiency(db: Session, region: str = None):
         WHERE c.region = :region
         GROUP BY c.industry_code, c.industry_name
         ORDER BY raroc DESC
-    """), {"region": region}).fetchall()
+    """), {"region": region, "cost_rate": COST_RATE}).fetchall()
     return rows
 
 
@@ -129,7 +134,7 @@ def get_industry_portfolio_with_rwa_density(db: Session, region: str = None):
             ROUND(COALESCE(SUM(rp.rwa), 0) * 100.0 / NULLIF(SUM(f.outstanding_amount), 0), 2) as rwa_density,
             CASE
                 WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
                 ELSE 0
             END as raroc
         FROM customer c
@@ -139,7 +144,7 @@ def get_industry_portfolio_with_rwa_density(db: Session, region: str = None):
         WHERE c.region = :region
         GROUP BY c.industry_code, c.industry_name
         ORDER BY rwa_density DESC
-    """), {"region": region}).fetchall()
+    """), {"region": region, "cost_rate": COST_RATE}).fetchall()
 
 
 def get_concentration_by_region(db: Session, region: str = None):
@@ -158,12 +163,12 @@ def get_portfolio_aggregates(db: Session, region: str = None):
     """
     if not region:
         return db.execute(text("""
-            SELECT SUM(total_revenue) / SUM(total_rwa * 0.08) as portfolio_raroc,
+            SELECT (SUM(total_revenue) - SUM(total_exposure) * :cost_rate - SUM(total_el)) / NULLIF(SUM(total_rwa) * 0.08, 0) as portfolio_raroc,
                    SUM(total_exposure) as total_exposure,
                    SUM(total_rwa) as total_rwa,
                    SUM(total_el) as total_el
             FROM portfolio_summary WHERE segment_type = 'INDUSTRY'
-        """)).fetchone()
+        """), {"cost_rate": COST_RATE}).fetchone()
 
     if region not in VALID_REGIONS:
         return None
@@ -172,7 +177,7 @@ def get_portfolio_aggregates(db: Session, region: str = None):
         SELECT
             CASE
                 WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN SUM(f.outstanding_amount * f.final_rate) / (SUM(rp.rwa) * 0.08)
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
                 ELSE 0
             END as portfolio_raroc,
             COALESCE(SUM(f.outstanding_amount), 0) as total_exposure,
@@ -183,7 +188,7 @@ def get_portfolio_aggregates(db: Session, region: str = None):
         LEFT JOIN loan_application la ON f.application_id = la.application_id
         LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
         WHERE c.region = :region
-    """), {"region": region}).fetchone()
+    """), {"region": region, "cost_rate": COST_RATE}).fetchone()
 
 
 def get_rwa_density_aggregate(db: Session, region: str = None):

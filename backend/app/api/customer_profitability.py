@@ -150,12 +150,19 @@ async def get_profitability_rankings(
     sort_by: str = Query("total_profit", description="정렬 기준: total_profit, raroc, clv_score"),
     limit: int = Query(50, le=200),
     min_raroc: Optional[float] = None,
+    region: str = Query(None),
     db: Session = Depends(get_db)
 ):
     """고객 수익성 순위"""
     valid_sorts = ["total_profit", "raroc", "clv_score", "total_revenue", "churn_risk_score"]
     if sort_by not in valid_sorts:
         sort_by = "total_profit"
+
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
 
     query = f"""
         SELECT cp.customer_id, c.customer_name, c.industry_name, c.size_category,
@@ -165,9 +172,9 @@ async def get_profitability_rankings(
                cp.clv_score, cp.retention_probability, cp.cross_sell_potential, cp.churn_risk_score
         FROM customer_profitability cp
         JOIN customer c ON cp.customer_id = c.customer_id
-        WHERE 1=1
+        WHERE 1=1{region_cond}
     """
-    params = {}
+    params = {**rp}
 
     if min_raroc is not None:
         query += " AND cp.raroc >= :min_raroc"
@@ -294,11 +301,18 @@ async def get_cross_sell_opportunities(
     status: Optional[str] = None,
     product_type: Optional[str] = None,
     min_probability: Optional[float] = None,
+    region: str = Query(None),
     limit: int = Query(100, le=500),
     db: Session = Depends(get_db)
 ):
     """Cross-sell 기회 목록"""
-    query = """
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
+    query = f"""
         SELECT cso.opportunity_id, cso.customer_id, c.customer_name, c.industry_name,
                cso.product_type, cso.probability, cso.expected_revenue,
                cso.priority_score, cso.status, cso.assigned_rm,
@@ -306,9 +320,9 @@ async def get_cross_sell_opportunities(
         FROM cross_sell_opportunity cso
         JOIN customer c ON cso.customer_id = c.customer_id
         LEFT JOIN customer_profitability cp ON cso.customer_id = cp.customer_id
-        WHERE 1=1
+        WHERE 1=1{region_cond}
     """
-    params = {}
+    params = {**rp}
 
     if status:
         query += " AND cso.status = :status"
@@ -371,20 +385,27 @@ async def get_cross_sell_opportunities(
 @router.get("/churn-risk")
 async def get_churn_risk_customers(
     min_risk: float = Query(0.3, description="최소 이탈 위험 점수"),
+    region: str = Query(None),
     limit: int = Query(50, le=200),
     db: Session = Depends(get_db)
 ):
     """이탈 위험 고객 목록"""
-    result = db.execute(text("""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
+    result = db.execute(text(f"""
         SELECT cp.customer_id, c.customer_name, c.industry_name,
                cp.total_profit, cp.raroc, cp.clv_score,
                cp.retention_probability, cp.churn_risk_score
         FROM customer_profitability cp
         JOIN customer c ON cp.customer_id = c.customer_id
-        WHERE cp.churn_risk_score >= :min_risk
+        WHERE cp.churn_risk_score >= :min_risk{region_cond}
         ORDER BY cp.churn_risk_score DESC
         LIMIT :limit
-    """), {"min_risk": min_risk, "limit": limit})
+    """), {"min_risk": min_risk, "limit": limit, **rp})
 
     at_risk_customers = []
     for row in result:
@@ -412,30 +433,42 @@ async def get_churn_risk_customers(
 
 
 @router.get("/dashboard")
-async def get_profitability_dashboard(db: Session = Depends(get_db)):
+async def get_profitability_dashboard(
+    region: str = Query(None),
+    db: Session = Depends(get_db)
+):
     """수익성 대시보드"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     # 전체 요약
-    summary = db.execute(text("""
+    summary = db.execute(text(f"""
         SELECT
-            COUNT(*) as customer_count,
-            SUM(total_revenue) as total_revenue,
-            SUM(total_profit) as total_profit,
-            AVG(raroc) as avg_raroc,
-            AVG(clv_score) as avg_clv,
-            SUM(CASE WHEN churn_risk_score >= 0.4 THEN 1 ELSE 0 END) as high_churn_count
-        FROM customer_profitability
-    """)).fetchone()
+            COUNT(DISTINCT cp.customer_id) as customer_count,
+            SUM(cp.total_revenue) as total_revenue,
+            SUM(cp.total_profit) as total_profit,
+            AVG(cp.raroc) as avg_raroc,
+            AVG(cp.clv_score) as avg_clv,
+            SUM(CASE WHEN cp.churn_risk_score >= 0.4 THEN 1 ELSE 0 END) as high_churn_count
+        FROM customer_profitability cp
+        JOIN customer c ON cp.customer_id = c.customer_id
+        WHERE 1=1{region_cond}
+    """), rp).fetchone()
 
     # 규모별 수익성
-    by_size = db.execute(text("""
+    by_size = db.execute(text(f"""
         SELECT c.size_category,
-               COUNT(*) as count,
+               COUNT(DISTINCT cp.customer_id) as count,
                SUM(cp.total_profit) as total_profit,
                AVG(cp.raroc) as avg_raroc
         FROM customer_profitability cp
         JOIN customer c ON cp.customer_id = c.customer_id
+        WHERE 1=1{region_cond}
         GROUP BY c.size_category
-    """))
+    """), rp)
 
     size_breakdown = []
     for row in by_size:
@@ -447,13 +480,14 @@ async def get_profitability_dashboard(db: Session = Depends(get_db)):
         })
 
     # Top 10 고객
-    top_customers = db.execute(text("""
+    top_customers = db.execute(text(f"""
         SELECT c.customer_name, cp.total_profit, cp.raroc
         FROM customer_profitability cp
         JOIN customer c ON cp.customer_id = c.customer_id
+        WHERE 1=1{region_cond}
         ORDER BY cp.total_profit DESC
         LIMIT 10
-    """))
+    """), rp)
 
     top_10 = []
     for row in top_customers:

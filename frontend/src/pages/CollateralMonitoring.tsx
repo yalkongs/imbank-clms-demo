@@ -8,9 +8,16 @@ import {
   BarChart3,
   MapPin
 } from 'lucide-react';
-import { Card, StatCard, TrendChart, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton } from '../components';
+import { Card, StatCard, TrendChart, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton, RegionFilter } from '../components';
 import { collateralMonitoringApi } from '../utils/api';
 import { formatAmount, formatPercent } from '../utils/format';
+
+const REGIONS = [
+  { value: '', label: '전체 지역' },
+  { value: 'CAPITAL', label: '수도권' },
+  { value: 'DAEGU_GB', label: '대구경북' },
+  { value: 'BUSAN_GN', label: '부산경남' },
+];
 
 export default function CollateralMonitoring() {
   const [loading, setLoading] = useState(true);
@@ -18,21 +25,23 @@ export default function CollateralMonitoring() {
   const [realEstateIndex, setRealEstateIndex] = useState<any[]>([]);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [ltvAnalysis, setLtvAnalysis] = useState<any>(null);
-  const [selectedRegion, setSelectedRegion] = useState<string>('');
+  const [region, setRegion] = useState<string>('');
+  const [chartRegion, setChartRegion] = useState<string>('');
   const [modalOpen, setModalOpen] = useState(false);
   const [featureInfo, setFeatureInfo] = useState<any>(null);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [region]);
 
   const loadData = async () => {
+    const r = region || undefined;
     try {
       const [dashRes, indexRes, alertRes, ltvRes] = await Promise.all([
-        collateralMonitoringApi.getDashboard(),
-        collateralMonitoringApi.getRealEstateIndex(),
-        collateralMonitoringApi.getAlerts({ status: 'OPEN' }),
-        collateralMonitoringApi.getLtvAnalysis()
+        collateralMonitoringApi.getDashboard(r),
+        collateralMonitoringApi.getRealEstateIndex(r),
+        collateralMonitoringApi.getAlerts({ status: 'OPEN', region: r }),
+        collateralMonitoringApi.getLtvAnalysis(r)
       ]);
       setDashboard(dashRes.data);
       setRealEstateIndex(indexRes.data.indices || indexRes.data.index_data || []);
@@ -42,16 +51,6 @@ export default function CollateralMonitoring() {
       console.error('Collateral monitoring data load error:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadRegionIndex = async (region: string) => {
-    setSelectedRegion(region);
-    try {
-      const res = await collateralMonitoringApi.getRealEstateIndex(region);
-      setRealEstateIndex(res.data.indices || res.data.index_data || []);
-    } catch (error) {
-      console.error('Region index load error:', error);
     }
   };
 
@@ -86,9 +85,9 @@ export default function CollateralMonitoring() {
   }).filter((d: any) => d.value > 0) || [];
 
   // Prepare chart data - API returns region_code and reference_date
-  const regions = [...new Set(realEstateIndex.map((d: any) => d.region_code || d.region))];
+  const indexRegions = [...new Set(realEstateIndex.map((d: any) => d.region_code || d.region))];
   const indexChartData = realEstateIndex
-    .filter((d: any) => !selectedRegion || (d.region_code || d.region) === selectedRegion)
+    .filter((d: any) => !chartRegion || (d.region_code || d.region) === chartRegion)
     .reduce((acc: any[], curr: any) => {
       const dateKey = (curr.reference_date || curr.index_month)?.substring(0, 7);
       const regionKey = curr.region_code || curr.region;
@@ -114,6 +113,7 @@ export default function CollateralMonitoring() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">실시간 담보가치 추적 및 LTV 관리</p>
         </div>
+        <RegionFilter value={region} onChange={setRegion} />
       </div>
 
       {/* Summary Stats */}
@@ -173,12 +173,12 @@ export default function CollateralMonitoring() {
             <div className="flex items-center space-x-2">
               <HelpButton onClick={() => openFeatureModal('real_estate_index')} size="sm" />
               <select
-                value={selectedRegion}
-                onChange={(e) => loadRegionIndex(e.target.value)}
+                value={chartRegion}
+                onChange={(e) => setChartRegion(e.target.value)}
                 className="text-sm border rounded px-2 py-1"
               >
                 <option value="">전체</option>
-                {regions.map(r => (
+                {indexRegions.map(r => (
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
@@ -189,9 +189,9 @@ export default function CollateralMonitoring() {
           <TrendChart
             data={indexChartData}
             lines={
-              selectedRegion
-                ? [{ key: selectedRegion, name: selectedRegion, color: COLORS.primary }]
-                : regions.slice(0, 5).map((r, i) => ({
+              chartRegion
+                ? [{ key: chartRegion, name: chartRegion, color: COLORS.primary }]
+                : indexRegions.slice(0, 5).map((r, i) => ({
                     key: r,
                     name: r,
                     color: [COLORS.primary, COLORS.success, COLORS.warning, COLORS.danger, COLORS.secondary][i]

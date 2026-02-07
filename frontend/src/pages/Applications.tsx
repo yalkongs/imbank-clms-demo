@@ -26,7 +26,7 @@ import {
   Check,
   Minus
 } from 'lucide-react';
-import { Card, Table, Badge, CellFormatters } from '../components';
+import { Card, Table, Badge, CellFormatters, RegionFilter } from '../components';
 import { applicationsApi } from '../utils/api';
 import { formatAmount, formatPercent, formatDate, formatInputAmount, parseFormattedNumber } from '../utils/format';
 
@@ -40,6 +40,13 @@ const REVIEW_STAGES = [
   { key: 'PRICING', name: '가격결정', icon: Calculator },
   { key: 'FINAL_REVIEW', name: '최종심사', icon: Users },
   { key: 'COMPLETED', name: '완료', icon: CheckCircle }
+];
+
+const REGIONS = [
+  { value: '', label: '전체 지역' },
+  { value: 'CAPITAL', label: '수도권' },
+  { value: 'DAEGU_GB', label: '대구경북' },
+  { value: 'BUSAN_GN', label: '부산경남' },
 ];
 
 // 체크리스트 아이콘
@@ -59,6 +66,7 @@ export default function Applications() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [filter, setFilter] = useState('ALL');
   const [stageFilter, setStageFilter] = useState<string | null>(null);
+  const [region, setRegion] = useState('');
 
   // 탭 상태
   const [activeTab, setActiveTab] = useState<'info' | 'credit' | 'collateral' | 'limit' | 'pricing' | 'checklist'>('info');
@@ -102,13 +110,13 @@ export default function Applications() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [region]);
 
   const loadData = async () => {
     try {
       const [appsRes, summaryRes] = await Promise.all([
-        applicationsApi.getPending(),
-        applicationsApi.getSummary()
+        applicationsApi.getAll({ status: 'PENDING', region: region || undefined }),
+        applicationsApi.getSummary(region || undefined)
       ]);
       setApplications(appsRes.data || []);
       setSummary(summaryRes.data);
@@ -349,13 +357,16 @@ export default function Applications() {
           <h1 className="text-2xl font-bold text-gray-900">여신심사</h1>
           <p className="text-sm text-gray-500 mt-1">기업여신 심사 및 승인 관리</p>
         </div>
-        <button
-          onClick={loadData}
-          className="flex items-center px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
-        >
-          <RefreshCw size={16} className="mr-2" />
-          새로고침
-        </button>
+        <div className="flex items-center space-x-2">
+          <RegionFilter value={region} onChange={setRegion} />
+          <button
+            onClick={loadData}
+            className="flex items-center px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+          >
+            <RefreshCw size={16} className="mr-2" />
+            새로고침
+          </button>
+        </div>
       </div>
 
       {/* 심사 현황 요약 */}
@@ -383,7 +394,7 @@ export default function Applications() {
           </div>
           <div className="p-3 bg-white rounded-lg border border-gray-200">
             <p className="text-xs text-gray-500">전체 건수</p>
-            <p className="text-xl font-bold text-gray-700">{counts.all}건</p>
+            <p className="text-xl font-bold text-gray-700">{counts.all || summary.today?.pending_total || 0}건</p>
           </div>
         </div>
       )}

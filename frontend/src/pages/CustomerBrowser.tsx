@@ -12,7 +12,7 @@ import {
   Filter,
   X
 } from 'lucide-react';
-import { Card, StatCard } from '../components';
+import { Card, StatCard, RegionFilter } from '../components';
 import { customersApi } from '../utils/api';
 import { formatAmount, formatPercent, formatDate, getGradeColorClass, getStatusColorClass } from '../utils/format';
 
@@ -82,6 +82,13 @@ const TABS: { key: TabKey; label: string; icon: React.ReactNode }[] = [
   { key: 'applications', label: '심사이력', icon: <FileText size={16} /> },
 ];
 
+const REGIONS = [
+  { value: '', label: '전체 지역' },
+  { value: 'CAPITAL', label: '수도권' },
+  { value: 'DAEGU_GB', label: '대구경북' },
+  { value: 'BUSAN_GN', label: '부산경남' },
+];
+
 const sizeCategoryLabel = (s: string) =>
   s === 'LARGE' ? '대기업' : s === 'MEDIUM' ? '중견기업' : s === 'SMALL' ? '중소기업' : '소호';
 
@@ -99,6 +106,7 @@ export default function CustomerBrowser() {
   const [sizeFilter, setSizeFilter] = useState('');
   const [industries, setIndustries] = useState<{ industry_code: string; industry_name: string; customer_count: number }[]>([]);
   const [industryFilter, setIndustryFilter] = useState('');
+  const [regionFilter, setRegionFilter] = useState('');
 
   // --- Detail state ---
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -121,6 +129,7 @@ export default function CustomerBrowser() {
         search: search || undefined,
         industry_code: industryFilter || undefined,
         size_category: sizeFilter || undefined,
+        region: regionFilter || undefined,
         sort_by: 'customer_name',
         sort_order: 'asc',
       });
@@ -131,13 +140,13 @@ export default function CustomerBrowser() {
     } finally {
       setListLoading(false);
     }
-  }, [search, industryFilter, sizeFilter, pagination.page_size]);
+  }, [search, industryFilter, sizeFilter, regionFilter, pagination.page_size]);
 
   // Debounced reload on filter change
   useEffect(() => {
     const t = setTimeout(() => loadCustomers(1), 250);
     return () => clearTimeout(t);
-  }, [search, industryFilter, sizeFilter]);
+  }, [search, industryFilter, sizeFilter, regionFilter]);
 
   // --- Select customer ---
   const selectCustomer = async (id: string) => {
@@ -163,8 +172,8 @@ export default function CustomerBrowser() {
     if (next) selectCustomer(next.customer_id);
   };
 
-  const clearFilters = () => { setSearch(''); setSizeFilter(''); setIndustryFilter(''); };
-  const hasFilters = !!(search || sizeFilter || industryFilter);
+  const clearFilters = () => { setSearch(''); setSizeFilter(''); setIndustryFilter(''); setRegionFilter(''); };
+  const hasFilters = !!(search || sizeFilter || industryFilter || regionFilter);
 
   // --- Tab renderers (detail right panel) ---
 
@@ -505,6 +514,7 @@ export default function CustomerBrowser() {
                 <option value="MEDIUM">중견기업</option>
                 <option value="SMALL">중소기업</option>
               </select>
+              <RegionFilter value={regionFilter} onChange={setRegionFilter} size="sm" />
               {hasFilters && (
                 <button onClick={clearFilters} className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
                   <X size={14} />

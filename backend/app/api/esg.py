@@ -141,10 +141,17 @@ async def get_esg_assessments(
     esg_grade: Optional[str] = None,
     min_score: Optional[float] = None,
     industry_code: Optional[str] = None,
+    region: str = Query(None),
     limit: int = Query(100, le=500),
     db: Session = Depends(get_db)
 ):
     """ESG 평가 목록"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     query = """
         SELECT ea.assessment_id, ea.customer_id, c.customer_name, c.industry_name,
                ea.assessment_date, ea.e_score, ea.s_score, ea.g_score,
@@ -155,7 +162,8 @@ async def get_esg_assessments(
         JOIN customer c ON ea.customer_id = c.customer_id
         WHERE 1=1
     """
-    params = {}
+    query += region_cond
+    params = {**rp}
 
     if esg_grade:
         query += " AND ea.esg_grade = :esg_grade"
@@ -343,16 +351,28 @@ async def get_green_finance(
 
 
 @router.get("/grade-distribution")
-async def get_esg_grade_distribution(db: Session = Depends(get_db)):
+async def get_esg_grade_distribution(
+    region: str = Query(None),
+    db: Session = Depends(get_db)
+):
     """ESG 등급 분포"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     distribution = db.execute(text("""
-        SELECT esg_grade, COUNT(*) as count,
-               AVG(esg_score) as avg_score,
+        SELECT ea.esg_grade, COUNT(*) as count,
+               AVG(ea.esg_score) as avg_score,
                SUM(ea.pd_adjustment) / COUNT(*) as avg_pd_adj
         FROM esg_assessment ea
-        GROUP BY esg_grade
-        ORDER BY esg_grade
-    """))
+        JOIN customer c ON ea.customer_id = c.customer_id
+        WHERE 1=1
+    """ + region_cond + """
+        GROUP BY ea.esg_grade
+        ORDER BY ea.esg_grade
+    """), rp)
 
     grades = []
     for row in distribution:
@@ -369,10 +389,12 @@ async def get_esg_grade_distribution(db: Session = Depends(get_db)):
                AVG(ea.e_score) as avg_e, AVG(ea.carbon_intensity) as avg_carbon
         FROM esg_assessment ea
         JOIN customer c ON ea.customer_id = c.customer_id
+        WHERE 1=1
+    """ + region_cond + """
         GROUP BY c.industry_name
         ORDER BY avg_esg DESC
         LIMIT 15
-    """))
+    """), rp)
 
     industry_ranking = []
     for row in by_industry:
@@ -390,20 +412,31 @@ async def get_esg_grade_distribution(db: Session = Depends(get_db)):
 
 
 @router.get("/dashboard")
-async def get_esg_dashboard(db: Session = Depends(get_db)):
+async def get_esg_dashboard(
+    region: str = Query(None),
+    db: Session = Depends(get_db)
+):
     """ESG 대시보드"""
+    region_cond = ""
+    rp = {}
+    if region:
+        region_cond = " AND c.region = :region"
+        rp["region"] = region
+
     # 전체 요약
     summary = db.execute(text("""
         SELECT
             COUNT(*) as total_assessed,
-            AVG(esg_score) as avg_esg_score,
-            AVG(e_score) as avg_e,
-            AVG(s_score) as avg_s,
-            AVG(g_score) as avg_g,
-            SUM(CASE WHEN esg_grade IN ('A', 'B') THEN 1 ELSE 0 END) as high_grade_count,
-            SUM(CASE WHEN esg_grade IN ('D', 'E') THEN 1 ELSE 0 END) as low_grade_count
-        FROM esg_assessment
-    """)).fetchone()
+            AVG(ea.esg_score) as avg_esg_score,
+            AVG(ea.e_score) as avg_e,
+            AVG(ea.s_score) as avg_s,
+            AVG(ea.g_score) as avg_g,
+            SUM(CASE WHEN ea.esg_grade IN ('A', 'B') THEN 1 ELSE 0 END) as high_grade_count,
+            SUM(CASE WHEN ea.esg_grade IN ('D', 'E') THEN 1 ELSE 0 END) as low_grade_count
+        FROM esg_assessment ea
+        JOIN customer c ON ea.customer_id = c.customer_id
+        WHERE 1=1
+    """ + region_cond), rp).fetchone()
 
     # 녹색금융 요약
     green_summary = db.execute(text("""
@@ -418,10 +451,13 @@ async def get_esg_dashboard(db: Session = Depends(get_db)):
 
     # 트렌드별 분포
     trend_dist = db.execute(text("""
-        SELECT esg_trend, COUNT(*) as count
-        FROM esg_assessment
-        GROUP BY esg_trend
-    """))
+        SELECT ea.esg_trend, COUNT(*) as count
+        FROM esg_assessment ea
+        JOIN customer c ON ea.customer_id = c.customer_id
+        WHERE 1=1
+    """ + region_cond + """
+        GROUP BY ea.esg_trend
+    """), rp)
 
     trends = {row[0]: row[1] for row in trend_dist}
 

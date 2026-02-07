@@ -10,31 +10,43 @@ import {
   Activity,
   Users
 } from 'lucide-react';
-import { Card, StatCard, GaugeCard, TrendChart, DonutChart, COLORS } from '../components';
+import { Card, StatCard, GaugeCard, TrendChart, DonutChart, COLORS, RegionFilter } from '../components';
 import { dashboardApi } from '../utils/api';
 import { formatAmount, formatPercent, formatNumber } from '../utils/format';
+
+const REGIONS = [
+  { value: '', label: '전체 지역' },
+  { value: 'CAPITAL', label: '수도권' },
+  { value: 'DAEGU_GB', label: '대구경북' },
+  { value: 'BUSAN_GN', label: '부산경남' },
+];
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [region, setRegion] = useState('');
   const [summary, setSummary] = useState<any>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [kpis, setKpis] = useState<any>(null);
+  const [capitalTrend, setCapitalTrend] = useState<any[]>([]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [region]);
 
   const loadData = async () => {
     try {
-      const [summaryRes, alertsRes, kpisRes] = await Promise.all([
-        dashboardApi.getSummary(),
-        dashboardApi.getEWSAlerts(),
-        dashboardApi.getKPIs()
+      const r = region || undefined;
+      const [summaryRes, alertsRes, kpisRes, trendRes] = await Promise.all([
+        dashboardApi.getSummary(r),
+        dashboardApi.getEWSAlerts(r),
+        dashboardApi.getKPIs(r),
+        dashboardApi.getCapitalTrend()
       ]);
       setSummary(summaryRes.data);
       setAlerts(alertsRes.data || []);
       setKpis(kpisRes.data);
+      setCapitalTrend(trendRes.data || []);
     } catch (error) {
       console.error('Dashboard data load error:', error);
     } finally {
@@ -63,15 +75,6 @@ export default function Dashboard() {
     { name: 'B이하', value: 15, color: '#ef4444' }
   ];
 
-  // 자본비율 추이 데이터 (가상)
-  const capitalTrend = [
-    { date: '2023-07', bis: 14.2, tier1: 12.1, cet1: 10.8 },
-    { date: '2023-08', bis: 14.5, tier1: 12.3, cet1: 11.0 },
-    { date: '2023-09', bis: 14.3, tier1: 12.2, cet1: 10.9 },
-    { date: '2023-10', bis: 14.8, tier1: 12.5, cet1: 11.2 },
-    { date: '2023-11', bis: 15.0, tier1: 12.7, cet1: 11.4 },
-    { date: '2023-12', bis: capital.bis_ratio || 15.2, tier1: capital.tier1_ratio || 12.8, cet1: capital.cet1_ratio || 11.5 }
-  ];
 
   return (
     <div className="space-y-6">
@@ -81,9 +84,12 @@ export default function Dashboard() {
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">기업여신 포트폴리오 현황 및 핵심 지표</p>
         </div>
-        <div className="flex items-center space-x-2 text-sm text-gray-500">
-          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-          <span>실시간 업데이트</span>
+        <div className="flex items-center space-x-4">
+          <RegionFilter value={region} onChange={setRegion} />
+          <div className="flex items-center space-x-2 text-sm text-gray-500">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            <span>실시간 업데이트</span>
+          </div>
         </div>
       </div>
 
