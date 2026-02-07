@@ -672,9 +672,9 @@ def get_efficiency_dashboard(region: str = Query(None), db: Session = Depends(ge
         "capital_metrics": {
             "total_capital": capital[0] if capital else 0,
             "total_rwa": capital[1] if capital else 0,
-            "bis_ratio": round(capital[2], 2) if capital and capital[2] else 0,
-            "cet1_ratio": round(capital[3], 2) if capital and capital[3] else 0,
-            "capital_buffer": round((capital[2] / 100 - 0.105) * capital[1], 0) if capital else 0
+            "bis_ratio": round(capital[2] * 100, 2) if capital and capital[2] else 0,
+            "cet1_ratio": round(capital[3] * 100, 2) if capital and capital[3] else 0,
+            "capital_buffer": round((capital[2] - 0.105) * capital[1], 0) if capital else 0
         },
         "efficiency_metrics": {
             "portfolio_raroc": round(portfolio_raroc[0], 2) if portfolio_raroc and portfolio_raroc[0] else 0,  # DB에 이미 % 값으로 저장

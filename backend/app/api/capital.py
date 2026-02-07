@@ -34,10 +34,10 @@ def get_capital_position(db: Session = Depends(get_db)):
         "market_rwa": float(result[7]) if result[7] else 0,
         "operational_rwa": float(result[8]) if result[8] else 0,
         "total_rwa": float(result[9]) if result[9] else 0,
-        "bis_ratio": float(result[10]) if result[10] else 0,
-        "cet1_ratio": float(result[11]) if result[11] else 0,
-        "tier1_ratio": float(result[12]) if result[12] else 0,
-        "leverage_ratio": float(result[13]) if result[13] else 0,
+        "bis_ratio": round(float(result[10]) * 100, 2) if result[10] else 0,
+        "cet1_ratio": round(float(result[11]) * 100, 2) if result[11] else 0,
+        "tier1_ratio": round(float(result[12]) * 100, 2) if result[12] else 0,
+        "leverage_ratio": round(float(result[13]) * 100, 2) if result[13] else 0,
         "regulatory_minimums": {
             "bis_ratio": 10.5,
             "cet1_ratio": 7.0,
@@ -67,10 +67,10 @@ def get_capital_trend(months: int = 12, db: Session = Depends(get_db)):
     return [
         {
             "period": r[0],
-            "bis_ratio": float(r[1]) if r[1] else 0,
-            "cet1_ratio": float(r[2]) if r[2] else 0,
-            "tier1_ratio": float(r[3]) if r[3] else 0,
-            "leverage_ratio": float(r[4]) if r[4] else 0,
+            "bis_ratio": round(float(r[1]) * 100, 2) if r[1] else 0,
+            "cet1_ratio": round(float(r[2]) * 100, 2) if r[2] else 0,
+            "tier1_ratio": round(float(r[3]) * 100, 2) if r[3] else 0,
+            "leverage_ratio": round(float(r[4]) * 100, 2) if r[4] else 0,
             "total_capital": float(r[5]) if r[5] else 0,
             "total_rwa": float(r[6]) if r[6] else 0
         }
