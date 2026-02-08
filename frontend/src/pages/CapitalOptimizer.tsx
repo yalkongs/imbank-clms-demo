@@ -165,7 +165,7 @@ export default function CapitalOptimizer() {
         <div className="flex items-center gap-3">
           <RegionFilter value={region} onChange={setRegion} />
           <button
-            onClick={loadData}
+            onClick={() => loadData()}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <RefreshCw size={16} />

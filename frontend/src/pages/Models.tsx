@@ -152,7 +152,7 @@ export default function Models() {
         <StatCard
           title="등록 모델"
           value={`${models.length}개`}
-          subtitle={`활성: ${status?.status_summary?.ACTIVE || 0}개`}
+          subtitle={`활성: ${(status?.status_summary?.ACTIVE || 0) + (status?.status_summary?.PRODUCTION || 0)}개`}
           icon={<Brain size={24} />}
           color="blue"
         />
@@ -213,11 +213,11 @@ export default function Models() {
       )}
 
       {activeTab === 'backtest' && (
-        <BacktestTab data={backtestData} />
+        <BacktestTab data={backtestData} models={models} />
       )}
 
       {activeTab === 'override' && (
-        <OverrideTab data={overridePerformance} />
+        <OverrideTab data={overridePerformance} models={models} />
       )}
 
       {activeTab === 'vintage' && (
@@ -499,7 +499,9 @@ function RegistryTab({
 }
 
 // PD Backtest 탭
-function BacktestTab({ data }: { data: any }) {
+function BacktestTab({ data, models }: { data: any; models: any[] }) {
+  const [selectedModel, setSelectedModel] = useState<string>('ALL');
+
   if (!data) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -508,9 +510,14 @@ function BacktestTab({ data }: { data: any }) {
     );
   }
 
+  // 모델 필터 적용
+  const filteredResults = selectedModel === 'ALL'
+    ? data.backtest_results
+    : data.backtest_results?.filter((r: any) => r.model_id === selectedModel);
+
   // 연도별 통계 준비
   const yearStats: { [key: string]: { pass: number; warning: number; fail: number } } = {};
-  data.backtest_results?.forEach((r: any) => {
+  filteredResults?.forEach((r: any) => {
     if (!yearStats[r.year]) {
       yearStats[r.year] = { pass: 0, warning: 0, fail: 0 };
     }
@@ -525,9 +532,23 @@ function BacktestTab({ data }: { data: any }) {
     total: stats.pass + stats.warning + stats.fail
   }));
 
+  // summary 재계산
+  const filteredSummary = { PASS: 0, WARNING: 0, FAIL: 0 };
+  filteredResults?.forEach((r: any) => {
+    if (r.result === 'PASS') filteredSummary.PASS++;
+    else if (r.result === 'WARNING') filteredSummary.WARNING++;
+    else if (r.result === 'FAIL') filteredSummary.FAIL++;
+  });
+
+  // 경보 필터
+  const filteredAlerts = selectedModel === 'ALL'
+    ? data.alerts
+    : data.alerts?.filter((a: any) => a.model_id === selectedModel);
+
   // 등급별 PD vs DR 비교 (최근 연도)
-  const latestYear = Math.max(...Object.keys(yearStats).map(Number));
-  const gradeComparison = data.backtest_results
+  const latestYear = Object.keys(yearStats).length > 0
+    ? Math.max(...Object.keys(yearStats).map(Number)) : 0;
+  const gradeComparison = filteredResults
     ?.filter((r: any) => r.year === latestYear)
     ?.sort((a: any, b: any) => a.grade.localeCompare(b.grade))
     ?.map((r: any) => ({
@@ -537,27 +558,61 @@ function BacktestTab({ data }: { data: any }) {
       result: r.result
     }));
 
+  // backtest에 참여하는 모델 목록
+  const backtestModelIds = [...new Set(data.backtest_results?.map((r: any) => r.model_id) || [])];
+  const backtestModels = models.filter(m => backtestModelIds.includes(m.model_id));
+
   return (
     <div className="space-y-6">
+      {/* 모델 선택 필터 */}
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-gray-700">모델:</span>
+        <div className="flex gap-1">
+          <button
+            onClick={() => setSelectedModel('ALL')}
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+              selectedModel === 'ALL'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            전체
+          </button>
+          {backtestModels.map((m: any) => (
+            <button
+              key={m.model_id}
+              onClick={() => setSelectedModel(m.model_id)}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                selectedModel === m.model_id
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {m.model_name}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 요약 */}
       <div className="grid grid-cols-4 gap-4">
         <StatCard
           title="검정 통과"
-          value={data.summary?.PASS || 0}
+          value={filteredSummary.PASS}
           subtitle="Binomial Test"
           icon={<CheckCircle size={24} />}
           color="green"
         />
         <StatCard
           title="경고"
-          value={data.summary?.WARNING || 0}
+          value={filteredSummary.WARNING}
           subtitle="p-value < 0.05"
           icon={<AlertTriangle size={24} />}
           color="yellow"
         />
         <StatCard
           title="실패"
-          value={data.summary?.FAIL || 0}
+          value={filteredSummary.FAIL}
           subtitle="p-value < 0.01"
           icon={<XCircle size={24} />}
           color="red"
@@ -605,7 +660,7 @@ function BacktestTab({ data }: { data: any }) {
       </div>
 
       {/* 경보 목록 */}
-      {data.alerts?.length > 0 && (
+      {filteredAlerts?.length > 0 && (
         <Card title="Backtest 경보">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -620,7 +675,7 @@ function BacktestTab({ data }: { data: any }) {
                 </tr>
               </thead>
               <tbody>
-                {data.alerts.slice(0, 15).map((alert: any, index: number) => (
+                {filteredAlerts.slice(0, 15).map((alert: any, index: number) => (
                   <tr key={index} className="border-b border-gray-100">
                     <td className="px-4 py-2 font-medium text-gray-900">{alert.model_name}</td>
                     <td className="px-4 py-2 text-center">{alert.year}</td>
@@ -666,7 +721,7 @@ function BacktestTab({ data }: { data: any }) {
 }
 
 // Override 성과 탭
-function OverrideTab({ data }: { data: any }) {
+function OverrideTab({ data, models }: { data: any; models: any[] }) {
   if (!data) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -850,6 +905,8 @@ function OverrideTab({ data }: { data: any }) {
 
 // Vintage 분석 탭
 function VintageTab({ data }: { data: any }) {
+  const [selectedCohort, setSelectedCohort] = useState<string>('ALL');
+
   if (!data) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -864,14 +921,62 @@ function VintageTab({ data }: { data: any }) {
   // 코호트별 요약
   const summaryByType = data.summary_by_type || [];
 
+  // cohort 유형 목록
+  const cohortTypes = [...new Set(data.vintages?.map((v: any) => v.cohort_type) || [])];
+
+  // 필터된 빈티지
+  const filteredVintages = selectedCohort === 'ALL'
+    ? data.vintages
+    : data.vintages?.filter((v: any) => v.cohort_type === selectedCohort);
+
+  const cohortLabel = (type: string) => {
+    switch (type) {
+      case 'OVERALL': return '전체';
+      case 'GRADE': return '등급별';
+      case 'INDUSTRY': return '업종별';
+      case 'SIZE': return '규모별';
+      default: return type;
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {/* 코호트 유형 필터 */}
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium text-gray-700">코호트:</span>
+        <div className="flex gap-1">
+          <button
+            onClick={() => setSelectedCohort('ALL')}
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+              selectedCohort === 'ALL'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            전체
+          </button>
+          {cohortTypes.map((type: any) => (
+            <button
+              key={type}
+              onClick={() => setSelectedCohort(type)}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                selectedCohort === type
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {cohortLabel(type)}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 요약 */}
       <div className="grid grid-cols-4 gap-4">
         {summaryByType.map((s: any, index: number) => (
           <StatCard
             key={index}
-            title={s.cohort_type === 'OVERALL' ? '전체 평균' : s.cohort_type === 'GRADE' ? '등급별' : '업종별'}
+            title={cohortLabel(s.cohort_type)}
             value={`${s.avg_mob12_default?.toFixed(2) || 0}%`}
             subtitle={`MOB12 부도율 (누적 손실: ${s.avg_cumulative_loss?.toFixed(2) || 0}%)`}
             icon={<Calendar size={24} />}
@@ -880,8 +985,8 @@ function VintageTab({ data }: { data: any }) {
         ))}
         <StatCard
           title="분석 빈티지"
-          value={`${data.vintages?.length || 0}개`}
-          subtitle="코호트 수"
+          value={`${filteredVintages?.length || 0}개`}
+          subtitle={selectedCohort === 'ALL' ? '전체 코호트' : cohortLabel(selectedCohort)}
           icon={<BarChart3 size={24} />}
           color="gray"
         />
@@ -938,7 +1043,7 @@ function VintageTab({ data }: { data: any }) {
               </tr>
             </thead>
             <tbody>
-              {data.vintages?.slice(0, 20).map((v: any, index: number) => (
+              {filteredVintages?.slice(0, 20).map((v: any, index: number) => (
                 <tr key={index} className="border-b border-gray-100">
                   <td className="px-4 py-2 font-medium">{v.month}</td>
                   <td className="px-4 py-2">

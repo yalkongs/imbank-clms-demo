@@ -49,19 +49,17 @@ def get_dashboard_summary(region: str = Query(None), db: Session = Depends(get_d
         WHERE 1=1 {region_cond}
     """), region_params).fetchone()
 
-    # 평균 RAROC - 지역 필터 시 facility 기반 계산
-    if region:
-        avg_raroc = db.execute(text(f"""
-            SELECT AVG(pr.expected_raroc)
-            FROM pricing_result pr
-            JOIN facility f ON pr.application_id = f.application_id
-            JOIN customer c ON f.customer_id = c.customer_id
-            WHERE f.status = 'ACTIVE' {region_cond}
-        """), region_params).fetchone()
-    else:
-        avg_raroc = db.execute(text("""
-            SELECT AVG(raroc) FROM portfolio_summary
-        """)).fetchone()
+    # 포트폴리오 RAROC = (총이자수익 - 총비용 - 총EL) / (총RWA * 8%)
+    avg_raroc = db.execute(text(f"""
+        SELECT CASE WHEN SUM(rp.rwa) * 0.08 > 0
+            THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.048 - SUM(rp.expected_loss))
+                 / (SUM(rp.rwa) * 0.08)
+            ELSE 0 END
+        FROM facility f
+        JOIN risk_parameter rp ON f.application_id = rp.application_id
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE f.status = 'ACTIVE' {region_cond}
+    """), region_params).fetchone()
 
     # 평균 등급 - 지역 필터 적용
     avg_grade = db.execute(text(f"""
@@ -189,19 +187,17 @@ def get_kpis(region: str = Query(None), db: Session = Depends(get_db)):
     """주요 KPI 현황"""
     region_cond, region_params = _region_filter("c", region)
 
-    # 포트폴리오 RAROC - 지역 필터
-    if region:
-        portfolio_raroc = db.execute(text(f"""
-            SELECT AVG(pr.expected_raroc)
-            FROM pricing_result pr
-            JOIN facility f ON pr.application_id = f.application_id
-            JOIN customer c ON f.customer_id = c.customer_id
-            WHERE f.status = 'ACTIVE' {region_cond}
-        """), region_params).fetchone()
-    else:
-        portfolio_raroc = db.execute(text("""
-            SELECT AVG(raroc) FROM portfolio_summary
-        """)).fetchone()
+    # 포트폴리오 RAROC - 지역 필터 (summary와 동일한 산출식 사용)
+    portfolio_raroc = db.execute(text(f"""
+        SELECT CASE WHEN SUM(rp.rwa) * 0.08 > 0
+            THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.048 - SUM(rp.expected_loss))
+                 / (SUM(rp.rwa) * 0.08)
+            ELSE 0 END
+        FROM facility f
+        JOIN risk_parameter rp ON f.application_id = rp.application_id
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE f.status = 'ACTIVE' {region_cond}
+    """), region_params).fetchone()
 
     # 평균 PD - 지역 필터
     avg_pd = db.execute(text(f"""
