@@ -172,6 +172,7 @@ export const ewsAdvancedApi = {
   getTransactionAnomalies: (region?: string) => api.get('/ews-advanced/transaction-behavior/anomalies', { params: region ? { region } : undefined }),
   // 공적정보
   getPublicRegistryDashboard: (region?: string) => api.get('/ews-advanced/public-registry/dashboard', { params: region ? { region } : undefined }),
+  getPublicRegistryCustomers: (region?: string) => api.get('/ews-advanced/public-registry/customers', { params: region ? { region } : undefined }),
   getPublicRegistryCustomer: (customerId: string) => api.get(`/ews-advanced/public-registry/${customerId}`),
   getPublicRegistryTimeline: (region?: string) => api.get('/ews-advanced/public-registry/timeline', { params: region ? { region } : undefined }),
   // 시장신호
@@ -184,6 +185,7 @@ export const ewsAdvancedApi = {
   getNewsFeed: (params?: { region?: string; sentiment?: string }) => api.get('/ews-advanced/news-sentiment/feed', { params }),
   // 공급망
   getSupplyChainDashboard: (region?: string) => api.get('/ews-advanced/supply-chain/dashboard', { params: region ? { region } : undefined }),
+  getSupplyChainCustomers: (region?: string) => api.get('/ews-advanced/supply-chain/customers', { params: region ? { region } : undefined }),
   getSupplyChainTemporal: (customerId: string) => api.get(`/ews-advanced/supply-chain/${customerId}/temporal`),
   // 통합
   getIntegratedDashboard: (region?: string) => api.get('/ews-advanced/integrated-dashboard', { params: region ? { region } : undefined }),

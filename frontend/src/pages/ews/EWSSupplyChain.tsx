@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Network, AlertTriangle, Link2, TrendingDown } from 'lucide-react';
+import { Network, AlertTriangle, Link2, TrendingDown, Search } from 'lucide-react';
 import { Card, StatCard } from '../../components';
 import { ewsAdvancedApi } from '../../utils/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -10,7 +10,9 @@ interface Props { region: string }
 export default function EWSSupplyChain({ region }: Props) {
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<any>(null);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [customerData, setCustomerData] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => { loadData(); }, [region]);
 
@@ -18,11 +20,16 @@ export default function EWSSupplyChain({ region }: Props) {
     setLoading(true);
     try {
       const r = region || undefined;
-      const res = await ewsAdvancedApi.getSupplyChainDashboard(r);
-      setDashboard(res.data);
+      const [dashRes, custRes] = await Promise.all([
+        ewsAdvancedApi.getSupplyChainDashboard(r),
+        ewsAdvancedApi.getSupplyChainCustomers(r),
+      ]);
+      setDashboard(dashRes.data);
+      setCustomers(custRes.data || []);
     } catch (e) {
       console.error(e);
       setDashboard(null);
+      setCustomers([]);
     } finally { setLoading(false); }
   };
 
@@ -34,6 +41,14 @@ export default function EWSSupplyChain({ region }: Props) {
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+
+  const filtered = searchTerm
+    ? customers.filter((c: any) =>
+        c.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.customer_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.industry || '').toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : customers;
 
   // 고객 시계열 차트 데이터: 월별 집계
   const customerChartData = customerData ? (() => {
@@ -140,18 +155,63 @@ export default function EWSSupplyChain({ region }: Props) {
         </Card>
       )}
 
-      {/* 기업 검색 */}
-      <Card title="공급망 분석 기업 검색">
-        <p className="text-sm text-gray-500 mb-3">기업 ID를 입력하여 공급망 시계열 데이터를 조회합니다.</p>
-        <div className="flex gap-2">
-          <input type="text" placeholder="고객 ID (예: CUST_001)"
-            className="border rounded px-3 py-2 text-sm flex-1"
-            onKeyDown={(e) => { if (e.key === 'Enter') loadCustomer((e.target as HTMLInputElement).value); }}
-          />
-          <button onClick={(e) => {
-            const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
-            if (input.value) loadCustomer(input.value);
-          }} className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700">조회</button>
+      {/* 기업 목록 선택 */}
+      <Card title={`공급망 분석 기업 목록 (${filtered.length}개)`}>
+        <div className="mb-3">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="기업명, ID, 업종으로 검색..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full border rounded px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+        <div className="overflow-x-auto max-h-80 overflow-y-auto">
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-white">
+              <tr className="border-b bg-gray-50">
+                <th className="px-3 py-2 text-left">기업명</th>
+                <th className="px-3 py-2 text-left">업종</th>
+                <th className="px-3 py-2 text-center">거래처 수</th>
+                <th className="px-3 py-2 text-center">평균 연쇄PD</th>
+                <th className="px-3 py-2 text-center">조회</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.slice(0, 100).map((c: any) => (
+                <tr
+                  key={c.customer_id}
+                  className={`border-b hover:bg-blue-50 cursor-pointer ${
+                    customerData?.customer_id === c.customer_id ? 'bg-blue-50' : ''
+                  }`}
+                  onClick={() => loadCustomer(c.customer_id)}
+                >
+                  <td className="px-3 py-2">
+                    <div className="font-medium">{c.customer_name}</div>
+                    <div className="text-xs text-gray-400">{c.customer_id}</div>
+                  </td>
+                  <td className="px-3 py-2 text-gray-600">{c.industry}</td>
+                  <td className="px-3 py-2 text-center">{c.partner_count}</td>
+                  <td className="px-3 py-2 text-center">
+                    <span className={c.avg_chain_pd > 0.15 ? 'text-red-600 font-medium' : ''}>
+                      {formatPercent(c.avg_chain_pd * 100, 2)}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <button
+                      className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
+                      onClick={(e) => { e.stopPropagation(); loadCustomer(c.customer_id); }}
+                    >
+                      상세
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Card>
     </div>

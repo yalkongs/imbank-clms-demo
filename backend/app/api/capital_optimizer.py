@@ -374,7 +374,7 @@ def get_dynamic_pricing_suggestion(
     el_spread = pd * lgd
 
     # UL 스프레드 계산 (자본비용)
-    ec = rwa * 0.08  # 경제적 자본 = RWA * 8%
+    ec = rwa * 0.105  # 경제적 자본 = RWA * 10.5% (BIS 8% + 보전완충 2.5%)
     ul_spread = (ec * (target_raroc or default_target)) / ead if ead > 0 else 0
 
     # 전략 조정
@@ -412,7 +412,7 @@ def get_dynamic_pricing_suggestion(
     for target_lgd in [0.45, 0.35, 0.25, 0.15]:
         # 담보로 LGD 개선시 RWA 변화
         new_rwa = calculate_irb_rwa(pd, target_lgd, ead, tenor / 12)
-        new_ec = new_rwa * 0.08
+        new_ec = new_rwa * 0.105
         new_el_spread = pd * target_lgd
         new_min_rate = base_rate + ftp_spread + new_el_spread + (new_ec * hurdle_rate / ead if ead > 0 else 0) + opex_spread
 
@@ -491,8 +491,8 @@ def get_rebalancing_suggestions(region: str = Query(None), db: Session = Depends
                 COALESCE(SUM(f.outstanding_amount), 0) as total_exposure,
                 COALESCE(SUM(rp.rwa), 0) as total_rwa,
                 CASE
-                    WHEN SUM(rp.rwa) * 0.08 > 0
-                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                    WHEN SUM(rp.rwa) * 0.105 > 0
+                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.105)
                     ELSE 0
                 END as raroc,
                 irs.strategy_code,

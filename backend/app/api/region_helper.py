@@ -48,8 +48,8 @@ def get_industry_portfolio(db: Session, region: str = None):
             AVG(f.final_rate) as weighted_rate,
             COALESCE(SUM(f.outstanding_amount * f.final_rate), 0) as total_revenue,
             CASE
-                WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                WHEN SUM(rp.rwa) * 0.105 > 0
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.105)
                 ELSE 0
             END as raroc
         FROM customer c
@@ -92,8 +92,8 @@ def get_industry_portfolio_for_efficiency(db: Session, region: str = None):
             COALESCE(SUM(rp.expected_loss), 0) as total_el,
             COALESCE(SUM(f.outstanding_amount * f.final_rate), 0) as total_revenue,
             CASE
-                WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                WHEN SUM(rp.rwa) * 0.105 > 0
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.105)
                 ELSE 0
             END as raroc
         FROM customer c
@@ -133,8 +133,8 @@ def get_industry_portfolio_with_rwa_density(db: Session, region: str = None):
             COALESCE(SUM(rp.rwa), 0) as total_rwa,
             ROUND(COALESCE(SUM(rp.rwa), 0) * 100.0 / NULLIF(SUM(f.outstanding_amount), 0), 2) as rwa_density,
             CASE
-                WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                WHEN SUM(rp.rwa) * 0.105 > 0
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.105)
                 ELSE 0
             END as raroc
         FROM customer c
@@ -163,7 +163,7 @@ def get_portfolio_aggregates(db: Session, region: str = None):
     """
     if not region:
         return db.execute(text("""
-            SELECT (SUM(total_revenue) - SUM(total_exposure) * :cost_rate - SUM(total_el)) / NULLIF(SUM(total_rwa) * 0.08, 0) as portfolio_raroc,
+            SELECT (SUM(total_revenue) - SUM(total_exposure) * :cost_rate - SUM(total_el)) / NULLIF(SUM(total_rwa) * 0.105, 0) as portfolio_raroc,
                    SUM(total_exposure) as total_exposure,
                    SUM(total_rwa) as total_rwa,
                    SUM(total_el) as total_el
@@ -176,8 +176,8 @@ def get_portfolio_aggregates(db: Session, region: str = None):
     return db.execute(text("""
         SELECT
             CASE
-                WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                WHEN SUM(rp.rwa) * 0.105 > 0
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.105)
                 ELSE 0
             END as portfolio_raroc,
             COALESCE(SUM(f.outstanding_amount), 0) as total_exposure,

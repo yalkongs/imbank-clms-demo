@@ -324,8 +324,8 @@ def get_industry_region_analysis(db: Session = Depends(get_db)):
             AVG(rp.lgd) as avg_lgd,
             AVG(f.final_rate) as avg_rate,
             CASE
-                WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                WHEN SUM(rp.rwa) * 0.105 > 0
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.105)
                 ELSE 0
             END as raroc,
             ROUND(COALESCE(SUM(rp.rwa), 0) * 100.0 / NULLIF(SUM(f.outstanding_amount), 0), 2) as rwa_density
@@ -351,8 +351,8 @@ def get_industry_region_analysis(db: Session = Depends(get_db)):
             AVG(rp.lgd) as avg_lgd,
             AVG(f.final_rate) as avg_rate,
             CASE
-                WHEN SUM(rp.rwa) * 0.08 > 0
-                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                WHEN SUM(rp.rwa) * 0.105 > 0
+                THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * :cost_rate - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.105)
                 ELSE 0
             END as raroc,
             ROUND(COALESCE(SUM(rp.rwa), 0) * 100.0 / NULLIF(SUM(f.outstanding_amount), 0), 2) as rwa_density
@@ -447,8 +447,8 @@ def get_industry_detail(industry_code: str, region: str = Query(None), db: Sessi
                 AVG(f.final_rate) as weighted_rate,
                 COALESCE(SUM(f.outstanding_amount * f.final_rate), 0) as total_revenue,
                 CASE
-                    WHEN SUM(rp.rwa) * 0.08 > 0
-                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * {COST_RATE} - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.08)
+                    WHEN SUM(rp.rwa) * 0.105 > 0
+                    THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * {COST_RATE} - SUM(rp.expected_loss)) / (SUM(rp.rwa) * 0.105)
                     ELSE 0
                 END as raroc
             FROM customer c

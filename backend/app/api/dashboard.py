@@ -49,11 +49,11 @@ def get_dashboard_summary(region: str = Query(None), db: Session = Depends(get_d
         WHERE 1=1 {region_cond}
     """), region_params).fetchone()
 
-    # 포트폴리오 RAROC = (총이자수익 - 총비용 - 총EL) / (총RWA * 8%)
+    # 포트폴리오 RAROC = (총이자수익 - 총비용 - 총EL) / (총RWA * 10.5%)
     avg_raroc = db.execute(text(f"""
-        SELECT CASE WHEN SUM(rp.rwa) * 0.08 > 0
+        SELECT CASE WHEN SUM(rp.rwa) * 0.105 > 0
             THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.048 - SUM(rp.expected_loss))
-                 / (SUM(rp.rwa) * 0.08)
+                 / (SUM(rp.rwa) * 0.105)
             ELSE 0 END
         FROM facility f
         JOIN risk_parameter rp ON f.application_id = rp.application_id
@@ -189,9 +189,9 @@ def get_kpis(region: str = Query(None), db: Session = Depends(get_db)):
 
     # 포트폴리오 RAROC - 지역 필터 (summary와 동일한 산출식 사용)
     portfolio_raroc = db.execute(text(f"""
-        SELECT CASE WHEN SUM(rp.rwa) * 0.08 > 0
+        SELECT CASE WHEN SUM(rp.rwa) * 0.105 > 0
             THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.048 - SUM(rp.expected_loss))
-                 / (SUM(rp.rwa) * 0.08)
+                 / (SUM(rp.rwa) * 0.105)
             ELSE 0 END
         FROM facility f
         JOIN risk_parameter rp ON f.application_id = rp.application_id
@@ -219,7 +219,7 @@ def get_kpis(region: str = Query(None), db: Session = Depends(get_db)):
         "portfolio_raroc": float(portfolio_raroc[0]) * 100 if portfolio_raroc and portfolio_raroc[0] else 15.0,
         "avg_pd": float(avg_pd[0]) if avg_pd and avg_pd[0] else 0.02,
         "avg_lgd": float(avg_lgd[0]) if avg_lgd and avg_lgd[0] else 0.35,
-        "hurdle_rate": 15.0
+        "hurdle_rate": 12.0
     }
 
 

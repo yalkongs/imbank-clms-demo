@@ -94,8 +94,8 @@ def calculate_expected_loss(pd: float, lgd: float, ead: float) -> float:
     return pd * lgd * ead
 
 
-def calculate_economic_capital(rwa: float, capital_ratio: float = 0.08) -> float:
-    """경제적 자본(EC) 계산"""
+def calculate_economic_capital(rwa: float, capital_ratio: float = 0.105) -> float:
+    """경제적 자본(EC) 계산 — BIS 최소 8% + 자본보전완충 2.5% = 10.5%"""
     return rwa * capital_ratio
 
 

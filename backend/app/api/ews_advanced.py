@@ -193,6 +193,33 @@ async def get_indicator_values(
     return {"customer_id": customer_id, "values": values}
 
 
+@router.get("/supply-chain/customers")
+async def supply_chain_customers(
+    region: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    """공급망 모니터링 대상 기업 목록"""
+    rc = ""
+    rp = {}
+    if region:
+        rc = " AND c.region = :region"
+        rp["region"] = region
+
+    rows = db.execute(text(f"""
+        SELECT DISTINCT sc.customer_id, c.customer_name, c.industry_name,
+               AVG(sc.chain_default_probability) as avg_cpd,
+               COUNT(DISTINCT sc.partner_id) as partner_count
+        FROM ews_supply_chain_temporal sc
+        JOIN customer c ON sc.customer_id = c.customer_id
+        WHERE sc.reference_month = '2026-02'{rc}
+        GROUP BY sc.customer_id, c.customer_name, c.industry_name
+        ORDER BY avg_cpd DESC
+    """), rp)
+
+    return [{"customer_id": r[0], "customer_name": r[1], "industry": r[2],
+             "avg_chain_pd": round(r[3], 4), "partner_count": r[4]} for r in rows]
+
+
 @router.get("/supply-chain/dashboard")
 async def supply_chain_dashboard(
     region: str = Query(None),
@@ -706,6 +733,36 @@ async def transaction_behavior_customer(customer_id: str, db: Session = Depends(
 
 
 # --- 공적정보 (Public Registry) ---
+
+@router.get("/public-registry/customers")
+async def public_registry_customers(
+    region: str = Query(None),
+    db: Session = Depends(get_db)
+):
+    """공적정보 발생 기업 목록"""
+    rc = ""
+    rp = {}
+    if region:
+        rc = " AND c.region = :region"
+        rp["region"] = region
+
+    rows = db.execute(text(f"""
+        SELECT p.customer_id, c.customer_name, c.industry_name,
+               COUNT(*) as event_count,
+               SUM(CASE WHEN p.resolved = 0 THEN 1 ELSE 0 END) as unresolved,
+               SUM(CASE WHEN p.severity IN ('HIGH','CRITICAL') THEN 1 ELSE 0 END) as severe_count,
+               GROUP_CONCAT(DISTINCT p.event_type) as event_types
+        FROM ews_public_registry p
+        JOIN customer c ON p.customer_id = c.customer_id
+        WHERE 1=1{rc}
+        GROUP BY p.customer_id, c.customer_name, c.industry_name
+        ORDER BY unresolved DESC, severe_count DESC
+    """), rp)
+
+    return [{"customer_id": r[0], "customer_name": r[1], "industry": r[2],
+             "event_count": r[3], "unresolved": r[4], "severe_count": r[5],
+             "event_types": r[6].split(',') if r[6] else []} for r in rows]
+
 
 @router.get("/public-registry/dashboard")
 async def public_registry_dashboard(
