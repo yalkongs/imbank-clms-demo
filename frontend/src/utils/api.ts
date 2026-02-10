@@ -166,6 +166,27 @@ export const ewsAdvancedApi = {
   getCompositeScores: (params?: { min_score?: number; limit?: number; region?: string }) =>
     api.get('/ews-advanced/composite-scores', { params }),
   getDashboard: (region?: string) => api.get('/ews-advanced/dashboard', { params: region ? { region } : undefined }),
+  // 거래행태
+  getTransactionDashboard: (region?: string) => api.get('/ews-advanced/transaction-behavior/dashboard', { params: region ? { region } : undefined }),
+  getTransactionCustomer: (customerId: string) => api.get(`/ews-advanced/transaction-behavior/${customerId}`),
+  getTransactionAnomalies: (region?: string) => api.get('/ews-advanced/transaction-behavior/anomalies', { params: region ? { region } : undefined }),
+  // 공적정보
+  getPublicRegistryDashboard: (region?: string) => api.get('/ews-advanced/public-registry/dashboard', { params: region ? { region } : undefined }),
+  getPublicRegistryCustomer: (customerId: string) => api.get(`/ews-advanced/public-registry/${customerId}`),
+  getPublicRegistryTimeline: (region?: string) => api.get('/ews-advanced/public-registry/timeline', { params: region ? { region } : undefined }),
+  // 시장신호
+  getMarketDashboard: (region?: string) => api.get('/ews-advanced/market-signals/dashboard', { params: region ? { region } : undefined }),
+  getMarketCustomer: (customerId: string) => api.get(`/ews-advanced/market-signals/${customerId}`),
+  getMarketAlerts: (region?: string) => api.get('/ews-advanced/market-signals/alerts', { params: region ? { region } : undefined }),
+  // 뉴스감성
+  getNewsDashboard: (region?: string) => api.get('/ews-advanced/news-sentiment/dashboard', { params: region ? { region } : undefined }),
+  getNewsCustomer: (customerId: string) => api.get(`/ews-advanced/news-sentiment/${customerId}`),
+  getNewsFeed: (params?: { region?: string; sentiment?: string }) => api.get('/ews-advanced/news-sentiment/feed', { params }),
+  // 공급망
+  getSupplyChainDashboard: (region?: string) => api.get('/ews-advanced/supply-chain/dashboard', { params: region ? { region } : undefined }),
+  getSupplyChainTemporal: (customerId: string) => api.get(`/ews-advanced/supply-chain/${customerId}/temporal`),
+  // 통합
+  getIntegratedDashboard: (region?: string) => api.get('/ews-advanced/integrated-dashboard', { params: region ? { region } : undefined }),
 };
 
 // Dynamic Limits API (동적 한도관리)
