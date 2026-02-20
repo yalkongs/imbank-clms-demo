@@ -332,7 +332,25 @@ def generate_delinquency(conn: sqlite3.Connection):
     activity_rows     = []
     facility_updates  = []
 
-    today = date(2024, 12, 31)
+    today = date.today()
+
+    # DPD 분포: EARLY(30%) / MID(25%) / LATE(20%) / NPL(15%) / WRITEOFF(10%)
+    DPD_RANGES = [
+        (1,  30,  0.30),
+        (31, 60,  0.25),
+        (61, 90,  0.20),
+        (91, 180, 0.15),
+        (181,365, 0.10),
+    ]
+
+    def pick_dpd():
+        r = random.random()
+        cumul = 0.0
+        for lo, hi, w in DPD_RANGES:
+            cumul += w
+            if r < cumul:
+                return random.randint(lo, hi)
+        return random.randint(1, 30)
 
     for fac in facilities:
         fid       = fac[0]
@@ -340,7 +358,7 @@ def generate_delinquency(conn: sqlite3.Connection):
         exposure  = float(fac[2] or 0)
 
         # 연체 1건 생성
-        dpd         = random.randint(1, 120)
+        dpd         = pick_dpd()
         overdue_date = today - timedelta(days=dpd)
         overdue_pct  = random.uniform(0.05, 0.20)
         overdue_amt  = round(exposure * overdue_pct, 2)

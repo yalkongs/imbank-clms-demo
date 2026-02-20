@@ -143,8 +143,8 @@ def get_active_delinquencies(
                 d.delinquency_id, d.facility_id, d.customer_id,
                 d.overdue_date, d.overdue_amount, d.overdue_type,
                 d.dpd, d.delinquency_stage, d.assigned_officer,
-                f.outstanding_amount, f.product_type,
-                c.company_name, c.credit_grade, c.industry
+                f.outstanding_amount, f.facility_type,
+                c.customer_name, c.industry_name
             FROM delinquency_record d
             JOIN facility f ON d.facility_id = f.facility_id
             JOIN customer c ON d.customer_id = c.customer_id
@@ -164,7 +164,7 @@ def get_active_delinquencies(
             "facility_id":     r[1],
             "customer_id":     r[2],
             "company_name":    r[11],
-            "industry":        r[13],
+            "industry":        r[12],
             "overdue_date":    str(r[3]),
             "overdue_amount":  round(r[4] or 0, 2),
             "overdue_type":    r[5],
@@ -173,8 +173,8 @@ def get_active_delinquencies(
             "stage_label":     meta['ko'],
             "stage_color":     meta['color'],
             "outstanding":     round(r[9] or 0, 2),
-            "product_type":    r[10],
-            "credit_grade":    r[12],
+            "facility_type":   r[10],
+            "credit_grade":    None,
             "assigned_officer": r[8],
         })
 
@@ -247,7 +247,7 @@ def get_facility_delinquency_history(
 
     facility = db.execute(
         text("""
-            SELECT f.outstanding_amount, f.product_type, c.company_name, f.dpd, f.max_dpd_12m
+            SELECT f.outstanding_amount, f.facility_type, c.customer_name, f.dpd, f.max_dpd_12m
             FROM facility f JOIN customer c ON f.customer_id = c.customer_id
             WHERE f.facility_id = :fid
         """),
@@ -257,7 +257,7 @@ def get_facility_delinquency_history(
     return {
         "facility_id":   facility_id,
         "company_name":  facility[2] if facility else None,
-        "product_type":  facility[1] if facility else None,
+        "facility_type": facility[1] if facility else None,
         "outstanding":   round(facility[0] or 0, 2) if facility else 0,
         "current_dpd":   facility[3] or 0 if facility else 0,
         "max_dpd_12m":   facility[4] or 0 if facility else 0,
@@ -321,14 +321,14 @@ def get_vintage_delinquency(
     rows = db.execute(
         text("""
             SELECT
-                strftime('%Y', f.approval_date) AS vintage_year,
+                strftime('%Y', f.contract_date) AS vintage_year,
                 COUNT(DISTINCT f.facility_id) AS total_facilities,
                 COUNT(DISTINCT d.facility_id) AS delinquent_facilities,
                 SUM(f.outstanding_amount) AS total_exposure,
                 SUM(CASE WHEN d.delinquency_id IS NOT NULL THEN f.outstanding_amount ELSE 0 END) AS delinquent_exposure
             FROM facility f
             LEFT JOIN delinquency_record d ON f.facility_id = d.facility_id
-            WHERE f.approval_date IS NOT NULL
+            WHERE f.contract_date IS NOT NULL
             GROUP BY vintage_year
             ORDER BY vintage_year
         """)
@@ -412,7 +412,7 @@ def record_collection_activity(
 
 @router.get("/collection-performance")
 def get_collection_performance(
-    months: int = Query(3, description="분석 기간(개월)"),
+    months: int = Query(12, description="분석 기간(개월)"),
     db: Session = Depends(get_db)
 ):
     """추심 성과 — 약속이행률, 회수율, 활동 유형별 효과"""
