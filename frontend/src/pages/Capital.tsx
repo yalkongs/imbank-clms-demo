@@ -71,7 +71,7 @@ export default function Capital() {
   };
 
   const [simLoading, setSimLoading] = useState(false);
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const runSimulation = async (params?: typeof simInput) => {
     const currentParams = params || simInput;

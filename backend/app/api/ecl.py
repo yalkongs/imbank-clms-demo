@@ -202,13 +202,11 @@ def get_stage_migration(
         matrix[fs][ts] = {"count": r[2], "exposure": round(r[3] or 0, 2)}
 
     # Stage 2/3 신규 진입 건수
-    new_stage2 = sum(
-        matrix.get(1, {}).get(2, {}).get("count", 0),
+    new_stage2 = matrix.get(1, {}).get(2, {}).get("count", 0)
+    new_stage3 = (
+        matrix.get(1, {}).get(3, {}).get("count", 0)
+        + matrix.get(2, {}).get(3, {}).get("count", 0)
     )
-    new_stage3 = sum([
-        matrix.get(1, {}).get(3, {}).get("count", 0),
-        matrix.get(2, {}).get(3, {}).get("count", 0),
-    ])
 
     return {
         "prev_date":   prev_date,

@@ -112,7 +112,7 @@ export default function Applications() {
   });
 
   // 디바운스 타이머
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadData();

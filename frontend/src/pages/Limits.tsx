@@ -64,7 +64,7 @@ export default function Limits() {
     handleCheckInputChange(newInput, true); // 고객 변경 시 즉시 실행
   };
 
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   const runLimitCheck = async (params?: typeof checkInput) => {
     const currentParams = params || checkInput;
