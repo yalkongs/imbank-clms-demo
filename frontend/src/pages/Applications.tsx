@@ -27,7 +27,7 @@ import {
   Minus
 } from 'lucide-react';
 import { Card, Table, Badge, CellFormatters, RegionFilter } from '../components';
-import { applicationsApi, financialApi, groupCreditApi } from '../utils/api';
+import { applicationsApi, financialApi, groupCreditApi, covenantApi } from '../utils/api';
 import { formatAmount, formatPercent, formatDate, formatInputAmount, parseFormattedNumber } from '../utils/format';
 
 // 심사 단계 정의
@@ -71,11 +71,13 @@ export default function Applications() {
   // 탭 상태
   const [activeTab, setActiveTab] = useState<'info' | 'credit' | 'collateral' | 'limit' | 'pricing' | 'checklist' | 'financial' | 'group' | 'covenant'>('info');
 
-  // Phase 1: 재무분석 / 그룹현황 데이터
+  // Phase 1: 재무분석 / 그룹현황 / 약정관리 데이터
   const [financialData, setFinancialData] = useState<any>(null);
   const [financialLoading, setFinancialLoading] = useState(false);
   const [groupData, setGroupData] = useState<any>(null);
   const [groupLoading, setGroupLoading] = useState(false);
+  const [covenantData, setCovenantData] = useState<any>(null);
+  const [covenantLoading, setCovenantLoading] = useState(false);
 
   // 확장/축소 상태
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -141,6 +143,7 @@ export default function Applications() {
       setActiveTab('info');
       setFinancialData(null);
       setGroupData(null);
+      setCovenantData(null);
     } catch (error) {
       console.error('Detail load error:', error);
     } finally {
@@ -182,6 +185,31 @@ export default function Applications() {
       console.error('Group load error:', e);
     } finally {
       setGroupLoading(false);
+    }
+  };
+
+  // 약정관리 탭 클릭 시 데이터 로드
+  const loadCovenantData = async (facilities: any[]) => {
+    if (covenantData) return;
+    setCovenantLoading(true);
+    try {
+      const facIds = facilities.slice(0, 5).map((f: any) => f.facility_id).filter(Boolean);
+      if (facIds.length === 0) { setCovenantData([]); return; }
+      const results = await Promise.all(facIds.map((id: string) => covenantApi.getByFacility(id)));
+      const all = results.flatMap((r: any) => {
+        const d = r.data;
+        return (d.covenants || []).map((c: any) => ({
+          ...c,
+          facility_id: d.facility?.facility_id,
+          customer_name: d.facility?.customer_name,
+        }));
+      });
+      setCovenantData(all);
+    } catch (e) {
+      console.error('Covenant load error:', e);
+      setCovenantData([]);
+    } finally {
+      setCovenantLoading(false);
     }
   };
 
@@ -590,6 +618,9 @@ export default function Applications() {
                       }
                       if (tab.key === 'group' && selectedApp?.customer?.customer_id) {
                         loadGroupData(selectedApp.customer.customer_id);
+                      }
+                      if (tab.key === 'covenant' && selectedApp?.existing_facilities) {
+                        loadCovenantData(selectedApp.existing_facilities);
                       }
                     }}
                     className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
@@ -1350,45 +1381,129 @@ export default function Applications() {
                   {/* ── Phase 1: 약정관리 탭 ── */}
                   {activeTab === 'covenant' && (
                     <div className="space-y-4">
-                      <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800">
-                        <p className="font-medium mb-1">코베넌트(약정 조건) 관리</p>
-                        <p className="text-xs text-blue-600">
-                          여신 승인 시 설정된 재무·행동·정보 코베넌트는 <strong>약정관리</strong> 메뉴에서 통합 관리됩니다.
-                          여신 실행 후 facility_id 기준으로 코베넌트가 연동됩니다.
-                        </p>
-                      </div>
-                      {/* 기존 여신의 코베넌트 미리보기 */}
-                      {selectedApp.existing_facilities?.length > 0 && (
-                        <div>
-                          <p className="text-sm font-semibold text-gray-700 mb-2">기존 여신 약정 현황</p>
-                          <div className="bg-gray-50 rounded-lg divide-y divide-gray-100">
-                            {selectedApp.existing_facilities.slice(0, 3).map((f: any) => (
-                              <div key={f.facility_id} className="px-4 py-3 flex items-center justify-between">
-                                <div>
-                                  <p className="text-sm font-medium">{f.product_name}</p>
-                                  <p className="text-xs text-gray-500">{formatAmount(f.outstanding)} | 만기: {f.maturity}</p>
-                                </div>
-                                <a
-                                  href="/covenant"
-                                  className="text-xs text-blue-600 hover:underline"
-                                  onClick={(e) => { e.preventDefault(); window.location.href = '/covenant'; }}
-                                >
-                                  약정 보기 →
-                                </a>
+                      {covenantLoading ? (
+                        <div className="flex items-center justify-center py-12 text-gray-400">
+                          <RefreshCw size={20} className="animate-spin mr-2" />
+                          <span className="text-sm">약정 데이터 로딩 중...</span>
+                        </div>
+                      ) : covenantData && covenantData.length > 0 ? (
+                        <>
+                          {/* 요약 KPI */}
+                          {(() => {
+                            const total = covenantData.length;
+                            const breach = covenantData.filter((c: any) => c.is_breach).length;
+                            const dueSoon = covenantData.filter((c: any) => c.is_due_check).length;
+                            const financial = covenantData.filter((c: any) => c.covenant_type === 'FINANCIAL').length;
+                            return (
+                              <div className="grid grid-cols-4 gap-3">
+                                {[
+                                  { label: '전체 약정', value: total, color: 'text-gray-800' },
+                                  { label: '위반', value: breach, color: breach > 0 ? 'text-red-600' : 'text-green-600' },
+                                  { label: '점검 예정', value: dueSoon, color: dueSoon > 0 ? 'text-yellow-600' : 'text-gray-600' },
+                                  { label: '재무 약정', value: financial, color: 'text-blue-600' },
+                                ].map(({ label, value, color }) => (
+                                  <div key={label} className="bg-gray-50 rounded-lg p-3 text-center">
+                                    <p className={`text-xl font-bold ${color}`}>{value}</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            );
+                          })()}
+
+                          {/* 약정 목록 */}
+                          <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <table className="w-full text-sm">
+                              <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                                <tr>
+                                  <th className="px-3 py-2 text-left">유형</th>
+                                  <th className="px-3 py-2 text-left">약정명</th>
+                                  <th className="px-3 py-2 text-right">기준값</th>
+                                  <th className="px-3 py-2 text-right">실적값</th>
+                                  <th className="px-3 py-2 text-center">결과</th>
+                                  <th className="px-3 py-2 text-center">다음점검</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {covenantData.map((c: any) => {
+                                  const typeColor: Record<string, string> = {
+                                    FINANCIAL: 'bg-blue-100 text-blue-700',
+                                    BEHAVIORAL: 'bg-purple-100 text-purple-700',
+                                    INFORMATION: 'bg-gray-100 text-gray-600',
+                                  };
+                                  const lastCheck = c.last_check;
+                                  const resultOk = lastCheck?.result === 'PASS';
+                                  const operator = c.operator === 'LE' ? '≤' : c.operator === 'GE' ? '≥' : '=';
+                                  return (
+                                    <tr key={c.covenant_id} className={c.is_breach ? 'bg-red-50' : c.is_due_check ? 'bg-yellow-50' : 'hover:bg-gray-50'}>
+                                      <td className="px-3 py-2">
+                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeColor[c.covenant_type] || 'bg-gray-100 text-gray-600'}`}>
+                                          {c.covenant_type === 'FINANCIAL' ? '재무' : c.covenant_type === 'BEHAVIORAL' ? '행동' : '정보'}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <p className="font-medium text-gray-800">{c.covenant_name}</p>
+                                        <p className="text-xs text-gray-400">{c.covenant_id}</p>
+                                      </td>
+                                      <td className="px-3 py-2 text-right text-gray-600">
+                                        {c.threshold_value != null
+                                          ? `${operator} ${c.threshold_value.toLocaleString()}`
+                                          : '-'}
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-medium">
+                                        {lastCheck?.actual_value != null
+                                          ? <span className={resultOk ? 'text-green-700' : 'text-red-600'}>
+                                              {lastCheck.actual_value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                            </span>
+                                          : <span className="text-gray-400">미점검</span>
+                                        }
+                                      </td>
+                                      <td className="px-3 py-2 text-center">
+                                        {lastCheck ? (
+                                          <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                                            lastCheck.result === 'PASS' ? 'bg-green-100 text-green-700' :
+                                            lastCheck.result === 'BREACH' ? 'bg-red-100 text-red-700' :
+                                            'bg-gray-100 text-gray-500'
+                                          }`}>
+                                            {lastCheck.result === 'PASS' ? '이행' : lastCheck.result === 'BREACH' ? '위반' : lastCheck.result}
+                                          </span>
+                                        ) : (
+                                          <span className="text-xs text-gray-400">-</span>
+                                        )}
+                                      </td>
+                                      <td className="px-3 py-2 text-center text-xs text-gray-500">
+                                        <span className={c.is_due_check ? 'text-yellow-600 font-medium' : ''}>
+                                          {c.next_check_date || '-'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
                           </div>
+                          <div className="text-right">
+                            <a
+                              href="/covenant"
+                              onClick={(e) => { e.preventDefault(); window.location.href = '/covenant'; }}
+                              className="text-xs text-blue-600 hover:underline inline-flex items-center gap-1"
+                            >
+                              <FileCheck size={13} />
+                              전체 약정관리 페이지 →
+                            </a>
+                          </div>
+                        </>
+                      ) : covenantData && covenantData.length === 0 ? (
+                        <div className="text-center py-10 text-gray-400">
+                          <FileCheck size={32} className="mx-auto mb-2 text-gray-300" />
+                          <p className="text-sm">설정된 약정 조건이 없습니다.</p>
+                          <p className="text-xs mt-1">여신 승인 후 약정이 연동됩니다.</p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-10 text-gray-400 text-sm">
+                          탭을 선택하면 약정 데이터를 불러옵니다.
                         </div>
                       )}
-                      <div className="text-center mt-4">
-                        <a
-                          href="/covenant"
-                          className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          <FileCheck size={16} className="mr-2" />
-                          전체 코베넌트 관리 페이지 →
-                        </a>
-                      </div>
                     </div>
                   )}
 
