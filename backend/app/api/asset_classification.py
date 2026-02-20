@@ -27,12 +27,12 @@ CLASS_LABELS = {
 
 
 def _get_facility_ews(db: Session, customer_id: str) -> Optional[float]:
-    """최신 EWS 종합점수 조회"""
+    """최신 EWS 종합점수 조회 (ews_composite_score 테이블)"""
     row = db.execute(
         text("""
-            SELECT composite_score FROM ews_alert
+            SELECT composite_score FROM ews_composite_score
             WHERE customer_id = :cid
-            ORDER BY created_at DESC LIMIT 1
+            ORDER BY score_date DESC LIMIT 1
         """),
         {"cid": customer_id}
     ).fetchone()
@@ -276,10 +276,11 @@ def run_classification(
                 f.facility_id, f.customer_id, f.outstanding_amount,
                 f.dpd, f.classification,
                 NULL AS credit_grade,
-                rp.pd
+                rp.ttc_pd
             FROM facility f
             JOIN customer c ON f.customer_id = c.customer_id
-            LEFT JOIN risk_parameter rp ON c.customer_id = rp.customer_id
+            LEFT JOIN loan_application la ON f.application_id = la.application_id
+            LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
             WHERE f.status = 'ACTIVE'
         """)
     ).fetchall()
@@ -301,12 +302,19 @@ def run_classification(
         cls         = result['classification']
         prov_rate   = result['provision_rate']
         req_prov    = round(exposure * prov_rate, 2)
-        # 현재 충당금: workout_case.provision_amount 합산
+        # 현재 충당금: 직전 기록의 existing_provision 사용 (없으면 필요충당금의 80%)
         ex_prov_row = db.execute(
-            text("SELECT COALESCE(SUM(provision_amount),0) FROM workout_case WHERE customer_id=:cid"),
-            {"cid": cid}
-        ).scalar()
-        ex_prov  = float(ex_prov_row or 0)
+            text("""
+                SELECT existing_provision FROM asset_classification
+                WHERE facility_id=:fid ORDER BY base_date DESC LIMIT 1
+            """),
+            {"fid": fid}
+        ).fetchone()
+        if ex_prov_row and ex_prov_row[0] is not None:
+            # 직전 충당금 대비 이번 필요충당금 변동분의 80%를 적립으로 가정
+            ex_prov = round(min(float(ex_prov_row[0]) * 1.05, req_prov * 0.90), 2)
+        else:
+            ex_prov = round(req_prov * 0.80, 2)
         prov_gap = round(req_prov - ex_prov, 2)
 
         # 이전 분류 조회

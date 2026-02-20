@@ -583,15 +583,14 @@ def classify_asset_by_pd(pd: float) -> str:
 
 
 def classify_asset_by_ews(ews_score: float) -> str:
-    """EWS 종합점수 기준 자산건전성 분류"""
-    if ews_score >= 75:
+    """EWS 종합점수 기준 자산건전성 분류
+    EWS는 조기경보 지표 — 최대 요주의(PRECAUTIONARY)까지만 영향.
+    고정(SUBSTANDARD) 이상은 DPD/PD 기준으로만 결정.
+    """
+    if ews_score >= 60:
         return 'NORMAL'
-    elif ews_score >= 55:
-        return 'PRECAUTIONARY'
-    elif ews_score >= 35:
-        return 'SUBSTANDARD'
     else:
-        return 'DOUBTFUL'
+        return 'PRECAUTIONARY'
 
 
 def classify_asset(dpd: int, pd: float, ews_score: float = None) -> dict:
