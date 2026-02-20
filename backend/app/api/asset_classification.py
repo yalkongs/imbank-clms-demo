@@ -139,8 +139,8 @@ def get_facility_classification_history(
                 ac.exposure_at_class, ac.provision_rate, ac.required_provision,
                 ac.existing_provision, ac.provision_gap,
                 ac.classified_by, ac.override_reason, ac.created_at,
-                f.product_type, f.outstanding_amount, f.credit_grade,
-                c.company_name
+                f.facility_type, f.outstanding_amount, NULL AS credit_grade,
+                c.customer_name
             FROM asset_classification ac
             JOIN facility f ON ac.facility_id = f.facility_id
             JOIN customer c ON ac.customer_id = c.customer_id
@@ -186,7 +186,7 @@ def get_facility_classification_history(
     return {
         "facility_id":    facility_id,
         "company_name":   rows[0][19] if rows else None,
-        "product_type":   rows[0][16] if rows else None,
+        "facility_type":  rows[0][16] if rows else None,
         "current_grade":  rows[0][18] if rows else None,
         "outstanding":    round(rows[0][17] or 0, 2) if rows else 0,
         "history":        history,
@@ -202,7 +202,7 @@ def get_customer_classification(
     rows = db.execute(
         text("""
             SELECT
-                f.facility_id, f.product_type, f.outstanding_amount,
+                f.facility_id, f.facility_type, f.outstanding_amount,
                 ac.classification, ac.dpd, ac.exposure_at_class,
                 ac.required_provision, ac.provision_gap, ac.base_date
             FROM facility f
@@ -275,7 +275,7 @@ def run_classification(
             SELECT
                 f.facility_id, f.customer_id, f.outstanding_amount,
                 f.dpd, f.classification,
-                c.credit_grade,
+                NULL AS credit_grade,
                 rp.pd
             FROM facility f
             JOIN customer c ON f.customer_id = c.customer_id
@@ -453,7 +453,7 @@ def get_provision_gap_analysis(
     rows = db.execute(
         text("""
             SELECT
-                ac.facility_id, c.company_name, c.industry,
+                ac.facility_id, c.customer_name, c.industry_name,
                 ac.classification, ac.exposure_at_class,
                 ac.required_provision, ac.existing_provision, ac.provision_gap,
                 ac.base_date

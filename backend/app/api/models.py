@@ -1040,7 +1040,7 @@ def get_lgd_backtest(db: Session = Depends(get_db)):
             SELECT
                 wc.case_id,
                 wc.customer_id,
-                c.company_name,
+                c.customer_name,
                 c.industry_name,
                 wc.total_exposure,
                 wc.actual_recovery_rate,

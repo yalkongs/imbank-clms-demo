@@ -27,7 +27,7 @@ import {
   Minus
 } from 'lucide-react';
 import { Card, Table, Badge, CellFormatters, RegionFilter } from '../components';
-import { applicationsApi } from '../utils/api';
+import { applicationsApi, financialApi, groupCreditApi } from '../utils/api';
 import { formatAmount, formatPercent, formatDate, formatInputAmount, parseFormattedNumber } from '../utils/format';
 
 // 심사 단계 정의
@@ -69,7 +69,13 @@ export default function Applications() {
   const [region, setRegion] = useState('');
 
   // 탭 상태
-  const [activeTab, setActiveTab] = useState<'info' | 'credit' | 'collateral' | 'limit' | 'pricing' | 'checklist'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'credit' | 'collateral' | 'limit' | 'pricing' | 'checklist' | 'financial' | 'group' | 'covenant'>('info');
+
+  // Phase 1: 재무분석 / 그룹현황 데이터
+  const [financialData, setFinancialData] = useState<any>(null);
+  const [financialLoading, setFinancialLoading] = useState(false);
+  const [groupData, setGroupData] = useState<any>(null);
+  const [groupLoading, setGroupLoading] = useState(false);
 
   // 확장/축소 상태
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
@@ -133,10 +139,49 @@ export default function Applications() {
       const response = await applicationsApi.getById(id);
       setSelectedApp(response.data);
       setActiveTab('info');
+      setFinancialData(null);
+      setGroupData(null);
     } catch (error) {
       console.error('Detail load error:', error);
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  // 재무분석 탭 클릭 시 데이터 로드
+  const loadFinancialData = async (customerId: string, applicationId: string) => {
+    if (financialData) return;
+    setFinancialLoading(true);
+    try {
+      const [ratiosRes, summaryRes] = await Promise.all([
+        financialApi.getRatios(customerId),
+        financialApi.getSummaryForApplication(applicationId),
+      ]);
+      setFinancialData({ ratios: ratiosRes.data, summary: summaryRes.data });
+    } catch (e) {
+      console.error('Financial load error:', e);
+    } finally {
+      setFinancialLoading(false);
+    }
+  };
+
+  // 그룹현황 탭 클릭 시 데이터 로드
+  const loadGroupData = async (customerId: string) => {
+    if (groupData) return;
+    setGroupLoading(true);
+    try {
+      const memberRes = await groupCreditApi.getCustomerGroup(customerId);
+      const groups = memberRes.data?.groups || [];
+      let groupDetail = null;
+      if (groups.length > 0) {
+        const detailRes = await groupCreditApi.getGroup(groups[0].group_id);
+        groupDetail = detailRes.data;
+      }
+      setGroupData({ membership: memberRes.data, detail: groupDetail });
+    } catch (e) {
+      console.error('Group load error:', e);
+    } finally {
+      setGroupLoading(false);
     }
   };
 
@@ -529,13 +574,24 @@ export default function Applications() {
                 { key: 'collateral', label: '담보정보', icon: Shield },
                 { key: 'limit', label: '한도심사', icon: AlertTriangle },
                 { key: 'pricing', label: '수익성', icon: Calculator },
-                { key: 'checklist', label: '체크리스트', icon: FileCheck }
+                { key: 'checklist', label: '체크리스트', icon: FileCheck },
+                { key: 'financial', label: '재무분석', icon: TrendingUp },
+                { key: 'group', label: '그룹현황', icon: Users },
+                { key: 'covenant', label: '약정관리', icon: FileCheck },
               ].map(tab => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.key}
-                    onClick={() => setActiveTab(tab.key as any)}
+                    onClick={() => {
+                      setActiveTab(tab.key as any);
+                      if (tab.key === 'financial' && selectedApp?.customer?.customer_id) {
+                        loadFinancialData(selectedApp.customer.customer_id, selectedApp.application.application_id);
+                      }
+                      if (tab.key === 'group' && selectedApp?.customer?.customer_id) {
+                        loadGroupData(selectedApp.customer.customer_id);
+                      }
+                    }}
                     className={`flex items-center px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                       activeTab === tab.key
                         ? 'border-blue-600 text-blue-600'
@@ -1048,6 +1104,291 @@ export default function Applications() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* ── Phase 1: 재무분석 탭 ── */}
+                  {activeTab === 'financial' && (
+                    <div>
+                      {financialLoading ? (
+                        <div className="flex items-center justify-center py-12 text-gray-500">
+                          <RefreshCw size={20} className="animate-spin mr-2" /> 재무데이터 로딩 중...
+                        </div>
+                      ) : financialData ? (
+                        <div className="space-y-6">
+                          {/* DSCR 핵심 판정 */}
+                          {financialData.summary?.key_ratios?.dscr && (
+                            <div className="bg-blue-50 rounded-lg p-4">
+                              <p className="text-sm font-semibold text-blue-800 mb-3">채무상환능력 (DSCR) 분석</p>
+                              <div className="grid grid-cols-3 gap-4">
+                                <div className="text-center">
+                                  <p className="text-xs text-gray-500">DSCR</p>
+                                  <p className={`text-2xl font-bold ${
+                                    financialData.summary.key_ratios.dscr.value >= 1.25 ? 'text-green-600' :
+                                    financialData.summary.key_ratios.dscr.value >= 1.0 ? 'text-yellow-600' : 'text-red-600'
+                                  }`}>
+                                    {financialData.summary.key_ratios.dscr.value?.toFixed(2) ?? 'N/A'}배
+                                  </p>
+                                  <p className="text-xs mt-1">기준: ≥ 1.25배</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs text-gray-500">Altman Z'</p>
+                                  <p className={`text-2xl font-bold ${
+                                    financialData.summary.key_ratios.altman_z?.signal === 'SAFE' ? 'text-green-600' :
+                                    financialData.summary.key_ratios.altman_z?.signal === 'GREY' ? 'text-yellow-600' : 'text-red-600'
+                                  }`}>
+                                    {financialData.summary.key_ratios.altman_z?.value?.toFixed(2) ?? 'N/A'}
+                                  </p>
+                                  <p className="text-xs mt-1">{financialData.summary.key_ratios.altman_z?.signal}</p>
+                                </div>
+                                <div className="text-center">
+                                  <p className="text-xs text-gray-500">심사 판정</p>
+                                  <p className={`text-lg font-bold ${
+                                    financialData.summary.key_ratios.dscr.judgment === 'STRONG' ? 'text-green-600' :
+                                    financialData.summary.key_ratios.dscr.judgment === 'ADEQUATE' ? 'text-blue-600' :
+                                    financialData.summary.key_ratios.dscr.judgment === 'MARGINAL' ? 'text-yellow-600' : 'text-red-600'
+                                  }`}>
+                                    {financialData.summary.key_ratios.dscr.judgment === 'STRONG' ? '우량' :
+                                     financialData.summary.key_ratios.dscr.judgment === 'ADEQUATE' ? '적정' :
+                                     financialData.summary.key_ratios.dscr.judgment === 'MARGINAL' ? '주의' : '부적격'}
+                                  </p>
+                                  <p className="text-xs mt-1">신청 건 반영 DSCR</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 3개년 재무비율 테이블 */}
+                          <div>
+                            <p className="text-sm font-semibold text-gray-700 mb-3">3개년 주요 재무비율</p>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left text-xs text-gray-500">지표</th>
+                                    <th className="px-3 py-2 text-right text-xs text-gray-500">기준</th>
+                                    {financialData.ratios?.years?.map((y: any) => (
+                                      <th key={y.fiscal_year} className="px-3 py-2 text-right text-xs text-gray-500">{y.fiscal_year}년</th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                  {[
+                                    { key: 'debt_ratio', label: '부채비율(%)', benchmark: '≤ 200%' },
+                                    { key: 'current_ratio', label: '유동비율(%)', benchmark: '≥ 100%' },
+                                    { key: 'ier', label: '이자보상배율(배)', benchmark: '≥ 1.5배' },
+                                    { key: 'dscr', label: 'DSCR(배)', benchmark: '≥ 1.25배' },
+                                    { key: 'op_margin', label: '영업이익률(%)', benchmark: '≥ 0%' },
+                                    { key: 'roa', label: 'ROA(%)', benchmark: '-' },
+                                  ].map(metric => (
+                                    <tr key={metric.key}>
+                                      <td className="px-3 py-2 text-gray-700">{metric.label}</td>
+                                      <td className="px-3 py-2 text-right text-gray-400 text-xs">{metric.benchmark}</td>
+                                      {financialData.ratios?.years?.map((y: any) => {
+                                        const r = y.ratios?.[metric.key];
+                                        return (
+                                          <td key={y.fiscal_year} className={`px-3 py-2 text-right font-medium ${
+                                            r?.signal === 'pass' ? 'text-green-600' :
+                                            r?.signal === 'warning' ? 'text-yellow-600' :
+                                            r?.signal === 'fail' ? 'text-red-600' : 'text-gray-700'
+                                          }`}>
+                                            {r?.value != null ? r.value.toFixed(1) : '-'}
+                                          </td>
+                                        );
+                                      })}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+
+                          {/* 동업종 비교 */}
+                          {financialData.ratios?.peer_average && (
+                            <div className="bg-gray-50 rounded-lg p-4">
+                              <p className="text-sm font-semibold text-gray-700 mb-2">
+                                동업종 평균 비교 ({financialData.ratios.industry_name}, {financialData.ratios.peer_average.peer_count}개사)
+                              </p>
+                              <div className="grid grid-cols-4 gap-3">
+                                {[
+                                  { k: 'debt_ratio', l: '부채비율(%)' },
+                                  { k: 'dscr', l: 'DSCR(배)' },
+                                  { k: 'ier', l: '이자보상배율' },
+                                  { k: 'op_margin', l: '영업이익률(%)' },
+                                ].map(({ k, l }) => (
+                                  <div key={k} className="text-center">
+                                    <p className="text-xs text-gray-500">{l}</p>
+                                    <p className="text-base font-bold text-gray-700">
+                                      {financialData.ratios.peer_average[k]?.toFixed(1) ?? '-'}
+                                    </p>
+                                    <p className="text-xs text-gray-400">동업종 평균</p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {!financialData.summary?.has_financial_data && (
+                            <div className="bg-yellow-50 rounded-lg p-4 text-sm text-yellow-800">
+                              재무제표 미입력 — 재무분석 탭에서 데이터를 입력하면 정밀 분석이 가능합니다.
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-400">재무 데이터 없음</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Phase 1: 그룹현황 탭 ── */}
+                  {activeTab === 'group' && (
+                    <div>
+                      {groupLoading ? (
+                        <div className="flex items-center justify-center py-12 text-gray-500">
+                          <RefreshCw size={20} className="animate-spin mr-2" /> 그룹 데이터 로딩 중...
+                        </div>
+                      ) : groupData ? (
+                        groupData.membership?.groups?.length > 0 ? (
+                          <div className="space-y-6">
+                            {/* 그룹 기본 정보 */}
+                            {groupData.detail && (
+                              <div className="bg-gray-50 rounded-lg p-4">
+                                <div className="flex items-center justify-between mb-3">
+                                  <p className="text-sm font-semibold text-gray-700">
+                                    {groupData.detail.group?.group_name}
+                                  </p>
+                                  <Badge variant={
+                                    groupData.detail.exposure_summary?.status === 'BREACH' ? 'danger' :
+                                    groupData.detail.exposure_summary?.status === 'WARNING' ? 'warning' : 'success'
+                                  }>
+                                    {groupData.detail.exposure_summary?.status}
+                                  </Badge>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4">
+                                  <div>
+                                    <p className="text-xs text-gray-500">그룹 합산 익스포저</p>
+                                    <p className="text-lg font-bold text-gray-800">
+                                      {formatAmount(groupData.detail.exposure_summary?.total_outstanding)}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">그룹 한도</p>
+                                    <p className="text-lg font-bold text-gray-800">
+                                      {formatAmount(groupData.detail.exposure_summary?.group_limit)}
+                                    </p>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-gray-500">한도 사용률</p>
+                                    <p className={`text-lg font-bold ${
+                                      (groupData.detail.exposure_summary?.utilization_pct || 0) >= 90 ? 'text-red-600' :
+                                      (groupData.detail.exposure_summary?.utilization_pct || 0) >= 80 ? 'text-yellow-600' : 'text-green-600'
+                                    }`}>
+                                      {groupData.detail.exposure_summary?.utilization_pct?.toFixed(1) ?? '-'}%
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* 계열사 목록 */}
+                            {groupData.detail?.members && (
+                              <div>
+                                <p className="text-sm font-semibold text-gray-700 mb-2">
+                                  계열사 현황 ({groupData.detail.members.length}개사)
+                                </p>
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead className="bg-gray-50">
+                                      <tr>
+                                        <th className="px-3 py-2 text-left text-xs text-gray-500">계열사명</th>
+                                        <th className="px-3 py-2 text-left text-xs text-gray-500">관계</th>
+                                        <th className="px-3 py-2 text-right text-xs text-gray-500">지분율</th>
+                                        <th className="px-3 py-2 text-center text-xs text-gray-500">등급</th>
+                                        <th className="px-3 py-2 text-right text-xs text-gray-500">여신 잔액</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                      {groupData.detail.members.map((m: any) => (
+                                        <tr key={m.customer_id} className={m.customer_id === selectedApp.customer?.customer_id ? 'bg-blue-50' : ''}>
+                                          <td className="px-3 py-2">
+                                            {m.customer_name}
+                                            {m.customer_id === selectedApp.customer?.customer_id && (
+                                              <span className="ml-1 text-xs text-blue-600">(본 고객)</span>
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2 text-gray-500">{m.relationship_type}</td>
+                                          <td className="px-3 py-2 text-right">{m.ownership_pct?.toFixed(1) ?? '-'}%</td>
+                                          <td className="px-3 py-2 text-center">
+                                            <Badge variant={
+                                              m.grade <= 'BBB' ? 'success' :
+                                              m.grade <= 'BB' ? 'warning' : 'danger'
+                                            }>
+                                              {m.grade || '-'}
+                                            </Badge>
+                                          </td>
+                                          <td className="px-3 py-2 text-right">{formatAmount(m.outstanding)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 text-gray-400">
+                            <Users size={32} className="mx-auto mb-2 text-gray-300" />
+                            <p>이 고객은 그룹에 속하지 않습니다.</p>
+                          </div>
+                        )
+                      ) : (
+                        <div className="text-center py-8 text-gray-400">데이터 없음</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Phase 1: 약정관리 탭 ── */}
+                  {activeTab === 'covenant' && (
+                    <div className="space-y-4">
+                      <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800">
+                        <p className="font-medium mb-1">코베넌트(약정 조건) 관리</p>
+                        <p className="text-xs text-blue-600">
+                          여신 승인 시 설정된 재무·행동·정보 코베넌트는 <strong>약정관리</strong> 메뉴에서 통합 관리됩니다.
+                          여신 실행 후 facility_id 기준으로 코베넌트가 연동됩니다.
+                        </p>
+                      </div>
+                      {/* 기존 여신의 코베넌트 미리보기 */}
+                      {selectedApp.existing_facilities?.length > 0 && (
+                        <div>
+                          <p className="text-sm font-semibold text-gray-700 mb-2">기존 여신 약정 현황</p>
+                          <div className="bg-gray-50 rounded-lg divide-y divide-gray-100">
+                            {selectedApp.existing_facilities.slice(0, 3).map((f: any) => (
+                              <div key={f.facility_id} className="px-4 py-3 flex items-center justify-between">
+                                <div>
+                                  <p className="text-sm font-medium">{f.product_name}</p>
+                                  <p className="text-xs text-gray-500">{formatAmount(f.outstanding)} | 만기: {f.maturity}</p>
+                                </div>
+                                <a
+                                  href="/covenant"
+                                  className="text-xs text-blue-600 hover:underline"
+                                  onClick={(e) => { e.preventDefault(); window.location.href = '/covenant'; }}
+                                >
+                                  약정 보기 →
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <div className="text-center mt-4">
+                        <a
+                          href="/covenant"
+                          className="inline-flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+                        >
+                          <FileCheck size={16} className="mr-2" />
+                          전체 코베넌트 관리 페이지 →
+                        </a>
+                      </div>
                     </div>
                   )}
 

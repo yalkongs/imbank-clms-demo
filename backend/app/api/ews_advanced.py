@@ -1193,7 +1193,7 @@ def trigger_automation_from_ews(
     # CRITICAL 고객 조회
     rows = db.execute(
         text("""
-            SELECT ecs.customer_id, ecs.composite_score, c.company_name
+            SELECT ecs.customer_id, ecs.composite_score, c.customer_name
             FROM ews_composite_score ecs
             JOIN customer c ON ecs.customer_id = c.customer_id
             JOIN (

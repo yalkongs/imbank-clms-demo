@@ -41,7 +41,7 @@ export default function CustomerProfitability() {
       const [dashRes, rankRes, crossRes, churnRes] = await Promise.all([
         customerProfitabilityApi.getDashboard(r),
         customerProfitabilityApi.getRankings({ limit: 20, region: r }),
-        customerProfitabilityApi.getCrossSellOpportunities({ status: 'IDENTIFIED', region: r }),
+        customerProfitabilityApi.getCrossSellOpportunities({ region: r }),
         customerProfitabilityApi.getChurnRisk({ min_risk: 0.3, region: r })
       ]);
       setDashboard(dashRes.data);
@@ -263,13 +263,29 @@ export default function CustomerProfitability() {
               <div key={opp.opportunity_id} className="p-3 bg-gray-50 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-medium text-gray-900">{opp.customer_name}</span>
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    (opp.priority_score || 0) >= 70 ? 'bg-red-100 text-red-700' :
-                    (opp.priority_score || 0) >= 50 ? 'bg-yellow-100 text-yellow-700' :
-                    'bg-blue-100 text-blue-700'
-                  }`}>
-                    {(opp.priority_score || 0) >= 70 ? 'HIGH' : (opp.priority_score || 0) >= 50 ? 'MEDIUM' : 'LOW'}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${
+                      opp.status === 'IDENTIFIED' ? 'bg-blue-100 text-blue-700' :
+                      opp.status === 'CONTACTED' ? 'bg-indigo-100 text-indigo-700' :
+                      opp.status === 'PROPOSED' ? 'bg-yellow-100 text-yellow-700' :
+                      opp.status === 'WON' ? 'bg-green-100 text-green-700' :
+                      opp.status === 'LOST' ? 'bg-gray-100 text-gray-500' :
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      {opp.status === 'IDENTIFIED' ? '발굴' :
+                       opp.status === 'CONTACTED' ? '접촉' :
+                       opp.status === 'PROPOSED' ? '제안' :
+                       opp.status === 'WON' ? '성사' :
+                       opp.status === 'LOST' ? '탈락' : '거절'}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${
+                      (opp.priority_score || 0) >= 70 ? 'bg-red-100 text-red-700' :
+                      (opp.priority_score || 0) >= 50 ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {(opp.priority_score || 0) >= 70 ? 'HIGH' : (opp.priority_score || 0) >= 50 ? 'MEDIUM' : 'LOW'}
+                    </span>
+                  </div>
                 </div>
                 <p className="text-sm text-gray-700">{opp.product_type}</p>
                 <div className="flex items-center justify-between mt-2 text-xs">
@@ -311,79 +327,96 @@ export default function CustomerProfitability() {
 
       {/* Customer Detail Modal */}
       {selectedCustomer && (
-        <Card
-          title={`고객 상세: ${selectedCustomer.customer_name}`}
-          headerAction={
-            <button
-              onClick={() => setSelectedCustomer(null)}
-              className="text-sm text-gray-500 hover:text-gray-700"
-            >
-              닫기
-            </button>
-          }
-        >
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">총 수익</p>
-              <p className="text-xl font-bold text-green-600">{formatAmount(selectedCustomer.total_revenue, 'billion')}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setSelectedCustomer(null)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">{selectedCustomer.customer_info?.customer_name}</h3>
+                <p className="text-xs text-gray-500">{selectedCustomer.customer_info?.industry_name} · {selectedCustomer.customer_info?.size_category}</p>
+              </div>
+              <button onClick={() => setSelectedCustomer(null)} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">총 비용</p>
-              <p className="text-xl font-bold text-red-600">{formatAmount(selectedCustomer.total_cost, 'billion')}</p>
-            </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">RAROC</p>
-              <p className={`text-xl font-bold ${selectedCustomer.raroc >= 15 ? 'text-green-600' : 'text-red-600'}`}>
-                {formatPercent(selectedCustomer.raroc)}
-              </p>
-            </div>
-            <div className="p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm text-gray-500">CLV</p>
-              <p className="text-xl font-bold text-blue-600">{formatAmount(selectedCustomer.clv, 'billion')}</p>
-            </div>
-          </div>
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="p-3 bg-gray-50 rounded-lg text-center">
+                  <p className="text-xs text-gray-500">총 수익</p>
+                  <p className="text-lg font-bold text-green-600">{formatAmount(selectedCustomer.profitability?.total?.revenue, 'billion')}</p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg text-center">
+                  <p className="text-xs text-gray-500">총 비용</p>
+                  <p className="text-lg font-bold text-red-600">{formatAmount(selectedCustomer.profitability?.total?.cost, 'billion')}</p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg text-center">
+                  <p className="text-xs text-gray-500">RAROC</p>
+                  <p className={`text-lg font-bold ${(selectedCustomer.profitability?.raroc || 0) >= 15 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatPercent(selectedCustomer.profitability?.raroc)}
+                  </p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg text-center">
+                  <p className="text-xs text-gray-500">CLV 점수</p>
+                  <p className="text-lg font-bold text-blue-600">{(selectedCustomer.lifecycle_metrics?.clv_score || 0).toFixed(1)}</p>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">수익 구성</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between p-2 bg-gray-50 rounded">
-                  <span className="text-sm">이자수익</span>
-                  <span className="text-sm font-medium">{formatAmount(selectedCustomer.interest_income, 'million')}</span>
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">수익 구성</h4>
+                  <div className="space-y-1.5">
+                    {[
+                      ['여신', selectedCustomer.profitability?.loan?.revenue],
+                      ['수신', selectedCustomer.profitability?.deposit?.revenue],
+                      ['수수료', selectedCustomer.profitability?.fee?.revenue],
+                      ['외환/파생', selectedCustomer.profitability?.fx?.revenue],
+                    ].map(([label, val]) => (
+                      <div key={label as string} className="flex justify-between p-2 bg-gray-50 rounded text-sm">
+                        <span>{label}</span>
+                        <span className="font-medium">{formatAmount(val as number, 'million')}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex justify-between p-2 bg-gray-50 rounded">
-                  <span className="text-sm">수수료수익</span>
-                  <span className="text-sm font-medium">{formatAmount(selectedCustomer.fee_income, 'million')}</span>
-                </div>
-                <div className="flex justify-between p-2 bg-gray-50 rounded">
-                  <span className="text-sm">기타수익</span>
-                  <span className="text-sm font-medium">{formatAmount(selectedCustomer.other_income, 'million')}</span>
-                </div>
-              </div>
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold text-gray-700 mb-3">비용 구성</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between p-2 bg-gray-50 rounded">
-                  <span className="text-sm">자금조달비용</span>
-                  <span className="text-sm font-medium">{formatAmount(selectedCustomer.funding_cost, 'million')}</span>
-                </div>
-                <div className="flex justify-between p-2 bg-gray-50 rounded">
-                  <span className="text-sm">신용비용</span>
-                  <span className="text-sm font-medium">{formatAmount(selectedCustomer.credit_cost, 'million')}</span>
-                </div>
-                <div className="flex justify-between p-2 bg-gray-50 rounded">
-                  <span className="text-sm">운영비용</span>
-                  <span className="text-sm font-medium">{formatAmount(selectedCustomer.operating_cost, 'million')}</span>
-                </div>
-                <div className="flex justify-between p-2 bg-gray-50 rounded">
-                  <span className="text-sm">자본비용</span>
-                  <span className="text-sm font-medium">{formatAmount(selectedCustomer.capital_cost, 'million')}</span>
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">비용 구성</h4>
+                  <div className="space-y-1.5">
+                    {[
+                      ['여신비용', selectedCustomer.profitability?.loan?.cost],
+                      ['예상손실(EL)', selectedCustomer.profitability?.loan?.el],
+                      ['자본비용', selectedCustomer.profitability?.loan?.capital_cost],
+                      ['수신비용', selectedCustomer.profitability?.deposit?.cost],
+                    ].map(([label, val]) => (
+                      <div key={label as string} className="flex justify-between p-2 bg-gray-50 rounded text-sm">
+                        <span>{label}</span>
+                        <span className="font-medium">{formatAmount(val as number, 'million')}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
+
+              {/* Cross-sell 기회 */}
+              {selectedCustomer.cross_sell_opportunities?.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">교차판매 기회</h4>
+                  <div className="space-y-1.5">
+                    {selectedCustomer.cross_sell_opportunities.map((opp: any, i: number) => (
+                      <div key={i} className="flex items-center justify-between p-2 bg-gray-50 rounded text-sm">
+                        <span>{opp.product_type}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">확률 {formatPercent((opp.probability || 0) * 100)}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-xs ${
+                            opp.status === 'WON' ? 'bg-green-100 text-green-700' :
+                            opp.status === 'LOST' || opp.status === 'DECLINED' ? 'bg-gray-100 text-gray-500' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>{opp.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        </Card>
+        </div>
       )}
 
       {/* Feature Modal */}

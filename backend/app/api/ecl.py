@@ -121,7 +121,7 @@ def get_facility_ecl(
                 e.ecl_base, e.macro_adj_factor, e.ecl_final,
                 e.prev_ecl, e.ecl_change,
                 e.existing_provision, e.provision_gap,
-                f.outstanding_amount, f.product_type, c.company_name
+                f.outstanding_amount, f.facility_type, c.customer_name
             FROM ecl_calculation e
             JOIN facility f ON e.facility_id = f.facility_id
             JOIN customer c ON e.customer_id = c.customer_id
@@ -284,8 +284,8 @@ def calculate_ecl_for_facility(
     fac = db.execute(
         text("""
             SELECT f.facility_id, f.customer_id, f.outstanding_amount,
-                   f.dpd, f.approval_date, f.maturity_date,
-                   c.credit_grade, rp.pd, rp.lgd
+                   f.dpd, f.contract_date, f.maturity_date,
+                   NULL AS credit_grade, rp.ttc_pd AS pd, rp.lgd
             FROM facility f
             JOIN customer c ON f.customer_id = c.customer_id
             LEFT JOIN risk_parameter rp ON c.customer_id = rp.customer_id

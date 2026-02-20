@@ -478,12 +478,32 @@ def generate_cross_sell_opportunities(conn):
 
     products = ['수신상품', '외환거래', '파생상품', '무역금융', 'PF', '채권인수', '현금관리', '퇴직연금']
 
+    # 현실적인 Cross-sell 파이프라인 status 분포
+    statuses_weights = [
+        ('IDENTIFIED', 0.30),   # 새로 발굴, RM 배정 대기
+        ('CONTACTED',  0.25),   # RM 접촉 완료
+        ('PROPOSED',   0.15),   # 제안서 제출
+        ('WON',        0.12),   # 계약 성사
+        ('LOST',       0.10),   # 경쟁 탈락
+        ('DECLINED',   0.08),   # 고객 거절
+    ]
+    status_list = [s for s, _ in statuses_weights]
+    base_weights = [w for _, w in statuses_weights]
+
     opportunities = []
     for customer_id in random.sample(customers, min(200, len(customers))):
         for product in random.sample(products, random.randint(1, 3)):
             probability = round(random.uniform(0.2, 0.9), 2)
             expected_revenue = random.randint(1000000, 100000000)
             priority = round(probability * expected_revenue / 10000000, 1)
+
+            # 확률 높은 기회는 WON, 낮은 기회는 LOST/DECLINED 가능성 높게
+            adj_w = list(base_weights)
+            if probability >= 0.7:
+                adj_w[3] *= 1.8; adj_w[4] *= 0.5
+            elif probability <= 0.4:
+                adj_w[3] *= 0.5; adj_w[4] *= 1.5; adj_w[5] *= 1.5
+            status = random.choices(status_list, weights=adj_w, k=1)[0]
 
             opportunities.append((
                 f"CSO_{generate_uuid()}",
@@ -492,7 +512,7 @@ def generate_cross_sell_opportunities(conn):
                 probability,
                 expected_revenue,
                 priority,
-                'OPEN',
+                status,
                 f"RM{random.randint(100, 999)}"
             ))
 
@@ -508,6 +528,200 @@ def generate_cross_sell_opportunities(conn):
 # ============================================
 # 4. 담보 가치 실시간 모니터링
 # ============================================
+
+def extend_collateral_schema(conn):
+    """담보 테이블 컬럼 확장 (멱등성 보장)"""
+    cursor = conn.cursor()
+    new_columns = [
+        ("appraisal_value", "REAL"),
+        ("market_value", "REAL"),
+        ("recognition_ratio", "REAL"),
+        ("recognized_value", "REAL"),
+        ("prior_lien_amount", "REAL DEFAULT 0"),
+        ("collateral_margin", "REAL"),
+        ("appraiser", "TEXT"),
+        ("last_appraisal_date", "DATE"),
+        ("location_address", "TEXT"),
+        ("description", "TEXT"),
+    ]
+    existing = {row[1] for row in cursor.execute("PRAGMA table_info(collateral)").fetchall()}
+    added = 0
+    for col_name, col_type in new_columns:
+        if col_name not in existing:
+            cursor.execute(f"ALTER TABLE collateral ADD COLUMN {col_name} {col_type}")
+            added += 1
+    conn.commit()
+    print(f"✓ 담보 테이블 컬럼 확장: {added}개 추가 ({len(new_columns) - added}개 기존)")
+
+
+def update_existing_collaterals(conn):
+    """기존 담보 ~910건에 신규 컬럼 값 채우기"""
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT col.collateral_id, col.collateral_type, col.collateral_subtype,
+               col.current_value, col.original_value,
+               COALESCE(f.outstanding_amount, 0)
+        FROM collateral col
+        LEFT JOIN facility f ON col.facility_id = f.facility_id
+    """)
+    rows = cursor.fetchall()
+
+    APPRAISERS = ['한국감정원', '대한감정평가', '삼성감정', '신한감정', 'KB감정', '우리감정']
+    ADDRESSES_CAPITAL = ['서울 강남구 역삼동', '서울 서초구 반포동', '서울 송파구 잠실동', '경기 성남시 분당구', '서울 마포구 상암동', '인천 연수구 송도동']
+    ADDRESSES_DAEGU = ['대구 수성구 범어동', '대구 중구 동인동', '경북 포항시 남구', '경북 구미시 인동']
+    ADDRESSES_BUSAN = ['부산 해운대구 우동', '부산 부산진구 전포동', '경남 창원시 성산구', '경남 김해시 내외동']
+
+    recognition_ratios = {
+        'REAL_ESTATE': {'아파트': (0.70, 0.80), '오피스텔': (0.60, 0.70), '오피스': (0.60, 0.70), '상가': (0.55, 0.65),
+                        '토지': (0.50, 0.65), '공장': (0.45, 0.60), '주택': (0.65, 0.75), '빌딩': (0.55, 0.70)},
+        'DEPOSIT': {'정기예금': (0.95, 1.00), '적금': (0.90, 0.95), 'CD': (0.95, 1.00)},
+        'SECURITIES': {'상장주식': (0.55, 0.65), '비상장주식': (0.30, 0.45), '채권': (0.80, 0.90), '펀드': (0.50, 0.65), '수익증권': (0.50, 0.60)},
+    }
+
+    count = 0
+    for coll_id, ctype, csub, curr_val, orig_val, outstanding in rows:
+        if curr_val is None or curr_val <= 0:
+            continue
+
+        # 감정가: 시세 대비 ±10%
+        market_value = curr_val
+        appraisal_value = market_value * random.uniform(0.92, 1.08)
+
+        # 인정비율
+        ratio_range = recognition_ratios.get(ctype, {}).get(csub, (0.50, 0.70))
+        recognition_ratio = round(random.uniform(*ratio_range), 3)
+        recognized_value = market_value * recognition_ratio
+
+        # 선순위
+        prior_lien = recognized_value * random.uniform(0, 0.3) if ctype == 'REAL_ESTATE' else 0
+        collateral_margin = recognized_value - prior_lien - outstanding
+
+        appraiser = random.choice(APPRAISERS) if ctype == 'REAL_ESTATE' else None
+        last_appraisal = random_date(2024, 2024) if ctype == 'REAL_ESTATE' else None
+
+        if ctype == 'REAL_ESTATE':
+            address = random.choice(ADDRESSES_CAPITAL + ADDRESSES_DAEGU + ADDRESSES_BUSAN)
+        else:
+            address = None
+
+        desc_map = {
+            'REAL_ESTATE': f'{csub} 담보 - 감정평가 완료',
+            'DEPOSIT': f'{csub} 질권 설정',
+            'SECURITIES': f'{csub} 담보 설정',
+        }
+        description = desc_map.get(ctype, '담보 설정')
+
+        cursor.execute("""
+            UPDATE collateral SET
+                appraisal_value = ?, market_value = ?, recognition_ratio = ?,
+                recognized_value = ?, prior_lien_amount = ?, collateral_margin = ?,
+                appraiser = ?, last_appraisal_date = ?, location_address = ?, description = ?
+            WHERE collateral_id = ?
+        """, (round(appraisal_value, 0), round(market_value, 0), recognition_ratio,
+              round(recognized_value, 0), round(prior_lien, 0), round(collateral_margin, 0),
+              appraiser, last_appraisal, address, description, coll_id))
+        count += 1
+
+    conn.commit()
+    print(f"✓ 기존 담보 갱신: {count}건")
+
+
+def generate_additional_collaterals(conn):
+    """새 담보 유형(동산/보증/매출채권/IP) ~200건 추가"""
+    cursor = conn.cursor()
+
+    # 기존 facility_id 목록
+    cursor.execute("SELECT facility_id, outstanding_amount FROM facility WHERE status='ACTIVE'")
+    facilities = cursor.fetchall()
+
+    # 기존 최대 collateral_id 번호
+    cursor.execute("SELECT MAX(CAST(REPLACE(collateral_id, 'COL', '') AS INTEGER)) FROM collateral")
+    max_num = cursor.fetchone()[0] or 0
+
+    NEW_TYPES = {
+        'MOVABLE_PROPERTY': {
+            'subtypes': ['기계설비', '재고자산', '차량', '선박'],
+            'ratios': {'기계설비': (0.40, 0.55), '재고자산': (0.30, 0.45), '차량': (0.50, 0.65), '선박': (0.35, 0.50)},
+            'value_range': (500_000_000, 20_000_000_000),
+        },
+        'GUARANTEE': {
+            'subtypes': ['신용보증기금', '기술보증기금', '서울보증보험'],
+            'ratios': {'신용보증기금': (0.80, 0.95), '기술보증기금': (0.80, 0.95), '서울보증보험': (0.85, 0.95)},
+            'value_range': (200_000_000, 10_000_000_000),
+        },
+        'RECEIVABLES': {
+            'subtypes': ['매출채권', '어음'],
+            'ratios': {'매출채권': (0.60, 0.75), '어음': (0.65, 0.80)},
+            'value_range': (100_000_000, 5_000_000_000),
+        },
+        'IP_RIGHTS': {
+            'subtypes': ['특허권', '상표권'],
+            'ratios': {'특허권': (0.20, 0.40), '상표권': (0.15, 0.35)},
+            'value_range': (50_000_000, 3_000_000_000),
+        },
+    }
+
+    APPRAISERS_NEW = {
+        'MOVABLE_PROPERTY': ['한국기계산업진흥회', '대한감정평가', '산업감정원'],
+        'GUARANTEE': [None],
+        'RECEIVABLES': [None],
+        'IP_RIGHTS': ['한국발명진흥회', '특허청 감정', 'IP밸류에이션'],
+    }
+
+    collaterals = []
+    seq = max_num + 1
+
+    target = 200
+    per_type = target // len(NEW_TYPES)
+
+    for ctype, info in NEW_TYPES.items():
+        for _ in range(per_type):
+            fac = random.choice(facilities)
+            fac_id, outstanding = fac[0], fac[1] or 0
+            subtype = random.choice(info['subtypes'])
+
+            val_lo, val_hi = info['value_range']
+            orig_value = random.uniform(val_lo, val_hi)
+            curr_value = orig_value * random.uniform(0.85, 1.05)
+            ltv = outstanding / curr_value if curr_value > 0 else 0
+
+            ratio_range = info['ratios'].get(subtype, (0.40, 0.60))
+            recognition_ratio = round(random.uniform(*ratio_range), 3)
+            market_value = curr_value
+            appraisal_value = market_value * random.uniform(0.90, 1.10)
+            recognized_value = market_value * recognition_ratio
+            prior_lien = 0
+            collateral_margin = recognized_value - outstanding
+
+            appraiser = random.choice(APPRAISERS_NEW.get(ctype, [None]))
+            last_appraisal = random_date(2024, 2024) if appraiser else None
+
+            coll_id = f"COL{seq:06d}"
+            seq += 1
+
+            collaterals.append((
+                coll_id, None, fac_id, ctype, subtype,
+                round(orig_value, 0), round(curr_value, 0), round(ltv, 4),
+                random_date(2024, 2024), 1,
+                round(appraisal_value, 0), round(market_value, 0), recognition_ratio,
+                round(recognized_value, 0), round(prior_lien, 0), round(collateral_margin, 0),
+                appraiser, last_appraisal, None,
+                f'{subtype} 담보 설정'
+            ))
+
+    cursor.executemany("""
+        INSERT OR IGNORE INTO collateral
+        (collateral_id, application_id, facility_id, collateral_type, collateral_subtype,
+         original_value, current_value, ltv, valuation_date, priority_rank,
+         appraisal_value, market_value, recognition_ratio,
+         recognized_value, prior_lien_amount, collateral_margin,
+         appraiser, last_appraisal_date, location_address, description)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, collaterals)
+
+    conn.commit()
+    print(f"✓ 신규 담보 추가: {len(collaterals)}건 (동산/보증/매출채권/IP)")
+
 
 def generate_real_estate_index(conn):
     """부동산 시세 인덱스 생성"""
@@ -553,23 +767,70 @@ def generate_real_estate_index(conn):
     print(f"✓ 부동산 시세 인덱스: {len(indices)}건 생성")
 
 def generate_collateral_valuations(conn):
-    """담보 가치 이력 생성"""
+    """담보 가치 이력 생성 - 담보 유형별 현실적 평가방법/변동성 적용"""
     cursor = conn.cursor()
-    cursor.execute("SELECT collateral_id, current_value FROM collateral")
+    cursor.execute("SELECT collateral_id, current_value, collateral_type FROM collateral")
     collaterals = cursor.fetchall()
+
+    # 유형별 평가 방법 및 변동성 설정
+    TYPE_CONFIG = {
+        'REAL_ESTATE': {
+            'valuation_type': ['AUTO', 'MANUAL'],
+            'valuation_source': ['시세연동', '감정평가', '공시지가'],
+            'change_range': (-0.10, 0.05),  # 부동산: 변동 큼
+        },
+        'DEPOSIT': {
+            'valuation_type': ['AUTO'],
+            'valuation_source': ['원금확인'],
+            'change_range': (-0.005, 0.005),  # 예금: 거의 변동 없음 (이자 소폭)
+        },
+        'SECURITIES': {
+            'valuation_type': ['AUTO'],
+            'valuation_source': ['시가평가'],
+            'change_range': (-0.15, 0.10),  # 유가증권: 변동성 높음
+        },
+        'MOVABLE_PROPERTY': {
+            'valuation_type': ['MANUAL'],
+            'valuation_source': ['감정평가'],
+            'change_range': (-0.08, 0.02),  # 동산: 감가 위주
+        },
+        'GUARANTEE': {
+            'valuation_type': ['AUTO'],
+            'valuation_source': ['보증잔액확인'],
+            'change_range': (-0.01, 0.01),  # 보증: 거의 변동 없음
+        },
+        'RECEIVABLES': {
+            'valuation_type': ['AUTO'],
+            'valuation_source': ['채권잔액확인'],
+            'change_range': (-0.05, 0.02),  # 매출채권: 회수/부실 변동
+        },
+        'IP_RIGHTS': {
+            'valuation_type': ['MANUAL'],
+            'valuation_source': ['감정평가'],
+            'change_range': (-0.12, 0.08),  # IP: 변동성 큼
+        },
+    }
+    DEFAULT_CONFIG = {
+        'valuation_type': ['AUTO', 'MANUAL'],
+        'valuation_source': ['평가'],
+        'change_range': (-0.10, 0.05),
+    }
 
     valuations = []
     alerts = []
 
-    for collateral_id, current_value in collaterals:
+    for collateral_id, current_value, collateral_type in collaterals:
         if current_value is None or current_value <= 0:
             continue
+
+        cfg = TYPE_CONFIG.get(collateral_type, DEFAULT_CONFIG)
+        change_lo, change_hi = cfg['change_range']
 
         base_value = current_value
         for month_offset in range(6):
             date = (datetime.now() - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
 
-            change_pct = random.uniform(-0.1, 0.05)
+            change_pct = random.uniform(change_lo, change_hi)
             new_value = base_value * (1 + change_pct)
 
             ltv_before = random.uniform(0.4, 0.8)
@@ -577,16 +838,24 @@ def generate_collateral_valuations(conn):
 
             alert_triggered = 1 if change_pct < -0.05 or ltv_after > 0.8 else 0
 
+            # 변동 거의 없는 유형은 시장 상황도 '보합' 위주
+            if abs(change_pct) < 0.01:
+                market_condition = '보합'
+            elif change_pct > 0:
+                market_condition = '상승'
+            else:
+                market_condition = '하락'
+
             valuations.append((
                 f"CVH_{generate_uuid()}",
                 collateral_id,
                 date,
-                random.choice(['AUTO', 'MANUAL']),
-                random.choice(['시세연동', '감정평가', '공시지가']),
+                random.choice(cfg['valuation_type']),
+                random.choice(cfg['valuation_source']),
                 round(base_value, 0),
                 round(new_value, 0),
                 round(change_pct * 100, 2),
-                random.choice(['상승', '보합', '하락']),
+                market_condition,
                 round(ltv_before, 3),
                 round(ltv_after, 3),
                 alert_triggered
@@ -1231,6 +1500,9 @@ def main():
 
         # 5. 담보 모니터링
         print("\n[5/9] 담보 모니터링 데이터 생성...")
+        extend_collateral_schema(conn)
+        update_existing_collaterals(conn)
+        generate_additional_collaterals(conn)
         generate_real_estate_index(conn)
         generate_collateral_valuations(conn)
 

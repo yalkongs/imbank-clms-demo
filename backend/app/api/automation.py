@@ -133,7 +133,7 @@ def get_automation_dashboard(
             SELECT
                 a.action_id, a.trigger_type, a.action_type,
                 a.action_status, a.priority,
-                a.customer_id, c.company_name,
+                a.customer_id, c.customer_name,
                 a.default_probability,
                 a.result_summary, a.created_at, a.executed_at
             FROM automation_action a
@@ -196,7 +196,7 @@ def get_pending_actions(
         text(f"""
             SELECT
                 a.action_id, a.trigger_type, a.action_type,
-                a.priority, a.customer_id, c.company_name,
+                a.priority, a.customer_id, c.customer_name,
                 a.facility_id, a.default_probability,
                 a.trigger_source_id, a.created_at
             FROM automation_action a
@@ -373,7 +373,7 @@ def scan_and_create_triggers(
     ews_rows = db.execute(
         text("""
             SELECT ecs.customer_id, ecs.composite_score,
-                   c.company_name
+                   c.customer_name
             FROM ews_composite_score ecs
             JOIN customer c ON ecs.customer_id = c.customer_id
             JOIN (
@@ -411,7 +411,7 @@ def scan_and_create_triggers(
     eod_rows = db.execute(
         text("""
             SELECT DISTINCT cc.covenant_id, cv.facility_id,
-                   f.customer_id, c.company_name
+                   f.customer_id, c.customer_name
             FROM covenant_check cc
             JOIN covenant cv ON cc.covenant_id = cv.covenant_id
             JOIN facility f ON cv.facility_id = f.facility_id
@@ -450,7 +450,7 @@ def scan_and_create_triggers(
     dpd_rows = db.execute(
         text("""
             SELECT DISTINCT d.facility_id, d.customer_id,
-                   d.dpd, c.company_name
+                   d.dpd, c.customer_name
             FROM delinquency_record d
             JOIN customer c ON d.customer_id = c.customer_id
             WHERE d.dpd >= 90 AND d.status = 'OPEN'

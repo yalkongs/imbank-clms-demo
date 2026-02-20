@@ -495,7 +495,7 @@ def get_workout_ecl_summary(db: Session = Depends(get_db)):
     rows = db.execute(
         text("""
             SELECT
-                wc.case_id, wc.customer_id, c.company_name,
+                wc.case_id, wc.customer_id, c.customer_name,
                 wc.total_exposure, wc.provision_amount,
                 wc.expected_recovery_rate, wc.strategy,
                 e.stage, e.ecl_final, e.provision_gap, e.calc_date
@@ -568,7 +568,7 @@ def auto_transfer_npl_to_workout(
             SELECT DISTINCT d.customer_id, d.facility_id,
                    d.overdue_amount, d.dpd,
                    f.outstanding_amount,
-                   c.company_name
+                   c.customer_name
             FROM delinquency_record d
             JOIN facility f ON d.facility_id = f.facility_id
             JOIN customer c ON d.customer_id = c.customer_id
