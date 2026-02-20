@@ -1464,6 +1464,107 @@ def generate_alm_data(conn):
     print(f"✓ ALM 갭: {len(gaps)}건, 시나리오: {len(scenarios)}건, 헷지: {len(hedges)}건, 제안: {len(recommendations)}건 생성")
 
 # ============================================
+# 9. 그룹여신 보증 관계 데이터
+# ============================================
+
+def generate_group_guarantees(conn):
+    """그룹 내 보증 관계 300건 생성"""
+    cursor = conn.cursor()
+
+    # 전체 고객 및 규모별 분류
+    cursor.execute("""
+        SELECT c.customer_id, c.size_category,
+               COALESCE(SUM(f.outstanding_amount), 0) as total_loan
+        FROM customer c
+        LEFT JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
+        GROUP BY c.customer_id
+        ORDER BY total_loan DESC
+    """)
+    customers = cursor.fetchall()
+    customer_ids = [row[0] for row in customers]
+    large_customers = [row[0] for row in customers if row[1] in ('LARGE', 'MEDIUM')]
+    small_customers = [row[0] for row in customers if row[1] in ('SMALL', 'SOHO')]
+
+    # 기존 데이터 삭제 후 재생성
+    cursor.execute("DELETE FROM group_guarantee")
+
+    guarantee_types = ['JOINT', 'INDIVIDUAL', 'CROSS', 'PARENT_SUBSIDIARY']
+    status_list = ['ACTIVE', 'EXPIRED', 'CANCELLED', 'PARTIAL']
+    status_weights = [0.70, 0.15, 0.10, 0.05]
+
+    # 그룹 구성: 대기업 20개(7~9건), 중견 15개(5~7건), 중소 12개(3~5건)
+    group_configs = (
+        [('LARGE', random.randint(7, 9)) for _ in range(20)] +
+        [('MEDIUM', random.randint(5, 7)) for _ in range(15)] +
+        [('SMALL', random.randint(3, 5)) for _ in range(12)]
+    )
+    random.shuffle(group_configs)
+
+    records = []
+    grp_num = 1
+
+    for cat, n_rel in group_configs:
+        if len(records) >= 300:
+            break
+
+        group_id = f'GRP{grp_num:05d}'
+        grp_num += 1
+
+        if cat == 'LARGE':
+            pool = large_customers or customer_ids
+        elif cat == 'MEDIUM':
+            pool = large_customers + small_customers[:200] or customer_ids
+        else:
+            pool = small_customers or customer_ids
+
+        n_members = min(random.randint(2, 5), len(pool))
+        members = random.sample(pool, n_members)
+
+        for _ in range(n_rel):
+            if len(records) >= 300:
+                break
+
+            guarantor = random.choice(members)
+            others = [m for m in members if m != guarantor]
+            beneficiary = random.choice(others) if others else random.choice(
+                [c for c in customer_ids if c != guarantor]
+            )
+
+            g_type = random.choices(guarantee_types, weights=[0.40, 0.30, 0.20, 0.10])[0]
+
+            if cat == 'LARGE':
+                amount = random.uniform(5_000_000_000, 50_000_000_000)
+            elif cat == 'MEDIUM':
+                amount = random.uniform(1_000_000_000, 15_000_000_000)
+            else:
+                amount = random.uniform(200_000_000, 5_000_000_000)
+
+            status = random.choices(status_list, weights=status_weights)[0]
+
+            start = datetime(2019, 1, 1)
+            end = datetime(2024, 12, 31)
+            eff_date = (start + timedelta(days=random.randint(0, (end - start).days))).strftime('%Y-%m-%d')
+
+            uid = str(uuid.uuid4())[:4].upper()
+            guarantee_id = f'GG_{group_id}_{guarantor[-6:]}_{beneficiary[-6:]}_{uid}'
+
+            records.append((
+                guarantee_id, group_id, guarantor, beneficiary,
+                g_type, round(amount, 0), eff_date, status
+            ))
+
+    cursor.executemany("""
+        INSERT OR IGNORE INTO group_guarantee
+        (guarantee_id, group_id, guarantor_id, beneficiary_id,
+         guarantee_type, guarantee_amount, effective_date, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, records)
+
+    conn.commit()
+    print(f"✓ 그룹여신 보증 관계: {len(records)}건 생성")
+
+
+# ============================================
 # 메인 실행
 # ============================================
 
@@ -1521,6 +1622,10 @@ def main():
         # 9. ALM
         print("\n[9/9] ALM 데이터 생성...")
         generate_alm_data(conn)
+
+        # 10. 그룹여신 보증 관계
+        print("\n[10/10] 그룹여신 보증 관계 데이터 생성...")
+        generate_group_guarantees(conn)
 
         print("\n" + "="*60)
         print("✓ 모든 확장 데이터 생성 완료!")
