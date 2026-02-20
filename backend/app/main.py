@@ -11,6 +11,12 @@ from contextlib import asynccontextmanager
 from .core.database import engine, Base
 from .api import dashboard, applications, capital, portfolio, limits, stress_test, models, model_inference, customers, capital_optimizer
 from .api import ews_advanced, dynamic_limits, customer_profitability, collateral_monitoring, portfolio_optimization, workout, esg, alm
+# Phase 1: 여신 심사 고도화
+from .api import financial_analysis, group_credit, covenant
+# Phase 2: 부실 관리 핵심
+from .api import asset_classification, ecl, delinquency
+# Phase 3: 자동화 브릿지
+from .api import automation
 
 
 @asynccontextmanager
@@ -79,6 +85,19 @@ app.include_router(portfolio_optimization.router)
 app.include_router(workout.router)
 app.include_router(esg.router)
 app.include_router(alm.router)
+
+# Phase 1: 여신 심사 고도화
+app.include_router(financial_analysis.router)
+app.include_router(group_credit.router)
+app.include_router(covenant.router)
+
+# Phase 2: 부실 관리 핵심
+app.include_router(asset_classification.router)
+app.include_router(ecl.router)
+app.include_router(delinquency.router)
+
+# Phase 3: 자동화 브릿지
+app.include_router(automation.router)
 
 
 @app.get("/health")

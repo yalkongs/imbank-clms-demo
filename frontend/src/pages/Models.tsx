@@ -20,10 +20,10 @@ import {
   Legend, ResponsiveContainer, ReferenceLine, Cell, ComposedChart, Area
 } from 'recharts';
 import { Card, StatCard, Table, Badge, CellFormatters, TrendChart, COLORS } from '../components';
-import { modelsApi } from '../utils/api';
+import { modelsApi, lgdBacktestApi } from '../utils/api';
 import { formatPercent, formatDate } from '../utils/format';
 
-type TabType = 'registry' | 'backtest' | 'override' | 'vintage';
+type TabType = 'registry' | 'backtest' | 'override' | 'vintage' | 'lgd';
 
 export default function Models() {
   const [loading, setLoading] = useState(true);
@@ -38,6 +38,10 @@ export default function Models() {
   const [vintageData, setVintageData] = useState<any>(null);
   const [modelSpecs, setModelSpecs] = useState<any>(null);
   const [showSpecsModal, setShowSpecsModal] = useState(false);
+  const [lgdData, setLgdData] = useState<any>(null);
+  const [lgdCollateral, setLgdCollateral] = useState<any>(null);
+  const [lgdIndustry, setLgdIndustry] = useState<any>(null);
+  const [recoveryData, setRecoveryData] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -53,7 +57,27 @@ export default function Models() {
     if (activeTab === 'vintage' && !vintageData) {
       loadVintageData();
     }
+    if (activeTab === 'lgd' && !lgdData) {
+      loadLgdData();
+    }
   }, [activeTab]);
+
+  const loadLgdData = async () => {
+    try {
+      const [overall, collateral, industry, recovery] = await Promise.all([
+        lgdBacktestApi.getOverall(),
+        lgdBacktestApi.getByCollateral(),
+        lgdBacktestApi.getByIndustry(),
+        lgdBacktestApi.getRecoveryAnalytics(),
+      ]);
+      setLgdData(overall.data);
+      setLgdCollateral(collateral.data);
+      setLgdIndustry(industry.data);
+      setRecoveryData(recovery.data);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -134,7 +158,8 @@ export default function Models() {
     { id: 'registry', label: '모델 레지스트리', icon: <Brain size={16} /> },
     { id: 'backtest', label: 'PD Backtest', icon: <BarChart3 size={16} /> },
     { id: 'override', label: 'Override 성과', icon: <GitBranch size={16} /> },
-    { id: 'vintage', label: 'Vintage 분석', icon: <Calendar size={16} /> }
+    { id: 'vintage', label: 'Vintage 분석', icon: <Calendar size={16} /> },
+    { id: 'lgd', label: 'LGD 백테스트', icon: <TrendingDown size={16} /> }
   ];
 
   return (
@@ -222,6 +247,15 @@ export default function Models() {
 
       {activeTab === 'vintage' && (
         <VintageTab data={vintageData} />
+      )}
+
+      {activeTab === 'lgd' && (
+        <LgdTab
+          data={lgdData}
+          collateral={lgdCollateral}
+          industry={lgdIndustry}
+          recovery={recoveryData}
+        />
       )}
 
       {/* 모델 상세 사양 모달 */}
@@ -1090,6 +1124,242 @@ function VintageTab({ data }: { data: any }) {
             <div>
               <p className="text-gray-500 mb-1">코호트 유형</p>
               <p className="font-medium">{data.analysis_info?.cohort_types?.join(', ')}</p>
+            </div>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// LGD 백테스트 탭
+function LgdTab({ data, collateral, industry, recovery }: {
+  data: any;
+  collateral: any;
+  industry: any;
+  recovery: any;
+}) {
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // 백엔드가 이미 % 단위로 반환 (avg_estimated_lgd, avg_actual_lgd 등)
+  // summary 필드: count, mean_error_pct, rmse_pct, mae_pct, conservative_rate(%)
+  const s = data;
+
+  // 담보 유형별 차트 데이터 — backend: by_collateral, 값은 이미 %
+  const collateralChartData = (collateral?.by_collateral || []).map((c: any) => ({
+    name: c.collateral_type || '-',
+    estimated: +(c.avg_estimated_lgd || 0),
+    actual: +(c.avg_actual_lgd || 0),
+    error: +(c.avg_error_pct || 0),
+    count: c.count
+  }));
+
+  // 업종별 차트 데이터 — backend: by_industry, 값은 이미 %
+  const industryChartData = (industry?.by_industry || []).slice(0, 8).map((i: any) => ({
+    name: i.industry || '-',
+    estimated: +(i.avg_estimated_lgd || 0),
+    actual: +(i.avg_actual_lgd || 0),
+    error: +(i.mae_pct || 0),
+    count: i.count
+  }));
+
+  // 회수 전략별 차트 데이터 — backend: by_strategy
+  const recoveryChartData = (recovery?.by_strategy || []).map((r: any) => ({
+    name: r.strategy_ko || r.strategy || '-',
+    avgDays: r.avg_days_to_resolution || 0,
+    recoveryRate: +(((r.avg_recovery_rate || 0) * 100).toFixed(1)),
+    count: r.count
+  }));
+
+  const errorColor = (val: number) => {
+    const abs = Math.abs(val);
+    if (abs < 3) return 'text-green-600';
+    if (abs < 7) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* 요약 KPI */}
+      <div className="grid grid-cols-5 gap-4">
+        <StatCard
+          title="분석 건수"
+          value={`${s.count?.toLocaleString() || 0}건`}
+          subtitle="Workout 완료 케이스"
+          icon={<BarChart3 size={24} />}
+          color="blue"
+        />
+        <StatCard
+          title="평균 추정 LGD"
+          value={`${(collateral?.by_collateral?.[0]?.avg_estimated_lgd || 0).toFixed(1)}%`}
+          subtitle="모델 예측값 (담보1순위)"
+          icon={<TrendingDown size={24} />}
+          color="gray"
+        />
+        <StatCard
+          title="평균 실제 LGD"
+          value={`${(collateral?.by_collateral?.[0]?.avg_actual_lgd || 0).toFixed(1)}%`}
+          subtitle="실현값 (담보1순위)"
+          icon={<Activity size={24} />}
+          color="gray"
+        />
+        <StatCard
+          title="평균 오차"
+          value={`${(s.mean_error_pct || 0).toFixed(2)}%p`}
+          subtitle={`RMSE: ${(s.rmse_pct || 0).toFixed(2)}%p`}
+          icon={<AlertTriangle size={24} />}
+          color={(s.mean_error_pct || 0) > 5 ? 'red' : 'green'}
+        />
+        <StatCard
+          title="보수적 추정 비율"
+          value={`${(s.conservative_rate || 0).toFixed(1)}%`}
+          subtitle="추정 > 실제 (보수주의)"
+          icon={<CheckCircle size={24} />}
+          color={(s.conservative_rate || 0) > 50 ? 'green' : 'yellow'}
+        />
+      </div>
+
+      {/* 담보 유형별 분석 */}
+      <div className="grid grid-cols-2 gap-6">
+        <Card title="담보 유형별 LGD 비교">
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={collateralChartData} layout="vertical">
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis type="number" unit="%" domain={[0, 100]} />
+              <YAxis type="category" dataKey="name" width={90} fontSize={11} />
+              <Tooltip formatter={(value: any) => `${value}%`} />
+              <Legend />
+              <Bar dataKey="estimated" name="추정 LGD" fill="#3B82F6" />
+              <Bar dataKey="actual" name="실제 LGD" fill="#10B981" />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card title="회수 전략별 성과">
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={recoveryChartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" fontSize={11} />
+              <YAxis yAxisId="left" unit="일" />
+              <YAxis yAxisId="right" orientation="right" unit="%" />
+              <Tooltip />
+              <Legend />
+              <Bar yAxisId="left" dataKey="avgDays" name="평균 회수기간(일)" fill="#8B5CF6" />
+              <Line yAxisId="right" type="monotone" dataKey="recoveryRate" name="회수율(%)" stroke="#F59E0B" strokeWidth={2} dot={{ r: 4 }} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Card>
+      </div>
+
+      {/* 담보 유형별 상세 테이블 */}
+      <Card title="담보 유형별 LGD 백테스트 상세">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-4 py-2 text-left font-medium text-gray-500">담보 유형</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">건수</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">추정 LGD</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">실제 LGD</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">평균 오차</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">MAE</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">RMSE</th>
+                <th className="px-4 py-2 text-center font-medium text-gray-500">보수적 비율</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(collateral?.by_collateral || []).map((c: any, index: number) => (
+                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-2 font-medium text-gray-900">{c.collateral_type || '-'}</td>
+                  <td className="px-4 py-2 text-right">{c.count?.toLocaleString()}</td>
+                  <td className="px-4 py-2 text-right font-mono">{(c.avg_estimated_lgd || 0).toFixed(1)}%</td>
+                  <td className="px-4 py-2 text-right font-mono">{(c.avg_actual_lgd || 0).toFixed(1)}%</td>
+                  <td className={`px-4 py-2 text-right font-mono font-semibold ${errorColor(c.avg_error_pct || 0)}`}>
+                    {(c.avg_error_pct || 0) >= 0 ? '+' : ''}{(c.avg_error_pct || 0).toFixed(2)}%p
+                  </td>
+                  <td className="px-4 py-2 text-right font-mono">-</td>
+                  <td className="px-4 py-2 text-right font-mono">-</td>
+                  <td className="px-4 py-2 text-center">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      c.conservative ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {c.conservative ? '보수적' : '낙관적'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* 업종별 상세 테이블 */}
+      <Card title="업종별 LGD 백테스트 (상위 15개)">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="px-4 py-2 text-left font-medium text-gray-500">업종</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">건수</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">추정 LGD</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">실제 LGD</th>
+                <th className="px-4 py-2 text-right font-medium text-gray-500">MAE</th>
+                <th className="px-4 py-2 text-center font-medium text-gray-500">편향</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(industry?.by_industry || []).slice(0, 15).map((i: any, index: number) => (
+                <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="px-4 py-2 font-medium text-gray-900">{i.industry || '-'}</td>
+                  <td className="px-4 py-2 text-right">{i.count?.toLocaleString()}</td>
+                  <td className="px-4 py-2 text-right font-mono">{(i.avg_estimated_lgd || 0).toFixed(1)}%</td>
+                  <td className="px-4 py-2 text-right font-mono">{(i.avg_actual_lgd || 0).toFixed(1)}%</td>
+                  <td className={`px-4 py-2 text-right font-mono font-semibold ${errorColor(i.mae_pct || 0)}`}>
+                    {(i.mae_pct || 0).toFixed(2)}%p
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                      i.bias === 'CONSERVATIVE' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {i.bias === 'CONSERVATIVE' ? '보수적' : '낙관적'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* 백테스트 방법론 */}
+      <Card title="LGD 백테스트 방법론">
+        <div className="bg-blue-50 rounded-lg p-4">
+          <h4 className="font-medium text-blue-900 mb-2">검증 기준</h4>
+          <p className="text-sm text-blue-800 mb-3">
+            Workout 완료 케이스의 실제 회수율로부터 실현 LGD를 산출하고, 기 추정 LGD와 비교하여 모델 정확성을 평가합니다.
+          </p>
+          <div className="grid grid-cols-4 gap-4 text-sm">
+            <div className="bg-white rounded p-3">
+              <p className="text-gray-500">실제 LGD 산출</p>
+              <p className="font-mono font-medium">1 - 회수율</p>
+            </div>
+            <div className="bg-white rounded p-3">
+              <p className="text-gray-500">오차 정의</p>
+              <p className="font-mono font-medium">추정 - 실제</p>
+            </div>
+            <div className="bg-white rounded p-3">
+              <p className="text-gray-500">보수성 판단</p>
+              <p className="font-mono font-medium">추정 &gt; 실제</p>
+            </div>
+            <div className="bg-white rounded p-3">
+              <p className="text-gray-500">목표 수준</p>
+              <p className="font-mono font-medium">MAE &lt; 5%p</p>
             </div>
           </div>
         </div>

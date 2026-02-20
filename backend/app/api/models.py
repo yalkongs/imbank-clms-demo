@@ -1,9 +1,10 @@
 """
 모델관리/MRM API
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+from typing import Optional
 from ..core.database import get_db
 
 router = APIRouter(prefix="/api/models", tags=["Models"])
@@ -1019,4 +1020,301 @@ def get_model_type_specifications(model_type: str) -> dict:
         "limitations": [],
         "regulatory_requirements": {}
     })
+
+
+# ============================================================
+# Phase 3 추가: LGD 백테스트 & 회수 실적 분석
+# ============================================================
+
+@router.get("/lgd-backtest")
+def get_lgd_backtest(db: Session = Depends(get_db)):
+    """
+    LGD 백테스트 전체 결과
+    — 추정 LGD vs 실측 LGD (workout_case 기반) 비교
+
+    실측 LGD = 1 - (actual_recovery_rate)
+    추정 LGD = risk_parameter.lgd
+    """
+    rows = db.execute(
+        text("""
+            SELECT
+                wc.case_id,
+                wc.customer_id,
+                c.company_name,
+                c.industry_name,
+                wc.total_exposure,
+                wc.actual_recovery_rate,
+                wc.strategy,
+                wc.closed_date,
+                rp.lgd AS estimated_lgd,
+                -- 실측 LGD = 1 - actual_recovery_rate (회수율이 있는 경우)
+                CASE WHEN wc.actual_recovery_rate IS NOT NULL
+                     THEN 1.0 - wc.actual_recovery_rate
+                     ELSE NULL END AS actual_lgd
+            FROM workout_case wc
+            JOIN customer c ON wc.customer_id = c.customer_id
+            LEFT JOIN (
+                SELECT la.customer_id, AVG(rp2.lgd) AS lgd
+                FROM risk_parameter rp2
+                JOIN loan_application la ON rp2.application_id = la.application_id
+                GROUP BY la.customer_id
+            ) rp ON wc.customer_id = rp.customer_id
+            WHERE wc.actual_recovery_rate IS NOT NULL
+              AND wc.case_status IN ('RECOVERED', 'LIQUIDATED', 'CLOSED')
+        """)
+    ).fetchall()
+
+    items = []
+    errors = []
+    for r in rows:
+        est_lgd    = float(r[8]) if r[8] else 0.45
+        actual_lgd = float(r[9]) if r[9] is not None else None
+        if actual_lgd is None:
+            continue
+        error = round(est_lgd - actual_lgd, 4)
+        items.append({
+            "case_id":       r[0],
+            "company_name":  r[2],
+            "industry":      r[3],
+            "exposure":      round(float(r[4] or 0), 2),
+            "strategy":      r[6],
+            "closed_date":   str(r[7]) if r[7] else None,
+            "estimated_lgd": round(est_lgd * 100, 2),
+            "actual_lgd":    round(actual_lgd * 100, 2),
+            "error":         round(error * 100, 2),
+            "error_abs":     round(abs(error) * 100, 2),
+        })
+        errors.append(error)
+
+    if not errors:
+        return {"message": "백테스트 데이터 부족", "count": 0, "items": []}
+
+    import math
+    mean_error = sum(errors) / len(errors)
+    rmse       = math.sqrt(sum(e ** 2 for e in errors) / len(errors))
+    mae        = sum(abs(e) for e in errors) / len(errors)
+
+    # 과대/과소 추정 비율
+    over_count  = sum(1 for e in errors if e > 0)
+    under_count = sum(1 for e in errors if e < 0)
+
+    return {
+        "count":          len(items),
+        "mean_error_pct": round(mean_error * 100, 3),
+        "rmse_pct":       round(rmse * 100, 3),
+        "mae_pct":        round(mae * 100, 3),
+        "over_estimated":  over_count,
+        "under_estimated": under_count,
+        "conservative_rate": round(over_count / len(errors) * 100, 1),
+        "items":          items[:50],
+    }
+
+
+@router.get("/lgd-backtest/collateral")
+def get_lgd_backtest_by_collateral(db: Session = Depends(get_db)):
+    """
+    담보유형별 LGD 실측 vs 추정 비교
+    """
+    rows = db.execute(
+        text("""
+            SELECT
+                la.collateral_type,
+                COUNT(*) AS cnt,
+                AVG(rp.lgd) AS avg_estimated_lgd,
+                AVG(1.0 - wc.actual_recovery_rate) AS avg_actual_lgd,
+                AVG(rp.lgd - (1.0 - wc.actual_recovery_rate)) AS avg_error,
+                SUM(wc.total_exposure) AS total_exposure
+            FROM workout_case wc
+            JOIN loan_application la ON wc.customer_id = la.customer_id
+            JOIN risk_parameter rp ON la.application_id = rp.application_id
+            WHERE wc.actual_recovery_rate IS NOT NULL
+              AND wc.case_status IN ('RECOVERED', 'LIQUIDATED', 'CLOSED')
+              AND la.collateral_type IS NOT NULL
+            GROUP BY la.collateral_type
+            ORDER BY cnt DESC
+        """)
+    ).fetchall()
+
+    import math
+    items = []
+    for r in rows:
+        est = float(r[2] or 0.45)
+        act = float(r[3]) if r[3] is not None else est
+        items.append({
+            "collateral_type":    r[0],
+            "count":              r[1],
+            "avg_estimated_lgd":  round(est * 100, 2),
+            "avg_actual_lgd":     round(act * 100, 2),
+            "avg_error_pct":      round(float(r[4] or 0) * 100, 3),
+            "total_exposure":     round(float(r[5] or 0), 2),
+            "conservative":       est > act,
+        })
+
+    return {"by_collateral": items}
+
+
+@router.get("/lgd-backtest/industry")
+def get_lgd_backtest_by_industry(db: Session = Depends(get_db)):
+    """
+    산업별 LGD 백테스트 정확도
+    """
+    rows = db.execute(
+        text("""
+            SELECT
+                c.industry_name,
+                COUNT(*) AS cnt,
+                AVG(rp.lgd) AS avg_estimated,
+                AVG(1.0 - wc.actual_recovery_rate) AS avg_actual,
+                AVG(ABS(rp.lgd - (1.0 - wc.actual_recovery_rate))) AS mae
+            FROM workout_case wc
+            JOIN customer c ON wc.customer_id = c.customer_id
+            JOIN loan_application la ON wc.customer_id = la.customer_id
+            JOIN risk_parameter rp ON la.application_id = rp.application_id
+            WHERE wc.actual_recovery_rate IS NOT NULL
+              AND wc.case_status IN ('RECOVERED', 'LIQUIDATED', 'CLOSED')
+            GROUP BY c.industry_name
+            ORDER BY cnt DESC
+            LIMIT 15
+        """)
+    ).fetchall()
+
+    items = []
+    for r in rows:
+        est = float(r[2] or 0.45)
+        act = float(r[3]) if r[3] is not None else est
+        items.append({
+            "industry":           r[0],
+            "count":              r[1],
+            "avg_estimated_lgd":  round(est * 100, 2),
+            "avg_actual_lgd":     round(act * 100, 2),
+            "mae_pct":            round(float(r[4] or 0) * 100, 3),
+            "bias":               "CONSERVATIVE" if est > act else "OPTIMISTIC",
+        })
+
+    return {"by_industry": items}
+
+
+@router.get("/recovery-analytics")
+def get_recovery_analytics(db: Session = Depends(get_db)):
+    """
+    회수 전략별 성과 통계
+    — 전략유형별 평균 회수율, 회수 기간, LGD 비교
+    """
+    rows = db.execute(
+        text("""
+            SELECT
+                wc.strategy,
+                COUNT(*) AS cnt,
+                AVG(wc.actual_recovery_rate) AS avg_recovery_rate,
+                AVG(1.0 - wc.actual_recovery_rate) AS avg_lgd,
+                AVG(rp.lgd) AS avg_est_lgd,
+                SUM(wc.total_exposure) AS total_exposure,
+                SUM(wc.total_exposure * wc.actual_recovery_rate) AS total_recovered
+            FROM workout_case wc
+            LEFT JOIN loan_application la ON wc.customer_id = la.customer_id
+            LEFT JOIN risk_parameter rp ON la.application_id = rp.application_id
+            WHERE wc.case_status IN ('RECOVERED', 'LIQUIDATED', 'CLOSED')
+            GROUP BY wc.strategy
+            ORDER BY avg_recovery_rate DESC
+        """)
+    ).fetchall()
+
+    strategy_labels = {
+        "NORMALIZATION":  "정상화",
+        "RESTRUCTURING":  "채무조정",
+        "ASSET_SALE":     "자산매각",
+        "LEGAL_RECOVERY": "법적회수",
+        "TBD":            "검토중",
+    }
+
+    total_exposure  = sum(float(r[5] or 0) for r in rows)
+    total_recovered = sum(float(r[6] or 0) for r in rows)
+
+    items = []
+    for r in rows:
+        strat    = r[0]
+        rec_rate = float(r[2] or 0)
+        act_lgd  = float(r[3]) if r[3] is not None else (1 - rec_rate)
+        est_lgd  = float(r[4] or 0.45)
+        items.append({
+            "strategy":           strat,
+            "strategy_label":     strategy_labels.get(strat, strat),
+            "count":              r[1],
+            "avg_recovery_rate":  round(rec_rate * 100, 2),
+            "avg_actual_lgd_pct": round(act_lgd * 100, 2),
+            "avg_estimated_lgd_pct": round(est_lgd * 100, 2),
+            "lgd_error_pct":      round((est_lgd - act_lgd) * 100, 2),
+            "total_exposure":     round(float(r[5] or 0), 2),
+            "total_recovered":    round(float(r[6] or 0), 2),
+        })
+
+    return {
+        "total_exposure":   round(total_exposure, 2),
+        "total_recovered":  round(total_recovered, 2),
+        "overall_recovery": round(total_recovered / total_exposure * 100, 2) if total_exposure > 0 else 0,
+        "by_strategy":      items,
+    }
+
+
+@router.get("/recovery-timeline")
+def get_recovery_timeline(db: Session = Depends(get_db)):
+    """
+    회수 기간 분포
+    — case open → close 기간별 분포 및 전략별 평균 회수 기간
+    """
+    rows = db.execute(
+        text("""
+            SELECT
+                wc.strategy,
+                wc.case_status,
+                CAST(
+                    (julianday(COALESCE(wc.closed_date, date('now')))
+                     - julianday(wc.created_at)) AS INTEGER
+                ) AS duration_days,
+                wc.actual_recovery_rate,
+                wc.total_exposure
+            FROM workout_case wc
+            WHERE wc.created_at IS NOT NULL
+        """)
+    ).fetchall()
+
+    # 기간 버킷: <6M / 6-12M / 12-24M / 24M+
+    buckets = {"<6M": 0, "6-12M": 0, "12-24M": 0, "24M+": 0}
+    strategy_durations: dict = {}
+
+    for r in rows:
+        days  = int(r[2] or 0)
+        strat = r[0]
+
+        if days < 180:
+            buckets["<6M"] += 1
+        elif days < 365:
+            buckets["6-12M"] += 1
+        elif days < 730:
+            buckets["12-24M"] += 1
+        else:
+            buckets["24M+"] += 1
+
+        if strat not in strategy_durations:
+            strategy_durations[strat] = []
+        strategy_durations[strat].append(days)
+
+    by_strategy = []
+    for strat, durations in strategy_durations.items():
+        avg_days = sum(durations) / len(durations) if durations else 0
+        by_strategy.append({
+            "strategy":       strat,
+            "count":          len(durations),
+            "avg_days":       round(avg_days, 1),
+            "avg_months":     round(avg_days / 30, 1),
+            "min_days":       min(durations) if durations else 0,
+            "max_days":       max(durations) if durations else 0,
+        })
+
+    return {
+        "duration_buckets": [
+            {"bucket": k, "count": v} for k, v in buckets.items()
+        ],
+        "by_strategy": sorted(by_strategy, key=lambda x: x["avg_days"]),
+    }
 

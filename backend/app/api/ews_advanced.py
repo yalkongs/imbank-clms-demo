@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
+import uuid
 from ..core.database import get_db
 
 router = APIRouter(prefix="/api/ews-advanced", tags=["EWS Advanced"])
@@ -1173,4 +1174,77 @@ async def integrated_dashboard(
         "trend_distribution": trend_distribution,
         "signal_timeline": timeline_data,
         "watchlist": watch_list,
+    }
+
+
+# ============================================================
+# Phase 3 추가: EWS CRITICAL → 자동화 액션 트리거
+# ============================================================
+
+@router.post("/trigger-automation")
+def trigger_automation_from_ews(
+    score_threshold: float = Query(35.0, description="CRITICAL 판정 임계값"),
+    db: Session = Depends(get_db)
+):
+    """
+    EWS 종합점수 CRITICAL 고객에 대해 automation_action 자동 생성
+    — /api/automation/trigger/scan과 동일 로직을 EWS 관점에서 노출
+    """
+    # CRITICAL 고객 조회
+    rows = db.execute(
+        text("""
+            SELECT ecs.customer_id, ecs.composite_score, c.company_name
+            FROM ews_composite_score ecs
+            JOIN customer c ON ecs.customer_id = c.customer_id
+            JOIN (
+                SELECT customer_id, MAX(score_date) AS latest
+                FROM ews_composite_score GROUP BY customer_id
+            ) mx ON ecs.customer_id = mx.customer_id AND ecs.score_date = mx.latest
+            WHERE ecs.composite_score < :threshold
+        """),
+        {"threshold": score_threshold}
+    ).fetchall()
+
+    created = 0
+    for r in rows:
+        cid = r[0]
+        # 이미 PENDING 액션이 있으면 스킵
+        existing = db.execute(
+            text("""
+                SELECT 1 FROM automation_action
+                WHERE customer_id=:cid AND trigger_type='EWS_CRITICAL'
+                  AND action_status='PENDING'
+            """),
+            {"cid": cid}
+        ).fetchone()
+        if existing:
+            continue
+
+        ews_score = float(r[1] or 35)
+        import math
+        beta = {"intercept": -3.5, "ews_score": -0.04, "dpd": 0.05, "pd": 12.0, "dscr": -0.8}
+        z = (beta["intercept"] + beta["ews_score"] * ews_score
+             + beta["dpd"] * 0 + beta["pd"] * 0.15 + beta["dscr"] * 1.2)
+        dp = round(1 / (1 + math.exp(-z)), 4)
+
+        for atype in ["NOTIFY_RM", "CREATE_WORKOUT"]:
+            db.execute(
+                text("""
+                    INSERT INTO automation_action
+                        (action_id, trigger_type, customer_id,
+                         action_type, priority, default_probability)
+                    VALUES (:aid, 'EWS_CRITICAL', :cid,
+                            :atype, 'HIGH', :dp)
+                """),
+                {"aid": str(uuid.uuid4()), "cid": cid, "atype": atype, "dp": dp}
+            )
+            created += 1
+
+    db.commit()
+
+    return {
+        "message":       f"EWS CRITICAL 트리거: {created}건 액션 생성",
+        "critical_customers": len(rows),
+        "actions_created":    created,
+        "threshold":          score_threshold,
     }

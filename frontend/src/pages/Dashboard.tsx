@@ -11,7 +11,7 @@ import {
   Users
 } from 'lucide-react';
 import { Card, StatCard, GaugeCard, TrendChart, DonutChart, COLORS, RegionFilter } from '../components';
-import { dashboardApi } from '../utils/api';
+import { dashboardApi, automationApi } from '../utils/api';
 import { formatAmount, formatPercent, formatNumber } from '../utils/format';
 
 const REGIONS = [
@@ -29,6 +29,8 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [kpis, setKpis] = useState<any>(null);
   const [capitalTrend, setCapitalTrend] = useState<any[]>([]);
+  const [automationData, setAutomationData] = useState<any>(null);
+  const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -37,20 +39,35 @@ export default function Dashboard() {
   const loadData = async () => {
     try {
       const r = region || undefined;
-      const [summaryRes, alertsRes, kpisRes, trendRes] = await Promise.all([
+      const [summaryRes, alertsRes, kpisRes, trendRes, autoRes] = await Promise.all([
         dashboardApi.getSummary(r),
         dashboardApi.getEWSAlerts(r),
         dashboardApi.getKPIs(r),
-        dashboardApi.getCapitalTrend()
+        dashboardApi.getCapitalTrend(),
+        automationApi.getDashboard().catch(() => ({ data: null })),
       ]);
       setSummary(summaryRes.data);
       setAlerts(alertsRes.data || []);
       setKpis(kpisRes.data);
       setCapitalTrend(trendRes.data || []);
+      setAutomationData(autoRes.data);
     } catch (error) {
       console.error('Dashboard data load error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleScan = async () => {
+    setScanning(true);
+    try {
+      await automationApi.scan();
+      const res = await automationApi.getDashboard();
+      setAutomationData(res.data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setScanning(false);
     }
   };
 
@@ -316,6 +333,80 @@ export default function Dashboard() {
           <span className="text-sm font-medium text-gray-700 group-hover:text-orange-700">고객 조회</span>
         </button>
       </div>
+
+      {/* 자동화 액션 현황 위젯 */}
+      {automationData && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle size={18} className="text-orange-500" />
+              <h3 className="text-sm font-semibold text-gray-800">자동화 액션 현황</h3>
+              {automationData.critical_pending > 0 && (
+                <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                  CRITICAL {automationData.critical_pending}건
+                </span>
+              )}
+            </div>
+            <button
+              onClick={handleScan}
+              disabled={scanning}
+              className="flex items-center gap-1.5 text-xs text-blue-600 border border-blue-200 rounded px-3 py-1 hover:bg-blue-50 disabled:opacity-50"
+            >
+              <Activity size={12} className={scanning ? 'animate-spin' : ''} />
+              트리거 스캔
+            </button>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="text-center p-3 bg-red-50 rounded-lg">
+              <p className="text-2xl font-bold text-red-600">{automationData.critical_pending}</p>
+              <p className="text-xs text-red-500 mt-0.5">CRITICAL 미처리</p>
+            </div>
+            <div className="text-center p-3 bg-orange-50 rounded-lg">
+              <p className="text-2xl font-bold text-orange-600">{automationData.high_pending}</p>
+              <p className="text-xs text-orange-500 mt-0.5">HIGH 미처리</p>
+            </div>
+            <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <p className="text-2xl font-bold text-gray-700">{automationData.total_pending}</p>
+              <p className="text-xs text-gray-500 mt-0.5">총 미처리</p>
+            </div>
+          </div>
+
+          {automationData.recent_actions?.length > 0 && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-gray-500 mb-2">최근 자동화 액션</p>
+              {automationData.recent_actions.slice(0, 4).map((a: any, i: number) => (
+                <div key={i} className="flex items-center justify-between text-xs bg-gray-50 rounded px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      a.priority === 'CRITICAL' ? 'bg-red-500' :
+                      a.priority === 'HIGH' ? 'bg-orange-500' : 'bg-gray-400'
+                    }`} />
+                    <span className="text-gray-500">{a.trigger_label}</span>
+                    <span className="font-medium text-gray-800">{a.company_name || a.customer_id}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-500">{a.action_label}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${
+                      a.action_status === 'EXECUTED' ? 'bg-green-100 text-green-700' :
+                      a.action_status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {a.action_status === 'EXECUTED' ? '완료' :
+                       a.action_status === 'PENDING' ? '대기' : a.action_status}
+                    </span>
+                    {a.default_prob > 0 && (
+                      <span className={`font-medium ${a.default_prob >= 60 ? 'text-red-600' : a.default_prob >= 30 ? 'text-orange-600' : 'text-gray-600'}`}>
+                        부실{a.default_prob}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

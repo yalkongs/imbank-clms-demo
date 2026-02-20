@@ -21,7 +21,10 @@ import {
   Briefcase,
   Leaf,
   TrendingDown,
-  Search
+  Search,
+  FileCheck,
+  ListChecks,
+  AlertOctagon
 } from 'lucide-react';
 
 interface NavItem {
@@ -76,6 +79,19 @@ const navGroups: NavGroup[] = [
     items: [
       { path: '/esg', label: 'ESG리스크', icon: <Leaf size={20} /> },
       { path: '/models', label: '모델관리', icon: <Brain size={20} /> },
+    ]
+  },
+  {
+    title: '여신 심사 고도화',
+    items: [
+      { path: '/covenant', label: '코베넌트관리', icon: <FileCheck size={20} /> },
+    ]
+  },
+  {
+    title: '부실 관리',
+    items: [
+      { path: '/asset-classification', label: '자산건전성분류', icon: <ListChecks size={20} /> },
+      { path: '/delinquency', label: '연체관리', icon: <AlertOctagon size={20} /> },
     ]
   },
   {

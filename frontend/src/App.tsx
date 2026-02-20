@@ -19,7 +19,10 @@ import {
   Workout,
   ESG,
   ALM,
-  CustomerBrowser
+  CustomerBrowser,
+  Covenant,
+  AssetClassification,
+  Delinquency
 } from './pages';
 
 function App() {
@@ -45,6 +48,11 @@ function App() {
         <Route path="esg" element={<ESG />} />
         <Route path="alm" element={<ALM />} />
         <Route path="customer-browser" element={<CustomerBrowser />} />
+        {/* Phase 1: 여신 심사 고도화 */}
+        <Route path="covenant" element={<Covenant />} />
+        {/* Phase 2: 부실 관리 핵심 */}
+        <Route path="asset-classification" element={<AssetClassification />} />
+        <Route path="delinquency" element={<Delinquency />} />
       </Route>
     </Routes>
   );

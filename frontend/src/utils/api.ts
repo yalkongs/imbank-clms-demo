@@ -228,6 +228,11 @@ export const collateralMonitoringApi = {
     api.get('/collateral-monitoring/alerts', { params }),
   getLtvAnalysis: (region?: string) => api.get('/collateral-monitoring/ltv-analysis', { params: region ? { region } : undefined }),
   getDashboard: (region?: string) => api.get('/collateral-monitoring/dashboard', { params: region ? { region } : undefined }),
+  getCustomers: (params?: {
+    search?: string; collateral_type?: string; region?: string;
+    sort_by?: string; sort_order?: string; page?: number; page_size?: number;
+  }) => api.get('/collateral-monitoring/customers', { params }),
+  getCustomerDetail: (customerId: string) => api.get(`/collateral-monitoring/customer/${customerId}`),
 };
 
 // Portfolio Optimization API (포트폴리오 최적화)
@@ -277,6 +282,175 @@ export const almApi = {
   getHedgeRecommendations: (status?: string) =>
     api.get('/alm/hedge-recommendations', { params: status ? { status } : undefined }),
   getDashboard: () => api.get('/alm/dashboard'),
+};
+
+// ============================================================
+// Phase 1: 여신 심사 고도화 API
+// ============================================================
+
+// Financial Analysis API (재무제표 분석)
+export const financialApi = {
+  getRatios: (customerId: string) =>
+    api.get(`/financial/ratios/${customerId}`),
+  getTrend: (customerId: string) =>
+    api.get(`/financial/trend/${customerId}`),
+  getPeerComparison: (customerId: string) =>
+    api.get(`/financial/peer-comparison/${customerId}`),
+  getSummaryForApplication: (applicationId: string) =>
+    api.get(`/financial/summary/${applicationId}`),
+  upsertStatement: (customerId: string, params: {
+    fiscal_year: number;
+    revenue?: number;
+    operating_profit?: number;
+    ebitda?: number;
+    interest_expense?: number;
+    net_profit?: number;
+    total_assets?: number;
+    current_assets?: number;
+    total_debt?: number;
+    current_debt?: number;
+    total_borrowing?: number;
+    equity?: number;
+    retained_earning?: number;
+    working_capital?: number;
+    operating_cf?: number;
+    audited?: number;
+    source?: string;
+  }) => api.post(`/financial/statement/${customerId}`, null, { params }),
+};
+
+// Group Credit API (그룹여신 통합심사)
+export const groupCreditApi = {
+  getGroup: (groupId: string) =>
+    api.get(`/group-credit/group/${groupId}`),
+  getCustomerGroup: (customerId: string) =>
+    api.get(`/group-credit/customer/${customerId}`),
+  checkGroupLimit: (groupId: string, newAmount?: number) =>
+    api.get(`/group-credit/limit-check/${groupId}`, { params: newAmount ? { new_amount: newAmount } : undefined }),
+  getConcentration: (region?: string) =>
+    api.get('/group-credit/concentration', { params: region ? { region } : undefined }),
+  getGuaranteeNetwork: (groupId: string) =>
+    api.get(`/group-credit/guarantee-network/${groupId}`),
+  simulateGroupLimit: (applicationId: string) =>
+    api.post(`/group-credit/simulate/${applicationId}`),
+};
+
+// Covenant API (코베넌트 관리)
+export const covenantApi = {
+  getByFacility: (facilityId: string) =>
+    api.get(`/covenants/facility/${facilityId}`),
+  getDueCheck: (daysAhead?: number, region?: string) =>
+    api.get('/covenants/due-check', { params: { days_ahead: daysAhead, region } }),
+  runCheck: (covenantId: string, params?: { actual_value?: number; checked_by?: string; notes?: string }) =>
+    api.post(`/covenants/check/${covenantId}`, null, { params }),
+  getBreachStatus: (region?: string) =>
+    api.get('/covenants/breach-status', { params: region ? { region } : undefined }),
+  getHistory: (covenantId: string) =>
+    api.get(`/covenants/history/${covenantId}`),
+  applyWaiver: (covenantId: string, params: { reason: string; approved_by: string; waiver_period_days?: number }) =>
+    api.post(`/covenants/waiver/${covenantId}`, null, { params }),
+};
+
+// ============================================================
+// Phase 2: 부실 관리 핵심
+// ============================================================
+
+export const assetClassificationApi = {
+  getPortfolio: (baseDate?: string) =>
+    api.get('/classification/portfolio', { params: baseDate ? { base_date: baseDate } : undefined }),
+  getFacilityHistory: (facilityId: string, limit?: number) =>
+    api.get(`/classification/facility/${facilityId}`, { params: limit ? { limit } : undefined }),
+  getCustomer: (customerId: string) =>
+    api.get(`/classification/customer/${customerId}`),
+  runClassification: (baseDate?: string) =>
+    api.post('/classification/run', null, { params: baseDate ? { base_date: baseDate } : undefined }),
+  getMigrationMatrix: (fromDate?: string, toDate?: string) =>
+    api.get('/classification/migration-matrix', { params: { from_date: fromDate, to_date: toDate } }),
+  getProvisionGap: () =>
+    api.get('/classification/provision-gap'),
+  getTrend: (months?: number) =>
+    api.get('/classification/trend', { params: months ? { months } : undefined }),
+};
+
+export const eclApi = {
+  getPortfolioSummary: (calcDate?: string) =>
+    api.get('/ecl/portfolio-summary', { params: calcDate ? { calc_date: calcDate } : undefined }),
+  getFacility: (facilityId: string, limit?: number) =>
+    api.get(`/ecl/facility/${facilityId}`, { params: limit ? { limit } : undefined }),
+  getStageMigration: () =>
+    api.get('/ecl/stage-migration'),
+  getProvisionAdequacy: () =>
+    api.get('/ecl/provision-adequacy'),
+  calculate: (facilityId: string, calcDate?: string) =>
+    api.post(`/ecl/calculate/${facilityId}`, null, { params: calcDate ? { calc_date: calcDate } : undefined }),
+  getTrend: (quarters?: number) =>
+    api.get('/ecl/trend', { params: quarters ? { quarters } : undefined }),
+  getMacroSensitivity: (facilityId?: string) =>
+    api.get('/ecl/macro-sensitivity', { params: facilityId ? { facility_id: facilityId } : undefined }),
+};
+
+export const delinquencyApi = {
+  getDashboard: () =>
+    api.get('/delinquency/dashboard'),
+  getActive: (stage?: string, limit?: number, offset?: number) =>
+    api.get('/delinquency/active', { params: { stage, limit, offset } }),
+  getFacility: (facilityId: string) =>
+    api.get(`/delinquency/facility/${facilityId}`),
+  getRollRate: (months?: number) =>
+    api.get('/delinquency/roll-rate', { params: months ? { months } : undefined }),
+  getVintage: () =>
+    api.get('/delinquency/vintage-delinquency'),
+  recordActivity: (params: {
+    delinquency_id: string;
+    facility_id: string;
+    activity_type: string;
+    contact_result?: string;
+    promised_date?: string;
+    promised_amount?: number;
+    notes?: string;
+    officer?: string;
+  }) => api.post('/delinquency/collection-activity', null, { params }),
+  getCollectionPerformance: (months?: number) =>
+    api.get('/delinquency/collection-performance', { params: months ? { months } : undefined }),
+};
+
+export const workoutEclApi = {
+  getEclSummary: () =>
+    api.get('/workout/ecl-summary'),
+  autoTransferNpl: (dpdThreshold?: number) =>
+    api.post('/workout/auto-transfer-npl', null, { params: dpdThreshold ? { dpd_threshold: dpdThreshold } : undefined }),
+};
+
+// ============================================================
+// Phase 3: 자동화 브릿지 / LGD 백테스트
+// ============================================================
+
+export const automationApi = {
+  getDashboard: () =>
+    api.get('/automation/dashboard'),
+  getPending: (priority?: string, triggerType?: string, limit?: number) =>
+    api.get('/automation/pending', { params: { priority, trigger_type: triggerType, limit } }),
+  executeAction: (actionId: string) =>
+    api.post(`/automation/execute/${actionId}`),
+  scan: () =>
+    api.post('/automation/trigger/scan'),
+  getDefaultProbability: (customerId: string) =>
+    api.get(`/automation/default-probability/${customerId}`),
+  getStatistics: (days?: number) =>
+    api.get('/automation/statistics', { params: days ? { days } : undefined }),
+};
+
+export const lgdBacktestApi = {
+  getOverall: () =>
+    api.get('/models/lgd-backtest'),
+  getByCollateral: () =>
+    api.get('/models/lgd-backtest/collateral'),
+  getByIndustry: () =>
+    api.get('/models/lgd-backtest/industry'),
+  getRecoveryAnalytics: () =>
+    api.get('/models/recovery-analytics'),
+  getRecoveryTimeline: () =>
+    api.get('/models/recovery-timeline'),
 };
 
 export default api;

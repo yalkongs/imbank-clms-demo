@@ -267,3 +267,493 @@ def get_grade_from_pd(pd: float) -> str:
 def get_pd_from_grade(grade: str) -> float:
     """등급으로부터 PD 조회"""
     return GRADE_PD_MAP.get(grade, 0.10)
+
+
+# ============================================================
+# Phase 1 추가: 재무제표 분석 / 그룹여신 / 코베넌트
+# ============================================================
+
+# 재무비율 기준값 (심사 기준)
+FINANCIAL_BENCHMARKS = {
+    'debt_ratio':      {'threshold': 200.0, 'operator': 'LE', 'label': '부채비율(%)'},
+    'current_ratio':   {'threshold': 100.0, 'operator': 'GE', 'label': '유동비율(%)'},
+    'ier':             {'threshold': 1.5,   'operator': 'GE', 'label': '이자보상배율(배)'},
+    'debt_dependency': {'threshold': 50.0,  'operator': 'LE', 'label': '차입금의존도(%)'},
+    'dscr':            {'threshold': 1.25,  'operator': 'GE', 'label': 'DSCR(배)'},
+    'op_margin':       {'threshold': 0.0,   'operator': 'GE', 'label': '영업이익률(%)'},
+}
+
+# 코베넌트 코드 → 재무비율 매핑
+COVENANT_METRIC_MAP = {
+    'FC01': 'debt_ratio',
+    'FC02': 'dscr',
+    'FC03': 'ier',
+    'FC04': 'current_ratio',
+    'FC05': 'net_debt_ebitda',
+}
+
+
+def calculate_dscr(ebitda: float, annual_principal: float, interest_expense: float) -> float:
+    """
+    DSCR (Debt Service Coverage Ratio) 채무상환능력비율
+    DSCR = EBITDA / (연간 원금상환액 + 이자비용)
+    기준: ≥ 1.25 (정상), ≥ 1.0 (최소), < 1.0 (위험)
+    """
+    denominator = annual_principal + interest_expense
+    if denominator <= 0:
+        return 0.0
+    return round(ebitda / denominator, 4)
+
+
+def calculate_altman_z(stmt: dict) -> tuple:
+    """
+    Altman Z'-Score (비상장 기업 수정 모델)
+    Z' = 0.717×X1 + 0.847×X2 + 3.107×X3 + 0.420×X4 + 0.998×X5
+
+    X1 = 운전자본 / 총자산
+    X2 = 이익잉여금 / 총자산
+    X3 = EBIT(영업이익) / 총자산
+    X4 = 자기자본 / 총부채
+    X5 = 매출액 / 총자산
+
+    판정: Z' > 2.9 → SAFE, 1.23~2.9 → GREY, < 1.23 → DANGER
+
+    Returns:
+        (z_score: float, signal: str)
+    """
+    total_assets = stmt.get('total_assets', 0) or 0
+    if total_assets <= 0:
+        return 0.0, 'GREY'
+
+    working_capital  = stmt.get('working_capital', 0) or 0
+    retained_earning = stmt.get('retained_earning', 0) or 0
+    operating_profit = stmt.get('operating_profit', 0) or 0
+    equity           = stmt.get('equity', 0) or 0
+    total_debt       = stmt.get('total_debt', 0) or 0
+    revenue          = stmt.get('revenue', 0) or 0
+
+    x1 = working_capital / total_assets
+    x2 = retained_earning / total_assets
+    x3 = operating_profit / total_assets
+    x4 = equity / total_debt if total_debt > 0 else 0
+    x5 = revenue / total_assets
+
+    z = 0.717 * x1 + 0.847 * x2 + 3.107 * x3 + 0.420 * x4 + 0.998 * x5
+    z = round(z, 4)
+
+    if z > 2.9:
+        signal = 'SAFE'
+    elif z >= 1.23:
+        signal = 'GREY'
+    else:
+        signal = 'DANGER'
+
+    return z, signal
+
+
+def calculate_financial_ratios(stmt: dict, prev_stmt: dict = None,
+                                annual_principal: float = None) -> dict:
+    """
+    재무비율 자동 산출
+
+    Args:
+        stmt: 당기 재무제표 dict
+        prev_stmt: 전기 재무제표 dict (성장률 계산용)
+        annual_principal: 연간 원금상환 예정액 (DSCR 계산용)
+
+    Returns:
+        재무비율 dict + 신호등(pass/warning/fail)
+    """
+    total_assets     = stmt.get('total_assets') or 0
+    current_assets   = stmt.get('current_assets') or 0
+    total_debt       = stmt.get('total_debt') or 0
+    current_debt     = stmt.get('current_debt') or 0
+    total_borrowing  = stmt.get('total_borrowing') or 0
+    equity           = stmt.get('equity') or 0
+    operating_profit = stmt.get('operating_profit') or 0
+    interest_expense = stmt.get('interest_expense') or 0
+    ebitda           = stmt.get('ebitda') or 0
+    net_profit       = stmt.get('net_profit') or 0
+    revenue          = stmt.get('revenue') or 0
+    retained_earning = stmt.get('retained_earning') or 0
+    working_capital  = stmt.get('working_capital') or 0
+    operating_cf     = stmt.get('operating_cf') or 0
+
+    # 안정성
+    debt_ratio      = round(total_debt / equity * 100, 2) if equity > 0 else None
+    current_ratio   = round(current_assets / current_debt * 100, 2) if current_debt > 0 else None
+    ier             = round(operating_profit / interest_expense, 2) if interest_expense > 0 else None
+    debt_dependency = round(total_borrowing / total_assets * 100, 2) if total_assets > 0 else None
+
+    # 현금흐름
+    _principal = annual_principal or (total_borrowing * 0.1)  # 미제공 시 총차입금의 10% 추정
+    dscr        = calculate_dscr(ebitda, _principal, interest_expense)
+    ocf_ratio   = round(operating_cf / total_debt * 100, 2) if total_debt > 0 else None
+
+    # 수익성
+    op_margin = round(operating_profit / revenue * 100, 2) if revenue > 0 else None
+    roa       = round(net_profit / total_assets * 100, 2) if total_assets > 0 else None
+    roe       = round(net_profit / equity * 100, 2) if equity > 0 else None
+
+    # 성장성 (전기 대비)
+    revenue_growth = None
+    op_growth      = None
+    if prev_stmt:
+        prev_revenue = prev_stmt.get('revenue') or 0
+        prev_op      = prev_stmt.get('operating_profit') or 0
+        if prev_revenue and prev_revenue != 0:
+            revenue_growth = round((revenue - prev_revenue) / abs(prev_revenue) * 100, 2)
+        if prev_op and prev_op != 0:
+            op_growth = round((operating_profit - prev_op) / abs(prev_op) * 100, 2)
+
+    # Altman Z'-Score
+    altman_z, risk_signal = calculate_altman_z(stmt)
+
+    # 신호등 판정
+    def _signal(value, benchmark_key):
+        if value is None:
+            return 'N/A'
+        b = FINANCIAL_BENCHMARKS.get(benchmark_key)
+        if not b:
+            return 'N/A'
+        op = b['operator']
+        th = b['threshold']
+        if op == 'LE':
+            if value <= th * 0.8:  return 'pass'
+            if value <= th:         return 'warning'
+            return 'fail'
+        elif op == 'GE':
+            if value >= th * 1.5:  return 'pass'
+            if value >= th:         return 'warning'
+            return 'fail'
+        return 'N/A'
+
+    return {
+        'debt_ratio':      {'value': debt_ratio,      'signal': _signal(debt_ratio, 'debt_ratio')},
+        'current_ratio':   {'value': current_ratio,   'signal': _signal(current_ratio, 'current_ratio')},
+        'ier':             {'value': ier,             'signal': _signal(ier, 'ier')},
+        'debt_dependency': {'value': debt_dependency, 'signal': _signal(debt_dependency, 'debt_dependency')},
+        'dscr':            {'value': dscr,            'signal': _signal(dscr, 'dscr')},
+        'ocf_ratio':       {'value': ocf_ratio,       'signal': 'N/A'},
+        'op_margin':       {'value': op_margin,       'signal': _signal(op_margin, 'op_margin')},
+        'roa':             {'value': roa,             'signal': 'N/A'},
+        'roe':             {'value': roe,             'signal': 'N/A'},
+        'revenue_growth':  {'value': revenue_growth,  'signal': 'N/A'},
+        'op_growth':       {'value': op_growth,       'signal': 'N/A'},
+        'altman_z':        {'value': altman_z,        'signal': risk_signal},
+    }
+
+
+def check_covenant_compliance(covenant: dict, financial_ratios: dict) -> dict:
+    """
+    코베넌트 이행 자동 체크 (재무 코베넌트용)
+
+    Args:
+        covenant: 코베넌트 정보 (covenant_code, operator, threshold_value)
+        financial_ratios: calculate_financial_ratios() 결과 또는 단순 {metric: value}
+
+    Returns:
+        {result, actual_value, breach_severity, message}
+    """
+    code      = covenant.get('covenant_code', '')
+    operator  = covenant.get('operator', 'GE')
+    threshold = covenant.get('threshold_value')
+
+    if threshold is None:
+        return {'result': 'PENDING', 'actual_value': None,
+                'breach_severity': None, 'message': '임계값 미설정'}
+
+    metric = COVENANT_METRIC_MAP.get(code)
+    if not metric:
+        return {'result': 'PENDING', 'actual_value': None,
+                'breach_severity': None, 'message': '자동 점검 불가 (정성 항목)'}
+
+    # 비율 딕셔너리에서 값 추출 (calculate_financial_ratios 반환형 대응)
+    raw = financial_ratios.get(metric)
+    if isinstance(raw, dict):
+        actual = raw.get('value')
+    else:
+        actual = raw
+
+    if actual is None:
+        return {'result': 'PENDING', 'actual_value': None,
+                'breach_severity': None, 'message': '실측값 없음'}
+
+    # 이행 판정
+    if operator == 'LE':
+        passed = actual <= threshold
+    elif operator == 'GE':
+        passed = actual >= threshold
+    else:
+        passed = (actual == threshold)
+
+    if passed:
+        return {'result': 'PASS', 'actual_value': actual,
+                'breach_severity': None, 'message': '이행'}
+
+    # 위반 심각도 판정 (임계값 대비 이탈 비율)
+    if threshold != 0:
+        deviation_pct = abs(actual - threshold) / abs(threshold) * 100
+    else:
+        deviation_pct = 100.0
+
+    if deviation_pct <= 10:
+        severity = 'MINOR'
+    elif deviation_pct <= 25:
+        severity = 'MAJOR'
+    else:
+        severity = 'EVENT_OF_DEFAULT'
+
+    return {
+        'result': 'BREACH',
+        'actual_value': actual,
+        'breach_severity': severity,
+        'deviation_pct': round(deviation_pct, 2),
+        'message': f'위반: 실측={actual}, 기준={threshold} ({operator}), 이탈={deviation_pct:.1f}%'
+    }
+
+
+def calculate_group_pd(member_pds: list, member_exposures: list) -> float:
+    """
+    그룹 가중평균 PD (익스포저 기준)
+    최열위(최대 PD) 원칙 적용: max(가중평균PD, 최열위 계열사 PD)
+    """
+    if not member_pds or not member_exposures:
+        return 0.0
+
+    total_exposure = sum(member_exposures)
+    if total_exposure <= 0:
+        return max(member_pds)
+
+    weighted_pd = sum(pd * exp for pd, exp in zip(member_pds, member_exposures)) / total_exposure
+    # 최열위 원칙: 가중평균과 최대 PD 중 큰 값 (보수적)
+    return round(max(weighted_pd, max(member_pds) * 0.7), 6)
+
+
+# ============================================================
+# Phase 2 추가: 자산건전성 분류 / IFRS9 ECL / 연체 관리
+# ============================================================
+
+# 금감원 5단계 충당금 적립률
+PROVISION_RATES = {
+    'NORMAL':         0.005,   # 0.5%
+    'PRECAUTIONARY':  0.02,    # 2% (최소, 최대 5%)
+    'SUBSTANDARD':    0.20,    # 20%
+    'DOUBTFUL':       0.50,    # 50%
+    'LOSS':           1.00,    # 100%
+}
+
+# 분류 우선순위 (가장 불리한 것 적용)
+_CLASS_ORDER = ['NORMAL', 'PRECAUTIONARY', 'SUBSTANDARD', 'DOUBTFUL', 'LOSS']
+
+
+def _class_rank(cls: str) -> int:
+    try:
+        return _CLASS_ORDER.index(cls)
+    except ValueError:
+        return 0
+
+
+def classify_asset_by_dpd(dpd: int) -> str:
+    """DPD 기준 자산건전성 분류"""
+    if dpd <= 0:
+        return 'NORMAL'
+    elif dpd <= 30:
+        return 'PRECAUTIONARY'
+    elif dpd <= 90:
+        return 'SUBSTANDARD'
+    elif dpd <= 180:
+        return 'DOUBTFUL'
+    else:
+        return 'LOSS'
+
+
+def classify_asset_by_pd(pd: float) -> str:
+    """PD 기준 자산건전성 분류"""
+    if pd < 0.03:
+        return 'NORMAL'
+    elif pd < 0.10:
+        return 'PRECAUTIONARY'
+    elif pd < 0.20:
+        return 'SUBSTANDARD'
+    elif pd < 0.50:
+        return 'DOUBTFUL'
+    else:
+        return 'LOSS'
+
+
+def classify_asset_by_ews(ews_score: float) -> str:
+    """EWS 종합점수 기준 자산건전성 분류"""
+    if ews_score >= 75:
+        return 'NORMAL'
+    elif ews_score >= 55:
+        return 'PRECAUTIONARY'
+    elif ews_score >= 35:
+        return 'SUBSTANDARD'
+    else:
+        return 'DOUBTFUL'
+
+
+def classify_asset(dpd: int, pd: float, ews_score: float = None) -> dict:
+    """
+    금감원 기준 5단계 자산건전성 분류
+    보수주의 원칙: DPD / PD / EWS 중 가장 불리한 등급 적용
+
+    Returns:
+        {classification, dpd_class, pd_class, ews_class, final_basis, provision_rate}
+    """
+    dpd_class = classify_asset_by_dpd(dpd)
+    pd_class  = classify_asset_by_pd(pd)
+    ews_class = classify_asset_by_ews(ews_score) if ews_score is not None else 'NORMAL'
+
+    ranks = {
+        'DPD': _class_rank(dpd_class),
+        'PD':  _class_rank(pd_class),
+        'EWS': _class_rank(ews_class),
+    }
+    final_basis = max(ranks, key=ranks.get)
+    classes = {'DPD': dpd_class, 'PD': pd_class, 'EWS': ews_class}
+    final_class = classes[final_basis]
+
+    return {
+        'classification':   final_class,
+        'dpd_based_class':  dpd_class,
+        'pd_based_class':   pd_class,
+        'ews_based_class':  ews_class,
+        'final_class_basis': final_basis,
+        'provision_rate':   PROVISION_RATES[final_class],
+    }
+
+
+def determine_sicr(pd_original: float, pd_current: float,
+                   ews_score: float = None, dpd: int = 0,
+                   grade_drop_notches: int = 0) -> dict:
+    """
+    SICR (Significant Increase in Credit Risk) 판별
+    — IFRS 9 Stage 1 → Stage 2 이동 트리거
+
+    SICR 조건 (OR):
+      1. PD 2배 이상 상승
+      2. 등급 2 notch 이상 하락
+      3. EWS 점수 WATCH 이하 (< 55점)
+      4. DPD ≥ 30일
+
+    Returns:
+        {sicr: bool, reasons: list[str], recommended_stage: int}
+    """
+    reasons = []
+
+    if pd_original and pd_original > 0:
+        if pd_current >= pd_original * 2.0:
+            reasons.append('PD_DOUBLED')
+
+    if grade_drop_notches >= 2:
+        reasons.append('GRADE_DROP_2NOTCH')
+
+    if ews_score is not None and ews_score < 55:
+        reasons.append('EWS_WATCH')
+
+    if dpd >= 30:
+        reasons.append('DPD_30')
+
+    sicr = len(reasons) > 0
+
+    # Stage 결정
+    if dpd >= 90 or pd_current >= 0.20:
+        stage = 3
+    elif sicr:
+        stage = 2
+    else:
+        stage = 1
+
+    return {
+        'sicr': sicr,
+        'reasons': reasons,
+        'recommended_stage': stage,
+    }
+
+
+def calculate_ecl_stage1(pd_12m: float, lgd: float, ead: float,
+                          discount_factor: float = 0.97) -> float:
+    """
+    Stage 1 ECL: 12개월 기대신용손실
+    ECL = PD_12M × LGD × EAD × DF
+
+    discount_factor: 기본 0.97 (약 0.5년 할인, 금리 6% 기준)
+    """
+    return round(pd_12m * lgd * ead * discount_factor, 2)
+
+
+def calculate_ecl_stage2(pd_current: float, lgd: float, ead: float,
+                          remaining_months: int,
+                          annual_pd_multiplier: float = 1.0) -> float:
+    """
+    Stage 2 ECL: 잔존 전 기간 기대신용손실
+    단순화 모델: Lifetime ECL = Σ_t (conditional PD_t × LGD × EAD_t × DF_t)
+    conditional PD_t ≈ PD_annual × (1-PD_annual)^(t-1)
+
+    Returns: Lifetime ECL
+    """
+    if remaining_months <= 0 or pd_current <= 0:
+        return calculate_ecl_stage1(pd_current, lgd, ead)
+
+    risk_free_rate_monthly = 0.005  # 연 6% / 12
+    pd_annual = min(pd_current * annual_pd_multiplier, 0.99)
+    pd_monthly = 1 - (1 - pd_annual) ** (1 / 12)
+
+    ecl = 0.0
+    survival = 1.0
+    for t in range(1, remaining_months + 1):
+        cond_pd = pd_monthly * survival
+        df = 1 / (1 + risk_free_rate_monthly) ** t
+        ecl += cond_pd * lgd * ead * df
+        survival *= (1 - pd_monthly)
+
+    return round(ecl, 2)
+
+
+def calculate_ecl_stage3(ead: float, expected_recovery: float,
+                          recovery_months: int = 24,
+                          discount_rate_annual: float = 0.06) -> float:
+    """
+    Stage 3 ECL: 신용 손상 (개별 평가)
+    ECL = EAD - PV(예상 현금회수액)
+
+    expected_recovery: 예상 총 회수액
+    recovery_months: 예상 회수 기간 (월)
+    """
+    if expected_recovery <= 0:
+        return round(ead, 2)
+
+    monthly_rate = discount_rate_annual / 12
+    if recovery_months > 0 and monthly_rate > 0:
+        # 균등 분할 회수 가정
+        monthly_payment = expected_recovery / recovery_months
+        pv_recovery = sum(
+            monthly_payment / (1 + monthly_rate) ** t
+            for t in range(1, recovery_months + 1)
+        )
+    else:
+        pv_recovery = expected_recovery
+
+    ecl = max(ead - pv_recovery, 0.0)
+    return round(ecl, 2)
+
+
+def determine_delinquency_stage(dpd: int) -> str:
+    """
+    DPD 기준 연체 단계 분류
+    EARLY(1-30) / MID(31-60) / LATE(61-90) / NPL(91-180) / WRITEOFF(181+)
+    """
+    if dpd <= 0:
+        return 'CURRENT'
+    elif dpd <= 30:
+        return 'EARLY'
+    elif dpd <= 60:
+        return 'MID'
+    elif dpd <= 90:
+        return 'LATE'
+    elif dpd <= 180:
+        return 'NPL'
+    else:
+        return 'WRITEOFF'

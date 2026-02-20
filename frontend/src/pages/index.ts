@@ -19,3 +19,10 @@ export { default as Workout } from './Workout';
 export { default as ESG } from './ESG';
 export { default as ALM } from './ALM';
 export { default as CustomerBrowser } from './CustomerBrowser';
+
+// Phase 1: 여신 심사 고도화
+export { default as Covenant } from './Covenant';
+
+// Phase 2: 부실 관리 핵심
+export { default as AssetClassification } from './AssetClassification';
+export { default as Delinquency } from './Delinquency';

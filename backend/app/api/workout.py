@@ -480,3 +480,145 @@ async def get_workout_dashboard(
         "by_strategy": strategy_breakdown,
         "recent_recoveries": recent_recoveries
     }
+
+
+# ============================================================
+# Phase 2 추가: ECL 탭용 엔드포인트 + DPD 자동 이관
+# ============================================================
+
+@router.get("/ecl-summary")
+def get_workout_ecl_summary(db: Session = Depends(get_db)):
+    """
+    Workout 페이지 — ECL 탭 요약
+    Stage 3 여신 위주, 충당금 vs ECL 비교
+    """
+    rows = db.execute(
+        text("""
+            SELECT
+                wc.case_id, wc.customer_id, c.company_name,
+                wc.total_exposure, wc.provision_amount,
+                wc.expected_recovery_rate, wc.strategy,
+                e.stage, e.ecl_final, e.provision_gap, e.calc_date
+            FROM workout_case wc
+            JOIN customer c ON wc.customer_id = c.customer_id
+            LEFT JOIN (
+                SELECT e1.*
+                FROM ecl_calculation e1
+                JOIN (
+                    SELECT facility_id, MAX(calc_date) AS latest
+                    FROM ecl_calculation GROUP BY facility_id
+                ) mx ON e1.facility_id = mx.facility_id AND e1.calc_date = mx.latest
+                JOIN facility f2 ON e1.facility_id = f2.facility_id
+                WHERE e1.stage >= 2
+            ) e ON c.customer_id = e.customer_id
+            WHERE wc.case_status IN ('OPEN', 'IN_PROGRESS')
+            ORDER BY wc.total_exposure DESC
+            LIMIT 30
+        """)
+    ).fetchall()
+
+    items = []
+    for r in rows:
+        exposure = float(r[3] or 0)
+        provision = float(r[4] or 0)
+        ecl_final = float(r[8] or 0)
+        items.append({
+            "case_id":          r[0],
+            "customer_id":      r[1],
+            "company_name":     r[2],
+            "total_exposure":   round(exposure, 2),
+            "existing_provision": round(provision, 2),
+            "expected_recovery": round(float(r[5] or 0), 3),
+            "strategy":         r[6],
+            "ecl_stage":        r[7],
+            "ecl_required":     round(ecl_final, 2),
+            "provision_gap":    round(float(r[9] or 0), 2),
+            "ecl_calc_date":    str(r[10]) if r[10] else None,
+            "adequacy":         "ADEQUATE" if provision >= ecl_final else "INSUFFICIENT",
+        })
+
+    total_exposure  = sum(i["total_exposure"] for i in items)
+    total_provision = sum(i["existing_provision"] for i in items)
+    total_ecl       = sum(i["ecl_required"] for i in items)
+
+    return {
+        "total_exposure":   round(total_exposure, 2),
+        "total_provision":  round(total_provision, 2),
+        "total_ecl":        round(total_ecl, 2),
+        "coverage_rate":    round(total_provision / total_ecl * 100, 2) if total_ecl > 0 else 0,
+        "provision_gap":    round(total_ecl - total_provision, 2),
+        "cases":            items,
+    }
+
+
+@router.post("/auto-transfer-npl")
+def auto_transfer_npl_to_workout(
+    dpd_threshold: int = Query(90, description="Workout 이관 DPD 임계값"),
+    db: Session = Depends(get_db)
+):
+    """
+    DPD 90일+ 연체 → Workout 케이스 자동 생성
+    — 이미 Workout 케이스가 있는 고객은 스킵
+    """
+    import uuid as _uuid
+
+    # DPD >= threshold 인 OPEN 연체 중 Workout 미이관 건
+    rows = db.execute(
+        text("""
+            SELECT DISTINCT d.customer_id, d.facility_id,
+                   d.overdue_amount, d.dpd,
+                   f.outstanding_amount,
+                   c.company_name
+            FROM delinquency_record d
+            JOIN facility f ON d.facility_id = f.facility_id
+            JOIN customer c ON d.customer_id = c.customer_id
+            WHERE d.status = 'OPEN'
+              AND d.dpd >= :threshold
+              AND d.customer_id NOT IN (
+                  SELECT customer_id FROM workout_case
+                  WHERE case_status IN ('OPEN', 'IN_PROGRESS')
+              )
+        """),
+        {"threshold": dpd_threshold}
+    ).fetchall()
+
+    created = 0
+    for r in rows:
+        case_id = str(_uuid.uuid4())
+        db.execute(
+            text("""
+                INSERT INTO workout_case
+                    (case_id, customer_id, facility_id,
+                     total_exposure, provision_amount,
+                     case_status, strategy,
+                     expected_recovery_rate,
+                     notes)
+                VALUES
+                    (:cid, :custid, :fid,
+                     :exp, :prov,
+                     'OPEN', 'TBD',
+                     0.40,
+                     :notes)
+            """),
+            {
+                "cid":    case_id,
+                "custid": r[0],
+                "fid":    r[1],
+                "exp":    float(r[4] or 0),
+                "prov":   float(r[4] or 0) * 0.5,
+                "notes":  f"DPD {r[3]}일 자동 이관",
+            }
+        )
+        # 연체 상태 WORKOUT으로 변경
+        db.execute(
+            text("UPDATE delinquency_record SET status='WORKOUT' WHERE facility_id=:fid AND status='OPEN'"),
+            {"fid": r[1]}
+        )
+        created += 1
+
+    db.commit()
+    return {
+        "message":  f"{created}건 Workout 케이스 자동 생성",
+        "created":  created,
+        "threshold_dpd": dpd_threshold,
+    }

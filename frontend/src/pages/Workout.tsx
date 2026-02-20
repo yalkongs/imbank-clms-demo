@@ -11,7 +11,7 @@ import {
   X
 } from 'lucide-react';
 import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton } from '../components';
-import { workoutApi } from '../utils/api';
+import { workoutApi, workoutEclApi } from '../utils/api';
 import { formatAmount, formatPercent } from '../utils/format';
 
 const REGIONS = [
@@ -32,6 +32,8 @@ export default function Workout() {
   const [featureModalOpen, setFeatureModalOpen] = useState(false);
   const [featureInfo, setFeatureInfo] = useState<any>(null);
   const [region, setRegion] = useState('');
+  const [mainTab, setMainTab] = useState<'cases' | 'ecl'>('cases');
+  const [eclData, setEclData] = useState<any>(null);
 
   useEffect(() => {
     loadData();
@@ -73,6 +75,15 @@ export default function Workout() {
     setCaseModalOpen(false);
     setSelectedCase(null);
     setScenarios([]);
+  };
+
+  const loadEclData = async () => {
+    try {
+      const res = await workoutEclApi.getEclSummary();
+      setEclData(res.data);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const openFeatureModal = async (featureId: string) => {
@@ -194,7 +205,127 @@ export default function Workout() {
         </Card>
       </div>
 
-      {/* Cases Table */}
+      {/* 메인 탭 */}
+      <div className="bg-white rounded-xl border border-gray-200">
+        <div className="border-b border-gray-200 px-6">
+          <nav className="flex gap-6">
+            <button
+              onClick={() => setMainTab('cases')}
+              className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                mainTab === 'cases'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              Workout 케이스
+            </button>
+            <button
+              onClick={() => { setMainTab('ecl'); if (!eclData) loadEclData(); }}
+              className={`py-3 text-sm font-medium border-b-2 transition-colors ${
+                mainTab === 'ecl'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              충당금 (ECL)
+            </button>
+          </nav>
+        </div>
+
+        {mainTab === 'ecl' ? (
+          <div className="p-6">
+            {!eclData ? (
+              <div className="text-center py-12 text-gray-400">로딩 중...</div>
+            ) : (
+              <div className="space-y-5">
+                {/* ECL 요약 KPI */}
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-500">총 익스포저</p>
+                    <p className="text-xl font-bold text-gray-900 mt-1">
+                      {(eclData.total_exposure / 100000000).toFixed(1)}억
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-500">기존 충당금</p>
+                    <p className="text-xl font-bold text-gray-900 mt-1">
+                      {(eclData.total_provision / 100000000).toFixed(1)}억
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-500">ECL 필요 금액</p>
+                    <p className="text-xl font-bold text-blue-700 mt-1">
+                      {(eclData.total_ecl / 100000000).toFixed(1)}억
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 rounded-lg p-4">
+                    <p className="text-xs text-gray-500">충당금 커버리지</p>
+                    <p className={`text-xl font-bold mt-1 ${eclData.coverage_rate >= 100 ? 'text-green-600' : 'text-red-600'}`}>
+                      {eclData.coverage_rate.toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+
+                {/* ECL 케이스 테이블 */}
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 text-left bg-gray-50">
+                      <th className="px-3 py-2 text-gray-600 font-medium">기업명</th>
+                      <th className="px-3 py-2 text-center text-gray-600 font-medium">ECL Stage</th>
+                      <th className="px-3 py-2 text-right text-gray-600 font-medium">익스포저</th>
+                      <th className="px-3 py-2 text-right text-gray-600 font-medium">기존충당금</th>
+                      <th className="px-3 py-2 text-right text-gray-600 font-medium">ECL 필요</th>
+                      <th className="px-3 py-2 text-right text-gray-600 font-medium">부족액</th>
+                      <th className="px-3 py-2 text-center text-gray-600 font-medium">적정성</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {eclData.cases.map((c: any, i: number) => (
+                      <tr key={i} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-3 py-2 font-medium text-gray-800">{c.company_name}</td>
+                        <td className="px-3 py-2 text-center">
+                          {c.ecl_stage ? (
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              c.ecl_stage === 3 ? 'bg-red-100 text-red-800' :
+                              c.ecl_stage === 2 ? 'bg-orange-100 text-orange-800' :
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              Stage {c.ecl_stage}
+                            </span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-3 py-2 text-right text-gray-700">
+                          {(c.total_exposure / 100000000).toFixed(1)}억
+                        </td>
+                        <td className="px-3 py-2 text-right text-gray-700">
+                          {(c.existing_provision / 100000000).toFixed(1)}억
+                        </td>
+                        <td className="px-3 py-2 text-right text-blue-700 font-medium">
+                          {(c.ecl_required / 100000000).toFixed(1)}억
+                        </td>
+                        <td className={`px-3 py-2 text-right font-medium ${c.provision_gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {c.provision_gap > 0 ? '+' : ''}{(c.provision_gap / 100000000).toFixed(1)}억
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            c.adequacy === 'ADEQUATE'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          }`}>
+                            {c.adequacy === 'ADEQUATE' ? '적정' : '부족'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </div>
+
+      {mainTab === 'cases' && (<>
       <Card title="Workout 케이스 목록">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -486,6 +617,7 @@ export default function Workout() {
           </table>
         </div>
       </Card>
+      </>)}
 
       {/* Feature Modal */}
       <FeatureModal
