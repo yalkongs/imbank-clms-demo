@@ -55,6 +55,10 @@ logs/
 
 # Database
 *.db-journal
+*.db-shm
+*.db-wal
+*.db.bak
+!database/imbank_demo.db
 
 # Test coverage
 htmlcov/
