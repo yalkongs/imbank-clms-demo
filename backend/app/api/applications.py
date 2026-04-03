@@ -53,7 +53,11 @@ def get_applications(
             a.customer_id, c.customer_name, c.industry_name, c.size_category,
             a.product_code, p.product_name,
             a.requested_amount, a.requested_tenor, a.status, a.current_stage,
-            a.priority, a.collateral_type, a.collateral_value,
+            a.priority,
+            CASE WHEN EXISTS(SELECT 1 FROM collateral col WHERE col.application_id = a.application_id)
+                 THEN a.collateral_type ELSE 'NONE' END as collateral_type,
+            CASE WHEN EXISTS(SELECT 1 FROM collateral col WHERE col.application_id = a.application_id)
+                 THEN a.collateral_value ELSE 0 END as collateral_value,
             cr.final_grade, cr.pd_value,
             a.assigned_to, a.branch_code
         FROM loan_application a
@@ -136,7 +140,10 @@ def get_pending_applications(db: Session = Depends(get_db)):
             a.status, a.current_stage, a.priority,
             cr.final_grade, cr.pd_value,
             irs.strategy_code,
-            a.collateral_type, a.collateral_value,
+            CASE WHEN EXISTS(SELECT 1 FROM collateral col WHERE col.application_id = a.application_id)
+                 THEN a.collateral_type ELSE 'NONE' END as collateral_type,
+            CASE WHEN EXISTS(SELECT 1 FROM collateral col WHERE col.application_id = a.application_id)
+                 THEN a.collateral_value ELSE 0 END as collateral_value,
             a.assigned_to,
             -- 기존 여신 현황
             (SELECT COUNT(*) FROM facility f WHERE f.customer_id = c.customer_id AND f.status = 'ACTIVE') as existing_facility_count,
