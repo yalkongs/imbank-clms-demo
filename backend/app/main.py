@@ -112,10 +112,16 @@ FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.p
 if os.path.isdir(FRONTEND_DIR):
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIR, "assets")), name="static")
 
+    # 경로 탐색(directory traversal) 방지를 위해 실제 경로가 FRONTEND_DIR 내부인지 검증
+    _FRONTEND_ROOT = os.path.realpath(FRONTEND_DIR)
+
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """SPA 라우팅 - 모든 비-API 경로를 index.html로"""
-        file_path = os.path.join(FRONTEND_DIR, full_path)
-        if os.path.isfile(file_path):
-            return FileResponse(file_path)
-        return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+        index_file = os.path.join(FRONTEND_DIR, "index.html")
+        requested = os.path.realpath(os.path.join(FRONTEND_DIR, full_path))
+        # FRONTEND_DIR 밖으로 벗어나는 요청(../, %2e%2e 등)은 SPA index로 폴백
+        if requested == _FRONTEND_ROOT or requested.startswith(_FRONTEND_ROOT + os.sep):
+            if os.path.isfile(requested):
+                return FileResponse(requested)
+        return FileResponse(index_file)

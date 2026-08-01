@@ -1,0 +1,15 @@
+# Render Blueprint — iM뱅크 CLMS 데모 (읽기 전용 데모)
+# 단일 FastAPI 프로세스가 API와 빌드된 SPA(frontend/dist)를 함께 서빙한다.
+# 프론트엔드는 사전 빌드되어 리포에 포함되므로 빌드 단계는 pip 설치만 수행한다.
+services:
+  - type: web
+    name: imbank-clms-demo
+    runtime: python
+    plan: free
+    region: singapore          # 한국에서 가장 가까운 무료 리전
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
