@@ -183,10 +183,14 @@ def get_concentration_analysis(region: str = Query(None), db: Session = Depends(
     """), region_params).fetchall()
 
     # 총 익스포저
+    if region:
+        total_where = "JOIN customer c ON f.customer_id = c.customer_id WHERE f.status = 'ACTIVE' " + region_clause
+    else:
+        total_where = "WHERE f.status = 'ACTIVE'"
     total = db.execute(text(f"""
         SELECT SUM(f.outstanding_amount)
         FROM facility f
-        {'JOIN customer c ON f.customer_id = c.customer_id WHERE f.status = \'ACTIVE\' ' + region_clause if region else 'WHERE f.status = \'ACTIVE\''}
+        {total_where}
     """), region_params).fetchone()
 
     total_exposure = total[0] if total[0] else 1
