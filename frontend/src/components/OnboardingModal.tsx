@@ -123,7 +123,7 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
           <span className="text-xs text-gray-400">v1.0.0 · Demo Mode</span>
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors"
+            className="btn-accent px-5 text-sm"
           >
             시작하기
           </button>
