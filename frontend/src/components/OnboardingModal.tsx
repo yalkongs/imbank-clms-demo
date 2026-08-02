@@ -126,6 +126,31 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
+        {/* 구축 규모 — '무엇을 하는 시스템인가' 만으로는 PoC 완성도가 전달되지 않는다.
+            실제로 얼마나 만들어졌는지 숫자로 보여준다. */}
+        <div className="px-6 pb-5">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+            <p className="text-[11px] font-semibold text-gray-400 tracking-wider mb-2">구축 규모</p>
+            <div className="grid grid-cols-4 gap-3 text-center">
+              {[
+                { n: '21',     l: '화면' },
+                { n: '190',    l: 'API' },
+                { n: '80',     l: 'DB 테이블' },
+                { n: '1,200',  l: '여신' },
+              ].map(s => (
+                <div key={s.l}>
+                  <p className="text-base font-bold text-gray-900 tabular leading-tight">{s.n}</p>
+                  <p className="text-[11px] text-gray-500">{s.l}</p>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-2.5 leading-relaxed">
+              Basel IRB · IFRS 9 · 금융감독규정 기준 산식 내장 —
+              고객 1,010개 · 자산건전성 분류 이력 14,400건
+            </p>
+          </div>
+        </div>
+
         {/* 푸터 */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
           <span className="text-xs text-gray-400">v1.0.0 · Demo Mode · © 2026 yalkongs</span>

@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useCountUp } from '../utils/useCountUp';
+import { useTheme } from '../context/ThemeProvider';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -23,6 +25,7 @@ const REGIONS = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { introOpen } = useTheme();
   const [loading, setLoading] = useState(true);
   const [region, setRegion] = useState('');
   const [summary, setSummary] = useState<any>(null);
@@ -71,6 +74,12 @@ export default function Dashboard() {
     }
   };
 
+  // 첫 렌더에서 0부터 세어 올린다 (브랜드 가이드 Animation 절).
+  // 훅은 조건부 return 보다 앞에 있어야 렌더마다 호출 순서가 일정하다.
+  const heroExposure = useCountUp(summary?.portfolio?.total_exposure || 0, 'hero-exposure', !introOpen);
+  const heroBis      = useCountUp(summary?.capital?.bis_ratio || 0, 'hero-bis', !introOpen);
+  const heroRaroc    = useCountUp(summary?.portfolio?.avg_raroc || 0, 'hero-raroc', !introOpen);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -95,6 +104,33 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* 브랜드 히어로 — 가이드가 민트→라임 그라디언트를 hero treatment 로 규정한다.
+          첫 화면에서 규모·기준일·건전성을 한 줄로 먼저 보여준다. */}
+      <div className="im-gradient rounded-2xl px-6 py-5 text-imbank-ink">
+        <div className="flex items-end justify-between flex-wrap gap-4">
+          <div>
+            <p className="text-xs font-semibold tracking-wider opacity-70">기업여신 포트폴리오</p>
+            <p className="text-3xl font-bold tabular mt-1">
+              {formatAmount(heroExposure, 'billion')}
+            </p>
+            <p className="text-xs opacity-70 mt-1">
+              {formatNumber(portfolio.total_customers || 0)}개 기업 · 여신 {formatNumber(portfolio.total_facilities || 1200)}건
+            </p>
+          </div>
+          <div className="flex items-center gap-6 text-sm">
+            <div>
+              <p className="text-xs opacity-70">BIS 자본비율</p>
+              <p className="text-xl font-bold tabular">{formatPercent(heroBis)}</p>
+            </div>
+            <div className="w-px h-9 bg-imbank-ink/15" />
+            <div>
+              <p className="text-xs opacity-70">평균 RAROC</p>
+              <p className="text-xl font-bold tabular">{formatPercent(heroRaroc)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* 페이지 제목 */}
       <div className="flex items-center justify-between">
         <div>

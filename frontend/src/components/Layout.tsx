@@ -103,7 +103,7 @@ const navGroups: NavGroup[] = [
 ];
 
 export default function Layout() {
-  const { setOnboarded } = useTheme();
+  const { setOnboarded, setIntroOpen } = useTheme();
   // 데모 특성상 접속·새로고침 때마다 소개 팝업을 띄운다.
   // (종전에는 localStorage 의 clms-onboarded 로 최초 1회만 표시했다.)
   const [showOnboarding, setShowOnboarding] = useState(true);
@@ -119,6 +119,7 @@ export default function Layout() {
 
   const closeOnboarding = () => {
     setShowOnboarding(false);
+    setIntroOpen(false);   // 팝업이 닫힌 뒤에야 대시보드 카운트업이 시작된다
     // 테마 선택은 계속 저장한다 — 팝업 표시 여부와는 무관하다.
     setOnboarded(true);
   };
@@ -200,7 +201,7 @@ export default function Layout() {
 
             {/* 소개 팝업 다시 보기 */}
             <button
-              onClick={() => setShowOnboarding(true)}
+              onClick={() => { setShowOnboarding(true); setIntroOpen(true); }}
               aria-label="시스템 소개 다시 보기"
               className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
             >
