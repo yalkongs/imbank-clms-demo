@@ -34,6 +34,26 @@ if ! git ls-files --error-unmatch database/imbank_demo.db >/dev/null 2>&1; then
   FAIL=1
 fi
 
+# 4) DB 변경분이 WAL 에만 남아 있지 않은가
+#    -wal 은 배포에 올라가지 않으므로, 미커밋 변경이 있으면 화면은 로컬에서만
+#    정상이고 배포에는 옛 데이터가 서빙된다.
+if [ -f database/imbank_demo.db ]; then
+  python3 - <<'PY' 2>/dev/null || true
+import sqlite3
+try:
+    c = sqlite3.connect("database/imbank_demo.db")
+    c.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    c.close()
+except Exception:
+    pass
+PY
+  if ! git diff --quiet database/imbank_demo.db 2>/dev/null; then
+    echo "[pre-push] 데모 DB 에 커밋되지 않은 변경이 있습니다." >&2
+    echo "           git add database/imbank_demo.db 후 커밋하세요." >&2
+    FAIL=1
+  fi
+fi
+
 if [ "$FAIL" = "1" ]; then
   echo "[pre-push] 배포가 깨질 상태라 push 를 중단합니다." >&2
   echo "           frontend 에서 'npm run build' 후 dist 를 커밋하세요." >&2
