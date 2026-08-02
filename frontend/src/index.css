@@ -1,9 +1,30 @@
+/* iM Financial Design System 지정 서체 — Pretendard Variable.
+   공식 iM 서체가 배포되지 않아 디자인 시스템이 대체 서체로 지정한 값이다. */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 * {
-  font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family: 'Pretendard Variable', Pretendard, -apple-system,
+               'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR',
+               system-ui, sans-serif;
+}
+
+body {
+  /* 공식 스펙: 본문 15px, 자간 -0.01em */
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 금액은 자릿수가 흔들리지 않도록 tabular figures 를 쓴다 (공식 스펙) */
+.tabular, .amount, td.text-right, .font-mono {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
 }
 
 body {
@@ -152,21 +173,67 @@ body {
 /* ============================================================
    iM뱅크 브랜드 변수 + 테마 시스템 (Classic / Gradient Mesh)
    ============================================================ */
+/* iM Financial Design System 공식 토큰 (Claude Design 프로젝트에서 가져옴) */
 :root {
-  --im-primary: #00BFA5;
-  --im-deep: #00897B;
-  --im-accent: #AEEA00;   /* 라임 */
-  --im-teal: #4DD0E1;
-  --im-ink: #0F2E2A;
+  --im-mint: #00C7A9;          /* Pantone 326C */
+  --im-lime: #E2F15E;          /* Pantone 585C */
+  --im-gradient: linear-gradient(90deg, #00C7A9 0%, #E2F15E 100%);
+  --im-gray: #666666;          /* 로고타입 색 — Cool Gray 10C */
+
+  /* 보조 팔레트 */
+  --im-blue: #7DB5FF;
+  --im-purple: #D1B5FF;
+  --im-light-blue: #53E1E5;
+  --im-beige: #CDC9B7;
+
+  /* 민트 틴트 */
+  --im-mint-50:  #E6FAF6;
+  --im-mint-600: #00A58C;
+  --im-mint-700: #008570;
+
+  /* 이전 이름 유지 (기존 규칙 호환) */
+  --im-primary: var(--im-mint);
+  --im-deep:    var(--im-mint-700);
+  --im-accent:  var(--im-lime);
+  --im-teal:    var(--im-light-blue);
+  --im-ink:     #18181B;
+
+  /* 모션 — 공식 스펙: 진입 120~200ms, 스프링 없음 */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+
+  /* 그림자 — 카드는 subtle, 주요 CTA에만 민트 글로우 */
+  --shadow-sm: 0 1px 3px rgba(24,24,27,0.06), 0 1px 2px rgba(24,24,27,0.04);
+  --shadow-mint: 0 8px 24px rgba(0,199,169,0.22);
 }
 
-/* 라임 강조 CTA */
+/* 라임 강조 CTA — 공식 스펙상 버튼 기본 형태는 pill */
 .btn-accent {
-  @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold transition-colors duration-200;
-  background: var(--im-accent);
+  @apply inline-flex items-center justify-center px-5 py-2 font-semibold;
+  border-radius: 9999px;
+  background: var(--im-lime);
   color: var(--im-ink);
+  transition: background var(--dur-base) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
 }
-.btn-accent:hover { background: #9BD400; }
+.btn-accent:hover  { background: #C9DC2E; }
+.btn-accent:active { transform: scale(0.98); }
+
+/* 민트 주 CTA */
+.btn-mint {
+  @apply inline-flex items-center justify-center px-5 py-2 font-semibold text-white;
+  border-radius: 9999px;
+  background: var(--im-mint);
+  box-shadow: var(--shadow-mint);
+  transition: background var(--dur-base) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
+}
+.btn-mint:hover  { background: var(--im-mint-600); }
+.btn-mint:active { transform: scale(0.98); }
+
+/* 브랜드 그라디언트 (심볼의 민트→라임) */
+.im-gradient { background: var(--im-gradient); }
 
 /* --- Gradient Mesh 테마 ---
    body에 직접 소프트 radial 메시를 깔고(fixed), 셸/카드는 프로스티드 처리.

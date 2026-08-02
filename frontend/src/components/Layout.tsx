@@ -137,12 +137,16 @@ export default function Layout() {
 
       {/* 사이드바 */}
       <aside className="app-sidebar w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* 로고 영역 */}
+        {/* 로고 영역 — 공식 가로형 국문 시그니처 (iM Financial Design System) */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
-          <Building2 className="text-blue-600 mr-3" size={28} />
-          <div>
-            <h1 className="text-lg font-bold text-gray-900">iM뱅크</h1>
-            <p className="text-xs text-gray-500">CLMS 데모</p>
+          <img
+            src="/brand/imbank-logo-h-kr.jpg"
+            alt="iM뱅크"
+            className="h-7 w-auto mr-3"
+          />
+          <div className="pl-3 border-l border-gray-200">
+            <p className="text-xs font-semibold text-gray-600 leading-tight">CLMS</p>
+            <p className="text-[10px] text-gray-400 leading-tight">여신생애주기관리</p>
           </div>
         </div>
 
@@ -183,6 +187,7 @@ export default function Layout() {
             시스템 정상 운영중
           </div>
           <p className="text-xs text-gray-400 mt-1">v1.0.0 | Demo Mode</p>
+          <p className="text-[10px] text-gray-400 mt-1">© 2026 yalkongs</p>
         </div>
       </aside>
 

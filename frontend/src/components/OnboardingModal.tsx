@@ -120,7 +120,7 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
 
         {/* 푸터 */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-          <span className="text-xs text-gray-400">v1.0.0 · Demo Mode</span>
+          <span className="text-xs text-gray-400">v1.0.0 · Demo Mode · © 2026 yalkongs</span>
           <button
             onClick={onClose}
             className="btn-accent px-5 text-sm"
