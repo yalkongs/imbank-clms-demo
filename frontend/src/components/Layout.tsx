@@ -44,64 +44,60 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    title: '핵심 업무',
+    title: '현황',
     items: [
-      { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+      { path: '/', label: '대시보드', icon: <LayoutDashboard size={20} /> },
+    ]
+  },
+  {
+    // 여신 생애주기 순서로 배치한다: 심사·실행 → 모니터링 → 회수.
+    // 종전 '여신 심사 고도화' · '부실 관리' 는 개발 Phase 이름이 그대로 노출된 것이었다.
+    title: '여신 업무',
+    items: [
       { path: '/applications', label: '여신신청', icon: <FileText size={20} /> },
-      { path: '/customers', label: '고객관리', icon: <Users size={20} /> },
+      { path: '/covenant', label: '코베넌트 관리', icon: <FileCheck size={20} /> },
     ]
   },
   {
-    title: '자본/포트폴리오',
+    title: '리스크 모니터링',
     items: [
-      { path: '/capital', label: '자본관리', icon: <PiggyBank size={20} /> },
-      { path: '/capital-optimizer', label: '자본최적화', icon: <TrendingUp size={20} /> },
+      { path: '/ews-advanced', label: 'EWS 조기경보', icon: <AlertTriangle size={20} /> },
+      { path: '/collateral-monitoring', label: '담보 모니터링', icon: <Home size={20} /> },
+      { path: '/asset-classification', label: '자산건전성 분류', icon: <ListChecks size={20} /> },
+    ]
+  },
+  {
+    title: '회수·정상화',
+    items: [
+      { path: '/delinquency', label: '연체 관리', icon: <AlertOctagon size={20} /> },
+      { path: '/workout', label: '부실채권 관리', icon: <Briefcase size={20} /> },
+    ]
+  },
+  {
+    // 조회 화면과 최적화 시뮬레이션은 같은 대상의 두 국면이라 페이지 안 탭으로 합쳤다.
+    // (구 /capital-optimizer · /portfolio-optimization · /dynamic-limits)
+    title: '포트폴리오·자본',
+    items: [
       { path: '/portfolio', label: '포트폴리오', icon: <PieChart size={20} /> },
-      { path: '/portfolio-optimization', label: '포트폴리오최적화', icon: <Layers size={20} /> },
-    ]
-  },
-  {
-    title: '리스크 관리',
-    items: [
+      { path: '/capital', label: '자본관리', icon: <PiggyBank size={20} /> },
       { path: '/limits', label: '한도관리', icon: <Gauge size={20} /> },
-      { path: '/dynamic-limits', label: '동적한도', icon: <Target size={20} /> },
-      { path: '/ews-advanced', label: 'EWS고도화', icon: <AlertTriangle size={20} /> },
-      { path: '/stress-test', label: '스트레스테스트', icon: <Activity size={20} /> },
       { path: '/alm', label: 'ALM', icon: <TrendingDown size={20} /> },
     ]
   },
   {
-    title: '고객/담보',
+    title: '분석·모델',
     items: [
-      { path: '/customer-profitability', label: '고객수익성', icon: <UserCheck size={20} /> },
-      { path: '/collateral-monitoring', label: '담보모니터링', icon: <Home size={20} /> },
-      { path: '/workout', label: 'Workout', icon: <Briefcase size={20} /> },
+      { path: '/stress-test', label: '스트레스 테스트', icon: <Activity size={20} /> },
+      { path: '/esg', label: 'ESG 리스크', icon: <Leaf size={20} /> },
+      { path: '/models', label: '모델관리 (MRM)', icon: <Brain size={20} /> },
     ]
   },
   {
-    title: 'ESG/모델',
+    title: '고객',
     items: [
-      { path: '/esg', label: 'ESG리스크', icon: <Leaf size={20} /> },
-      { path: '/models', label: '모델관리', icon: <Brain size={20} /> },
-    ]
-  },
-  {
-    title: '여신 심사 고도화',
-    items: [
-      { path: '/covenant', label: '코베넌트관리', icon: <FileCheck size={20} /> },
-    ]
-  },
-  {
-    title: '부실 관리',
-    items: [
-      { path: '/asset-classification', label: '자산건전성분류', icon: <ListChecks size={20} /> },
-      { path: '/delinquency', label: '연체관리', icon: <AlertOctagon size={20} /> },
-    ]
-  },
-  {
-    title: '조회',
-    items: [
-      { path: '/customer-browser', label: '고객정보조회', icon: <Search size={20} /> },
+      { path: '/customers', label: '고객관리', icon: <Users size={20} /> },
+      { path: '/customer-browser', label: '고객 조회', icon: <Search size={20} /> },
+      { path: '/customer-profitability', label: '고객 수익성', icon: <UserCheck size={20} /> },
     ]
   },
 ];
