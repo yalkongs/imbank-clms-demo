@@ -19,13 +19,16 @@ iM뱅크 CLMS 데모 시스템 - 데이터 대폭 보강 스크립트
 """
 
 import sqlite3
+import pathlib
 import random
 from datetime import datetime, timedelta
 import uuid
 import math
 
 # 데이터베이스 연결
-DB_PATH = '/Users/yalkongs/code/Projects/imbank-clms-demo/database/imbank_demo.db'
+# 리포 위치에 종속되지 않도록 스크립트 기준 상대 경로로 잡는다.
+# (옛 절대 경로 /Users/yalkongs/code/Projects/... 가 하드코딩돼 있어 실행이 불가능했다)
+DB_PATH = str(pathlib.Path(__file__).parent / 'imbank_demo.db')
 
 def get_connection():
     return sqlite3.connect(DB_PATH)

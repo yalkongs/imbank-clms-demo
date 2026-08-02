@@ -15,13 +15,16 @@ iM뱅크 CLMS - 확장 기능 데이터 생성 스크립트
 """
 
 import sqlite3
+import pathlib
 import random
 from datetime import datetime, timedelta
 import uuid
 import json
 import math
 
-DB_PATH = '/Users/yalkongs/code/Projects/imbank-clms-demo/database/imbank_demo.db'
+# 리포 위치에 종속되지 않도록 스크립트 기준 상대 경로로 잡는다.
+# (옛 절대 경로 /Users/yalkongs/code/Projects/... 가 하드코딩돼 있어 실행이 불가능했다)
+DB_PATH = str(pathlib.Path(__file__).parent / 'imbank_demo.db')
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
@@ -38,7 +41,7 @@ def random_date(start_year=2023, end_year=2024):
 
 def execute_schema_extension(conn):
     """스키마 확장 SQL 실행"""
-    with open('/Users/yalkongs/code/Projects/imbank-clms-demo/database/schema_extension.sql', 'r') as f:
+    with open(str(pathlib.Path(__file__).parent / 'schema_extension.sql'), 'r') as f:
         sql = f.read()
     cursor = conn.cursor()
     cursor.executescript(sql)
@@ -216,18 +219,64 @@ def generate_external_signals(conn):
     conn.commit()
     print(f"✓ 외부 신호: {len(signals)}건 생성")
 
+# 신용등급대별 EWS 채널 점수 모수 (평균, 표준편차)
+# EWS는 "위험 신호가 없으면 높은 점수"인 지표이므로, 정상 차주는 고득점에 몰리고
+# 소수만 낮은 꼬리를 형성해야 조기경보로 기능한다.
+# 종전에는 random.uniform(0,100) 균등분포로 뽑아 점수가 차주의 실제 신용도와
+# 무관한 난수가 됐고, 평균 50 · CRITICAL(35 미만) 6.1% 라는 분포를 만들었다.
+# 그 결과 EWS만으로 여신의 15%가 요주의로 강등됐다.
+EWS_SCORE_PROFILE = {
+    'PRIME':  (86.0, 6.0),   # A- 이상
+    'MID':    (76.0, 8.0),   # BBB+ ~ BBB-
+    'SUB':    (58.0, 12.0),  # BB+ 이하
+}
+
+# 등급과 무관하게 위험 징후가 포착된 차주 비중.
+# EWS의 존재 이유가 '우량 등급인데 징후가 먼저 나타나는' 경우를 잡는 것이므로
+# 등급 기반 점수만으로는 경보가 전혀 발생하지 않는다. 이 비율이 CRITICAL 구간을 만든다.
+EWS_DISTRESS_RATE = 0.02
+EWS_DISTRESS_PROFILE = (30.0, 12.0)
+
+
+def _ews_profile_for(grade: str) -> tuple:
+    if not grade:
+        return EWS_SCORE_PROFILE['MID']
+    g = grade.upper()
+    if g.startswith('A') or g.startswith('AA'):
+        return EWS_SCORE_PROFILE['PRIME']
+    if g.startswith('BBB'):
+        return EWS_SCORE_PROFILE['MID']
+    return EWS_SCORE_PROFILE['SUB']
+
+
+def _sample_channel_score(mu: float, sigma: float) -> float:
+    return round(max(0.0, min(100.0, random.gauss(mu, sigma))), 1)
+
+
 def generate_composite_scores(conn):
-    """종합 EWS 점수 생성"""
+    """종합 EWS 점수 생성 — 차주 신용등급에 연동한다."""
     cursor = conn.cursor()
-    cursor.execute("SELECT customer_id FROM customer")
-    customers = [row[0] for row in cursor.fetchall()]
+    # 최신 신용등급을 함께 읽어 등급대별로 점수 분포를 달리한다.
+    cursor.execute("""
+        SELECT c.customer_id, (
+            SELECT crr.final_grade FROM credit_rating_result crr
+            WHERE crr.customer_id = c.customer_id
+            ORDER BY crr.rating_date DESC LIMIT 1
+        )
+        FROM customer c
+    """)
+    customers = cursor.fetchall()
 
     scores = []
-    for customer_id in customers:
-        financial = round(random.uniform(0, 100), 1)
-        operational = round(random.uniform(0, 100), 1)
-        external = round(random.uniform(0, 100), 1)
-        supply_chain = round(random.uniform(0, 100), 1)
+    for customer_id, grade in customers:
+        if random.random() < EWS_DISTRESS_RATE:
+            mu, sigma = EWS_DISTRESS_PROFILE
+        else:
+            mu, sigma = _ews_profile_for(grade)
+        financial = _sample_channel_score(mu, sigma)
+        operational = _sample_channel_score(mu, sigma)
+        external = _sample_channel_score(mu, sigma)
+        supply_chain = _sample_channel_score(mu, sigma)
         composite = round(financial * 0.4 + operational * 0.2 + external * 0.2 + supply_chain * 0.2, 1)
 
         risk_level = 'LOW' if composite >= 70 else 'MEDIUM' if composite >= 50 else 'HIGH' if composite >= 30 else 'CRITICAL'
@@ -253,8 +302,12 @@ def generate_composite_scores(conn):
             recommendations[risk_level]
         ))
 
+    # score_id 를 매번 새 uuid 로 만들기 때문에 INSERT OR REPLACE 로는 갱신이 되지 않고
+    # 실행할 때마다 고객당 행이 하나씩 늘어난다(1,010 → 2,020 → 3,030 ...).
+    # 재실행 가능하도록 기존 행을 지우고 다시 넣는다.
+    cursor.execute("DELETE FROM ews_composite_score")
     cursor.executemany("""
-        INSERT OR REPLACE INTO ews_composite_score
+        INSERT INTO ews_composite_score
         (score_id, customer_id, score_date, financial_score, operational_score,
          external_score, supply_chain_score, composite_score, risk_level,
          predicted_default_prob, recommendation)

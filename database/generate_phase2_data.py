@@ -63,46 +63,19 @@ def uid():
 def fmt(d: date) -> str:
     return d.strftime("%Y-%m-%d")
 
-GRADE_PD = {
-    "AAA": 0.0002, "AA+": 0.0004, "AA": 0.0006, "AA-": 0.0010,
-    "A+":  0.0015, "A":   0.0025, "A-": 0.0045,
-    "BBB+":0.0070, "BBB": 0.0115, "BBB-":0.0185,
-    "BB+": 0.0300, "BB":  0.0480, "BB-": 0.0750,
-    "B+":  0.1200, "B":   0.2000, "B-":  0.3000,
-}
-
-PROVISION_RATES = {
-    "NORMAL":         0.005,
-    "PRECAUTIONARY":  0.020,
-    "SUBSTANDARD":    0.200,
-    "DOUBTFUL":       0.500,
-    "LOSS":           1.000,
-}
-
-CLASS_ORDER = ["NORMAL", "PRECAUTIONARY", "SUBSTANDARD", "DOUBTFUL", "LOSS"]
-
-
-def classify_by_dpd(dpd: int) -> str:
-    if dpd <= 0:       return "NORMAL"
-    elif dpd <= 30:    return "PRECAUTIONARY"
-    elif dpd <= 90:    return "SUBSTANDARD"
-    elif dpd <= 180:   return "DOUBTFUL"
-    else:              return "LOSS"
-
-
-def classify_by_pd(pd: float) -> str:
-    if pd < 0.03:      return "NORMAL"
-    elif pd < 0.10:    return "PRECAUTIONARY"
-    elif pd < 0.20:    return "SUBSTANDARD"
-    elif pd < 0.50:    return "DOUBTFUL"
-    else:              return "LOSS"
-
-
-def classify_by_ews(score: float) -> str:
-    if score >= 75:    return "NORMAL"
-    elif score >= 55:  return "PRECAUTIONARY"
-    elif score >= 35:  return "SUBSTANDARD"
-    else:              return "DOUBTFUL"
+# 분류 기준·충당금률·연체단계는 런타임과 반드시 같아야 한다.
+# 여기서 따로 정의하면 시드와 월말 재분류 결과가 어긋나므로 backend 모듈을 그대로 쓴다.
+sys.path.insert(0, str(Path(__file__).parent.parent / "backend"))
+from app.services.calculations import (          # noqa: E402
+    GRADE_PD_MAP as GRADE_PD,
+    PROVISION_RATES,
+    _CLASS_ORDER as CLASS_ORDER,
+    classify_asset_by_dpd as classify_by_dpd,
+    classify_asset_by_pd as classify_by_pd,
+    classify_asset_by_ews as classify_by_ews,
+    determine_delinquency_stage as delinquency_stage,
+    DPD_PRECAUTIONARY, DPD_SUBSTANDARD, DPD_LOSS,
+)
 
 
 def worst_class(*classes) -> str:
@@ -110,13 +83,34 @@ def worst_class(*classes) -> str:
     return CLASS_ORDER[max(ranks)]
 
 
-def delinquency_stage(dpd: int) -> str:
-    if dpd <= 0:       return "CURRENT"
-    elif dpd <= 30:    return "EARLY"
-    elif dpd <= 60:    return "MID"
-    elif dpd <= 90:    return "LATE"
-    elif dpd <= 180:   return "NPL"
-    else:              return "WRITEOFF"
+# ------------------------------------------------------------------ #
+# 연체 발생 모수 — 금융감독원 「국내은행 원화대출 연체율 현황」 기준
+# ------------------------------------------------------------------ #
+# 기업대출 연체율(1개월 이상) 0.84%, 중소기업 1.00%, 대기업 0.27%.
+# 본 데모는 중소기업 비중이 높은 지방은행 포트폴리오를 가정해 1.5% 수준으로 잡는다
+# (실제보다 다소 보수적 — 부실관리 화면에 표본이 남아야 하므로).
+#
+# 종전에는 여신의 12%를 연체로 만들고 연체일수를 1~90일 균등분포로 뽑아
+# 1개월 이상 연체율이 11.3%까지 올라갔다. 실제의 13배다.
+DELINQUENCY_RATE_1M = 0.015    # 1개월 이상 연체 비중
+DELINQUENCY_RATE_SHORT = 0.02  # 1개월 미만 단기 연체 비중 (건전성상 정상)
+
+# 연체 구간 분포 — 연체는 단기에 몰리고 장기로 갈수록 급감한다(롤레이트 체감).
+# (하한일, 상한일, 가중치)
+DPD_BUCKETS = [
+    (DPD_PRECAUTIONARY, DPD_SUBSTANDARD - 1, 0.55),   # 30~89일   요주의
+    (DPD_SUBSTANDARD,   180,                 0.28),   # 90~180일  고정이하
+    (181,               DPD_LOSS - 1,        0.12),   # 181~364일 고정이하
+    (DPD_LOSS,          DPD_LOSS + 200,      0.05),   # 365일 이상 추정손실
+]
+
+
+def sample_dpd() -> int:
+    """실제 연체 분포에 가깝게 DPD를 뽑는다 (1개월 이상 구간)."""
+    buckets = [(lo, hi) for lo, hi, _ in DPD_BUCKETS]
+    weights = [w for _, _, w in DPD_BUCKETS]
+    lo, hi = random.choices(buckets, weights=weights, k=1)[0]
+    return random.randint(lo, hi)
 
 
 # ------------------------------------------------------------------ #
@@ -169,9 +163,17 @@ def generate_classification_and_ecl(conn: sqlite3.Connection):
         lgd       = float(fac[6]) if fac[6] else 0.45
         ews_base  = float(fac[7]) if fac[7] else random.uniform(50, 90)
 
-        # 여신별 기본 DPD (낮은 확률로 연체 여신)
-        is_delinquent = random.random() < 0.12   # 12%
-        base_dpd      = random.randint(0, 5) if not is_delinquent else random.randint(1, 90)
+        # 여신별 기본 DPD — 감독원 연체율 통계에 맞춘 발생률과 구간 분포
+        roll = random.random()
+        if roll < DELINQUENCY_RATE_1M:
+            is_delinquent = True                      # 1개월 이상 연체
+            base_dpd = sample_dpd()
+        elif roll < DELINQUENCY_RATE_1M + DELINQUENCY_RATE_SHORT:
+            is_delinquent = False                     # 단기 연체 (건전성상 정상)
+            base_dpd = random.randint(1, DPD_PRECAUTIONARY - 1)
+        else:
+            is_delinquent = False
+            base_dpd = 0
 
         prev_class = None
         prev_ecl   = None
@@ -308,19 +310,22 @@ def generate_classification_and_ecl(conn: sqlite3.Connection):
 def generate_delinquency(conn: sqlite3.Connection):
     cur = conn.cursor()
 
-    # 연체 대상 여신 — 최신 분류에서 NORMAL 이외인 여신
+    # 연체 대상 여신 — 표본 수를 목표 연체율로 정한다.
+    # 종전에는 '분류가 NORMAL 이 아닌' 여신 200건을 그대로 연체로 만들었다.
+    # 그 집합에는 EWS·PD 때문에 요주의가 된 정상이행 여신이 대부분이라
+    # 1개월 이상 연체율이 12%를 넘었다(실제 기업대출 0.84%).
+    total_active = cur.execute(
+        "SELECT COUNT(*) FROM facility WHERE status = 'ACTIVE'"
+    ).fetchone()[0]
+    target_n = max(1, round(total_active * (DELINQUENCY_RATE_1M + DELINQUENCY_RATE_SHORT)))
+
     facilities = cur.execute("""
-        SELECT DISTINCT ac.facility_id, ac.customer_id,
-               f.outstanding_amount, f.facility_type
-        FROM asset_classification ac
-        JOIN facility f ON ac.facility_id = f.facility_id
-        JOIN (
-            SELECT facility_id, MAX(base_date) AS latest
-            FROM asset_classification GROUP BY facility_id
-        ) mx ON ac.facility_id = mx.facility_id AND ac.base_date = mx.latest
-        WHERE ac.classification != 'NORMAL'
-        LIMIT 200
-    """).fetchall()
+        SELECT f.facility_id, f.customer_id, f.outstanding_amount, f.facility_type
+        FROM facility f
+        WHERE f.status = 'ACTIVE'
+        ORDER BY RANDOM()
+        LIMIT :n
+    """, {"n": target_n}).fetchall()
 
     print(f"  연체 대상 여신: {len(facilities)}건")
 
@@ -334,23 +339,14 @@ def generate_delinquency(conn: sqlite3.Connection):
 
     today = date.today()
 
-    # DPD 분포: EARLY(30%) / MID(25%) / LATE(20%) / NPL(15%) / WRITEOFF(10%)
-    DPD_RANGES = [
-        (1,  30,  0.30),
-        (31, 60,  0.25),
-        (61, 90,  0.20),
-        (91, 180, 0.15),
-        (181,365, 0.10),
-    ]
+    # 연체는 단기에 몰리고 장기로 갈수록 급감한다. 표본 중 1개월 미만 비중은
+    # DELINQUENCY_RATE_SHORT / (SHORT + 1M) 로 잡고, 나머지를 sample_dpd() 로 뽑는다.
+    short_share = DELINQUENCY_RATE_SHORT / (DELINQUENCY_RATE_SHORT + DELINQUENCY_RATE_1M)
 
     def pick_dpd():
-        r = random.random()
-        cumul = 0.0
-        for lo, hi, w in DPD_RANGES:
-            cumul += w
-            if r < cumul:
-                return random.randint(lo, hi)
-        return random.randint(1, 30)
+        if random.random() < short_share:
+            return random.randint(1, DPD_PRECAUTIONARY - 1)   # 건전성상 정상
+        return sample_dpd()
 
     for fac in facilities:
         fid       = fac[0]
@@ -410,7 +406,8 @@ def generate_delinquency(conn: sqlite3.Connection):
             ))
 
         # facility 업데이트
-        max_dpd = random.randint(dpd, min(dpd + 30, 200))
+        # 상한을 200으로 묶으면 dpd 가 200을 넘는 순간 빈 범위가 되어 터진다.
+        max_dpd = random.randint(dpd, dpd + 30)
         facility_updates.append((dpd, max_dpd, fmt(overdue_date), fid))
 
     print(f"  연체 레코드 {len(delinquency_rows)}건 저장 중...")
@@ -486,6 +483,28 @@ def main():
     print("\n[1] 스키마 적용 중...")
     apply_schema(conn)
     print("  완료")
+
+    # 재실행 가능하도록 기존 생성분을 비운다. 종전에는 지우지 않아 두 번 돌리면
+    # 같은 여신·같은 기준일의 분류/ECL 행이 그대로 쌓였다.
+    print("  기존 Phase 2 데이터 삭제...")
+    cur = conn.cursor()
+    for t in ("collection_activity", "delinquency_record",
+              "ecl_calculation", "asset_classification"):
+        try:
+            cur.execute(f"DELETE FROM {t}")
+        except Exception as e:
+            print(f"    [WARN] {t}: {str(e)[:80]}")
+    # facility 의 연체 컬럼도 되돌린다. 이번 실행에서 연체로 뽑히지 않은 여신에
+    # 지난 실행의 DPD 가 남아 있으면 연체율이 실행할수록 누적된다.
+    try:
+        cur.execute("""
+            UPDATE facility
+               SET dpd = 0, max_dpd_12m = 0,
+                   first_delinquency_date = NULL, classification = 'NORMAL'
+        """)
+    except Exception as e:
+        print(f"    [WARN] facility 연체 컬럼 초기화: {str(e)[:80]}")
+    conn.commit()
 
     print("\n[2] 자산건전성 분류 + ECL 생성 중...")
     n_class, n_ecl = generate_classification_and_ecl(conn)
