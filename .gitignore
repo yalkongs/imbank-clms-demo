@@ -41,8 +41,12 @@ yarn-debug.log*
 yarn-error.log*
 
 # Build outputs
-frontend/dist/
 frontend/build/
+
+# frontend/dist는 예외 — Render 배포에서 FastAPI가 사전 빌드된 SPA를 직접 서빙하므로
+# (render.yaml + backend/app/main.py) 번들 산출물을 리포에 포함한다.
+# 위 Python 섹션의 `dist/` 패턴이 frontend/dist까지 잡으므로 여기서 되살린다.
+!frontend/dist/
 
 # Logs
 *.log
@@ -54,10 +58,12 @@ logs/
 .env.*.local
 
 # Database
+*.db
 *.db-journal
 *.db-shm
 *.db-wal
 *.db.bak
+# 데모 DB는 배포에 필요하므로 리포에 포함 (negation은 반드시 *.db 뒤에 와야 적용됨)
 !database/imbank_demo.db
 
 # Test coverage
@@ -88,4 +94,4 @@ temp/
 Thumbs.db
 ehthumbs.db
 Desktop.ini
-*.db
+.vercel
