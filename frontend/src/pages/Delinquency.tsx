@@ -205,11 +205,14 @@ export default function Delinquency() {
             <p className="text-xs text-gray-400 mt-1">총 {fmtAmt(dashboard.total_delinquent)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-1">NPL 비율</p>
+            {/* 감독규정상 NPL 은 '고정이하여신비율'이라 자산건전성 화면의 값(고정+회수의문+
+                추정손실 기준)이 정식 정의다. 여기 값은 연체일수 기준이라 숫자가 달라
+                같은 이름을 쓰면 혼선이 생긴다. 지표 이름을 정의대로 적는다. */}
+            <p className="text-xs text-gray-500 mb-1">91일+ 연체비율</p>
             <p className={`text-2xl font-bold ${dashboard.npl_ratio > 1 ? 'text-red-600' : 'text-gray-900'}`}>
               {dashboard.npl_ratio.toFixed(3)}%
             </p>
-            <p className="text-xs text-gray-400 mt-1">91일+ 연체</p>
+            <p className="text-xs text-gray-400 mt-1">연체일수 기준 · NPL은 자산건전성 참조</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs text-gray-500 mb-1">7일 신규 연체</p>

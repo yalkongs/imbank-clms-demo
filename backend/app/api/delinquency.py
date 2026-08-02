@@ -74,7 +74,12 @@ def get_delinquency_dashboard(
     total_delinquent = sum(b['exposure'] for b in bucket_data.values())
     delinquency_rate = round(total_delinquent / total_outstanding * 100, 3) if total_outstanding > 0 else 0
 
-    # NPL 이상 (91일+)
+    # 연체 91일 이상 익스포저.
+    # 주의: 이 값은 '연체일수' 기준이라 감독규정상 NPL(고정이하여신비율)과 다르다.
+    # 정식 NPL 은 자산건전성 분류의 고정+회수의문+추정손실 기준으로,
+    # /api/classification/portfolio 의 npl_ratio 를 쓴다.
+    # 응답 필드명은 하위호환을 위해 npl_ratio 를 유지하되 화면 라벨은
+    # '91일+ 연체비율' 로 표기한다.
     npl_exposure = sum(
         b['exposure'] for k, b in bucket_data.items() if k in ('NPL', 'WRITEOFF')
     )

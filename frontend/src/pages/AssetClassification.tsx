@@ -177,10 +177,12 @@ export default function AssetClassification() {
             <p className="text-2xl font-bold text-gray-900">{fmtAmt(portfolio.total_exposure)}</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <p className="text-xs text-gray-500 mb-1">NPL 비율</p>
+            {/* 감독규정상 NPL = 고정이하여신비율. 이 값이 정식 정의다. */}
+            <p className="text-xs text-gray-500 mb-1">고정이하여신비율 (NPL)</p>
             <p className={`text-2xl font-bold ${portfolio.npl_ratio > 3 ? 'text-red-600' : 'text-gray-900'}`}>
               {fmtPct(portfolio.npl_ratio)}
             </p>
+            <p className="text-xs text-gray-400 mt-1">고정 + 회수의문 + 추정손실</p>
           </div>
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="text-xs text-gray-500 mb-1">필요 충당금</p>
