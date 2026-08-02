@@ -1204,23 +1204,32 @@ def generate_capital_positions(conn):
     for base_date in month_ends(25):
         base_date_str = base_date.strftime('%Y-%m-%d')
 
-        # 자본 구성
-        cet1 = random.uniform(35000, 42000)
-        at1 = random.uniform(3000, 5000)
-        tier2 = random.uniform(8000, 12000)
+        # 금액은 '원' 단위로 저장한다. 시스템 전체(facility.outstanding_amount,
+        # capital_budget.rwa_budget 등)가 원 단위이고, 화면은 formatAmount(.., 'billion')
+        # 으로 1억을 나눠 억원으로 표시한다. 여기서 억원 단위로 저장하면
+        # 자본관리 화면의 금액이 전부 '0억원'으로 찍힌다.
+        EOK = 100_000_000  # 1억
+
+        # 자본 구성 (총자본 14~15조 규모의 지방은행 가정)
+        cet1 = random.uniform(120000, 128000) * EOK
+        at1 = random.uniform(2400, 2800) * EOK
+        tier2 = random.uniform(16000, 18500) * EOK
         total_capital = cet1 + at1 + tier2
 
-        # RWA
-        credit_rwa = random.uniform(280000, 350000)
-        market_rwa = random.uniform(15000, 25000)
-        op_rwa = random.uniform(20000, 30000)
+        # RWA (총 84~88조)
+        credit_rwa = random.uniform(760000, 790000) * EOK
+        market_rwa = random.uniform(20000, 23000) * EOK
+        op_rwa = random.uniform(62000, 66000) * EOK
         total_rwa = credit_rwa + market_rwa + op_rwa
 
         # 비율 계산
-        bis_ratio = total_capital / total_rwa * 100
-        cet1_ratio = cet1 / total_rwa * 100
-        tier1_ratio = (cet1 + at1) / total_rwa * 100
-        leverage_ratio = (cet1 + at1) / (total_rwa * 3) * 100  # 간략화
+        # 비율은 소수로 저장한다 (0.1663 = 16.63%).
+        # API 계층(capital.py)이 화면 표시용으로 *100 을 하므로 여기서 백분율로
+        # 저장하면 1382% 같은 값이 나온다. 저장 단위는 소수가 정본이다.
+        bis_ratio = total_capital / total_rwa
+        cet1_ratio = cet1 / total_rwa
+        tier1_ratio = (cet1 + at1) / total_rwa
+        leverage_ratio = (cet1 + at1) / (total_rwa * 3)  # 간략화
 
         position = (
             f"CAP_{base_date_str.replace('-', '')}",
