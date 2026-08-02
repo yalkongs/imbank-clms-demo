@@ -1,0 +1,43 @@
+#!/bin/sh
+#
+# push 직전에 배포 산출물의 정합성을 마지막으로 검증한다.
+# pre-commit 을 --no-verify 로 우회했거나, dist 를 손으로 건드린 경우를 잡는다.
+#
+# 우회: git push --no-verify
+
+set -e
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+FAIL=0
+
+# 1) index.html 이 참조하는 asset 이 리포에 실제로 있는가
+for f in $(grep -o '/assets/[^"]*' frontend/dist/index.html 2>/dev/null); do
+  if [ ! -f "frontend/dist$f" ]; then
+    echo "[pre-push] 번들 누락: frontend/dist$f" >&2
+    FAIL=1
+  fi
+done
+
+# 2) 그 asset 들이 git 에 추적되고 있는가 (.gitignore 에 걸리면 배포에 안 올라간다)
+for f in $(grep -o '/assets/[^"]*' frontend/dist/index.html 2>/dev/null); do
+  if ! git ls-files --error-unmatch "frontend/dist$f" >/dev/null 2>&1; then
+    echo "[pre-push] 미추적 번들: frontend/dist$f (.gitignore 확인 필요)" >&2
+    FAIL=1
+  fi
+done
+
+# 3) 배포에 필요한 데모 DB 가 추적되고 있는가
+if ! git ls-files --error-unmatch database/imbank_demo.db >/dev/null 2>&1; then
+  echo "[pre-push] database/imbank_demo.db 가 추적되지 않습니다 — 배포 시 DB 없음." >&2
+  FAIL=1
+fi
+
+if [ "$FAIL" = "1" ]; then
+  echo "[pre-push] 배포가 깨질 상태라 push 를 중단합니다." >&2
+  echo "           frontend 에서 'npm run build' 후 dist 를 커밋하세요." >&2
+  exit 1
+fi
+
+exit 0

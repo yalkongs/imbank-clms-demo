@@ -1,0 +1,58 @@
+#!/bin/sh
+#
+# 프론트엔드 소스가 커밋에 포함되면 자동으로 다시 빌드하고 dist 를 함께 스테이징한다.
+#
+# 배경: 이 프로젝트는 Render 배포에서 FastAPI 가 사전 빌드된 SPA(frontend/dist)를
+# 직접 서빙한다(render.yaml + backend/app/main.py). 소스만 고치고 dist 를 갱신하지
+# 않으면 배포된 화면이 옛 번들 그대로이고, index.html 만 갱신되면 asset 404 로
+# 백지 화면이 된다. 사람이 매번 기억해야 하는 단계를 훅으로 없앤다.
+#
+# 활성화: git config core.hooksPath .githooks   (setup-hooks.sh 가 실행해 준다)
+# 우회  : git commit --no-verify
+
+set -e
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+# 스테이징된 파일 중 빌드 산출물에 영향을 주는 것이 있는지 확인
+NEEDS_BUILD=$(git diff --cached --name-only --diff-filter=ACMR | grep -E \
+  '^frontend/(src/|index\.html$|package(-lock)?\.json$|vite\.config\.|tailwind\.config\.|postcss\.config\.|tsconfig)' \
+  || true)
+
+if [ -z "$NEEDS_BUILD" ]; then
+  exit 0
+fi
+
+echo "[pre-commit] 프론트엔드 변경 감지 → 빌드 후 dist 를 함께 커밋합니다."
+
+if [ ! -d frontend/node_modules ]; then
+  echo "[pre-commit] node_modules 가 없어 의존성을 설치합니다..."
+  (cd frontend && npm install --silent) || {
+    echo "[pre-commit] npm install 실패 — 커밋을 중단합니다." >&2
+    exit 1
+  }
+fi
+
+(cd frontend && npm run build) || {
+  echo "[pre-commit] 빌드 실패 — 깨진 상태가 배포되지 않도록 커밋을 중단합니다." >&2
+  exit 1
+}
+
+git add frontend/dist
+
+# index.html 이 참조하는 asset 이 실제로 존재하는지 확인 (백지 화면 방지)
+MISSING=0
+for f in $(grep -o '/assets/[^"]*' frontend/dist/index.html); do
+  if [ ! -f "frontend/dist$f" ]; then
+    echo "[pre-commit] 번들 누락: $f" >&2
+    MISSING=1
+  fi
+done
+if [ "$MISSING" = "1" ]; then
+  echo "[pre-commit] index.html 이 없는 asset 을 참조합니다 — 커밋을 중단합니다." >&2
+  exit 1
+fi
+
+echo "[pre-commit] dist 갱신 완료."
+exit 0

@@ -103,6 +103,28 @@ python generate_extension_data.py    # 확장 데이터
 (`backend/app/main.py:110-127`). Vercel 구성은 서버리스 읽기 전용 파일시스템이
 SQLite 데모와 맞지 않아 제거했으므로 되살리지 말 것.
 
+### 변경은 반드시 배포까지 간다
+
+**커밋만 하고 끝내지 않는다.** Render는 `origin/master`를 바라보므로
+push 하지 않으면 사용자가 보는 화면은 그대로다. 작업을 마쳤다고 보고하기 전에
+`git push origin master`까지 완료하고, 그 결과를 확인한다.
+
+작업 브랜치를 썼다면 master 로 머지한 뒤 push 한다. 배포 확인 전까지는
+"반영했다"고 말하지 않는다.
+
+### 자동화 장치 (`.githooks/`)
+
+클론 후 `./setup-hooks.sh` 를 한 번 실행하면 활성화된다
+(`git config core.hooksPath .githooks`).
+
+- **pre-commit** — `frontend/src`·설정 파일이 커밋에 포함되면 자동으로
+  `npm run build` 하고 `frontend/dist` 를 함께 스테이징한다. 빌드가 실패하면
+  커밋을 중단해 깨진 상태가 배포되지 않게 한다.
+- **pre-push** — `index.html` 이 참조하는 번들이 실제로 존재하고 git 에
+  추적되는지, 데모 DB가 추적되는지 검증한다. 하나라도 어긋나면 push 를 막는다.
+
+훅을 우회해야 하면 `--no-verify` 를 쓰되, 그 커밋은 배포가 깨질 수 있다.
+
 - **`frontend/dist`는 반드시 커밋한다.** `.gitignore`의 `!frontend/dist/` 예외가
   Python `dist/` 패턴을 상쇄하고 있다. 이 예외를 지우면 신규 번들이 커밋되지 않아
   배포 데모가 백지 화면이 된다.

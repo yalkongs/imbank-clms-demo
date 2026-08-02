@@ -240,10 +240,10 @@ body {
    컴포넌트 로직 변경 없이 data-theme 속성만으로 전환. */
 [data-theme="mesh"] body {
   background:
-    radial-gradient(46% 46% at 14% 18%, rgba(0, 191, 165, 0.30), transparent 62%),
-    radial-gradient(40% 40% at 86% 12%, rgba(174, 234, 0, 0.20), transparent 60%),
-    radial-gradient(52% 52% at 78% 82%, rgba(77, 208, 225, 0.26), transparent 62%),
-    radial-gradient(42% 42% at 22% 88%, rgba(0, 137, 123, 0.18), transparent 60%),
+    radial-gradient(46% 46% at 14% 18%, rgba(0, 199, 169, 0.30), transparent 62%),
+    radial-gradient(40% 40% at 86% 12%, rgba(226, 241, 94, 0.32), transparent 60%),
+    radial-gradient(52% 52% at 78% 82%, rgba(83, 225, 229, 0.26), transparent 62%),
+    radial-gradient(42% 42% at 22% 88%, rgba(0, 133, 112, 0.18), transparent 60%),
     #eef4f2;
   background-attachment: fixed;
 }
@@ -312,10 +312,10 @@ body {
 /* 테마 미리보기 카드용 미니 메시 */
 .mini-mesh {
   background:
-    radial-gradient(60% 60% at 20% 20%, rgba(0, 191, 165, 0.55), transparent 62%),
-    radial-gradient(55% 55% at 85% 25%, rgba(174, 234, 0, 0.45), transparent 60%),
-    radial-gradient(60% 60% at 75% 85%, rgba(77, 208, 225, 0.50), transparent 62%),
-    #eef4f2;
+    radial-gradient(60% 60% at 20% 20%, rgba(0, 199, 169, 0.55), transparent 62%),
+    radial-gradient(55% 55% at 85% 25%, rgba(226, 241, 94, 0.60), transparent 60%),
+    radial-gradient(60% 60% at 75% 85%, rgba(83, 225, 229, 0.50), transparent 62%),
+    #F4F4F5;
 }
 .mini-flat {
   background: #f1f5f4;
