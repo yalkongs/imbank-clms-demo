@@ -107,8 +107,10 @@ const navGroups: NavGroup[] = [
 ];
 
 export default function Layout() {
-  const { onboarded, setOnboarded } = useTheme();
-  const [showOnboarding, setShowOnboarding] = useState(false);
+  const { setOnboarded } = useTheme();
+  // 데모 특성상 접속·새로고침 때마다 소개 팝업을 띄운다.
+  // (종전에는 localStorage 의 clms-onboarded 로 최초 1회만 표시했다.)
+  const [showOnboarding, setShowOnboarding] = useState(true);
   // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 — 화면에 날짜를 박아두지 않는다.
   const [asOfLabel, setAsOfLabel] = useState('');
 
@@ -119,15 +121,9 @@ export default function Layout() {
       .catch(() => setAsOfLabel(''));
   }, []);
 
-  // 최초 접속(온보딩 미완료) 시 소개 팝업 표시
-  useEffect(() => {
-    if (!onboarded) {
-      setShowOnboarding(true);
-    }
-  }, [onboarded]);
-
   const closeOnboarding = () => {
     setShowOnboarding(false);
+    // 테마 선택은 계속 저장한다 — 팝업 표시 여부와는 무관하다.
     setOnboarded(true);
   };
 
