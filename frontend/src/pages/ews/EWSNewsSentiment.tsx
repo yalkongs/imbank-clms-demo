@@ -75,7 +75,7 @@ export default function EWSNewsSentiment({ region }: Props) {
               <YAxis tick={{ fontSize: 10 }} domain={[-1, 1]} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="avg_sentiment" name="평균 감성" stroke="#3b82f6" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="avg_sentiment" name="평균 감성" stroke="#00BFA5" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="avg_negative_ratio" name="부정비율" stroke="#ef4444" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -88,7 +88,7 @@ export default function EWSNewsSentiment({ region }: Props) {
               <XAxis dataKey="month" tick={{ fontSize: 10 }} />
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip />
-              <Bar dataKey="article_count" name="기사 수" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="article_count" name="기사 수" fill="#00BFA5" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -107,7 +107,7 @@ export default function EWSNewsSentiment({ region }: Props) {
                   <XAxis dataKey="month" tick={{ fontSize: 9 }} />
                   <YAxis tick={{ fontSize: 9 }} domain={[-1, 1]} />
                   <Tooltip />
-                  <Line type="monotone" dataKey="avg_sentiment" name="감성" stroke="#3b82f6" />
+                  <Line type="monotone" dataKey="avg_sentiment" name="감성" stroke="#00BFA5" />
                 </LineChart>
               </ResponsiveContainer>
             </div>

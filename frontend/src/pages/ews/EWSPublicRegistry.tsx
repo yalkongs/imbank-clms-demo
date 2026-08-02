@@ -115,7 +115,7 @@ export default function EWSPublicRegistry({ region }: Props) {
             <Bar dataKey="TAX_DELINQUENT" name="세금체납" stackId="a" fill="#ef4444" />
             <Bar dataKey="SOCIAL_INSURANCE" name="사회보험" stackId="a" fill="#f59e0b" />
             <Bar dataKey="SEIZURE" name="가압류" stackId="a" fill="#7c3aed" />
-            <Bar dataKey="AUDIT_OPINION" name="감사의견" stackId="a" fill="#3b82f6" />
+            <Bar dataKey="AUDIT_OPINION" name="감사의견" stackId="a" fill="#00BFA5" />
             <Bar dataKey="MGMT_CHANGE" name="경영진변동" stackId="a" fill="#6b7280" />
           </BarChart>
         </ResponsiveContainer>

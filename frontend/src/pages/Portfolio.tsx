@@ -80,7 +80,7 @@ export default function Portfolio() {
     name: getStrategyLabel(s.strategy),
     value: s.exposure,
     color: s.strategy === 'EXPAND' ? '#10b981' :
-           s.strategy === 'SELECTIVE' ? '#3b82f6' :
+           s.strategy === 'SELECTIVE' ? '#00BFA5' :
            s.strategy === 'MAINTAIN' ? '#6b7280' :
            s.strategy === 'REDUCE' ? '#f59e0b' : '#ef4444'
   })) || [];

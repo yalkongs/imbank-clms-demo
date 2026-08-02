@@ -70,7 +70,7 @@ export default function EWSMarketSignals({ region }: Props) {
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line yAxisId="left" type="monotone" dataKey="avg_dd" name="DD (좌)" stroke="#3b82f6" strokeWidth={2} dot={false} />
+              <Line yAxisId="left" type="monotone" dataKey="avg_dd" name="DD (좌)" stroke="#00BFA5" strokeWidth={2} dot={false} />
               <Line yAxisId="right" type="monotone" dataKey="avg_cds" name="CDS bp (우)" stroke="#ef4444" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -104,7 +104,7 @@ export default function EWSMarketSignals({ region }: Props) {
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line yAxisId="left" type="monotone" dataKey="distance_to_default" name="DD" stroke="#3b82f6" />
+              <Line yAxisId="left" type="monotone" dataKey="distance_to_default" name="DD" stroke="#00BFA5" />
               <Line yAxisId="right" type="monotone" dataKey="cds_spread" name="CDS" stroke="#ef4444" />
               <Line yAxisId="left" type="monotone" dataKey="stock_price_change" name="주가%" stroke="#10b981" />
             </LineChart>

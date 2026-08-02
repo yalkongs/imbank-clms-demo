@@ -66,7 +66,7 @@ export default function EWSTransactionBehavior({ region }: Props) {
               <YAxis tick={{ fontSize: 10 }} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line type="monotone" dataKey="avg_utilization" name="한도소진율" stroke="#3b82f6" dot={false} />
+              <Line type="monotone" dataKey="avg_utilization" name="한도소진율" stroke="#00BFA5" dot={false} />
               <Line type="monotone" dataKey="avg_outflow" name="예금유출률" stroke="#ef4444" dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -98,7 +98,7 @@ export default function EWSTransactionBehavior({ region }: Props) {
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
               <Tooltip />
               <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line yAxisId="left" type="monotone" dataKey="limit_utilization" name="한도소진율" stroke="#3b82f6" />
+              <Line yAxisId="left" type="monotone" dataKey="limit_utilization" name="한도소진율" stroke="#00BFA5" />
               <Line yAxisId="left" type="monotone" dataKey="deposit_outflow_rate" name="예금유출률" stroke="#ef4444" />
               <Line yAxisId="right" type="monotone" dataKey="payment_delay_days" name="결제지연(일)" stroke="#f59e0b" />
             </LineChart>

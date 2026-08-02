@@ -212,13 +212,21 @@ body {
   border-color: rgba(255, 255, 255, 0.6);
 }
 
-/* 모달 패널(bg-white + shadow-xl/2xl)은 가독성 우선 — 불투명 유지.
+/* 모달 패널(bg-white + shadow-xl/2xl)과 그 내부 흰 배경 요소는 가독성 우선 —
+   불투명 유지. 모달 안의 sticky 헤더가 반투명이면 스크롤되는 본문이 비쳐
+   sticky의 목적 자체가 깨진다(예: CustomerProfitability.tsx:332).
    위 카드 규칙과 specificity가 같으므로 반드시 뒤에 와야 이긴다. */
 [data-theme="mesh"] .app-main .bg-white.shadow-xl,
-[data-theme="mesh"] .app-main .bg-white.shadow-2xl {
+[data-theme="mesh"] .app-main .bg-white.shadow-2xl,
+[data-theme="mesh"] .app-main .shadow-xl .bg-white,
+[data-theme="mesh"] .app-main .shadow-2xl .bg-white {
   background: #ffffff !important;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+[data-theme="mesh"] .app-main .bg-white.shadow-xl,
+[data-theme="mesh"] .app-main .bg-white.shadow-2xl {
   border-color: rgb(229, 231, 235);
 }
 

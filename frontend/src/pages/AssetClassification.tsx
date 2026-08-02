@@ -258,7 +258,7 @@ export default function AssetClassification() {
                       <XAxis dataKey="label_ko" tick={{ fontSize: 11 }} />
                       <YAxis tickFormatter={(v) => `${(v / 100000000).toFixed(0)}억`} tick={{ fontSize: 11 }} />
                       <Tooltip formatter={(v: number) => fmtAmt(v)} />
-                      <Bar dataKey="required_provision" name="필요충당금" fill="#3b82f6" radius={[4,4,0,0]} />
+                      <Bar dataKey="required_provision" name="필요충당금" fill="#00BFA5" radius={[4,4,0,0]} />
                       <Bar dataKey="existing_provision" name="기존충당금" fill="#22c55e" radius={[4,4,0,0]} />
                     </BarChart>
                   </ResponsiveContainer>
