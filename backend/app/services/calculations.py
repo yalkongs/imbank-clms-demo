@@ -205,9 +205,15 @@ def calculate_pricing(
     }
 
 
+# 스트레스 시나리오 상한 (README '스트레스 테스트' 절 기준)
+STRESS_PD_CAP = 0.30
+STRESS_LGD_CAP = 0.70
+
+
 def calculate_stress_pd(base_pd: float, scenario_factor: float, industry_sensitivity: float = 1.0) -> float:
     """
     스트레스 상황 PD 계산
+    PD_stressed = min(PD_base × F_pd × S_industry, 0.30)
 
     Args:
         base_pd: 기본 PD (TTC)
@@ -215,10 +221,18 @@ def calculate_stress_pd(base_pd: float, scenario_factor: float, industry_sensiti
         industry_sensitivity: 산업별 민감도
 
     Returns:
-        stressed PD
+        stressed PD (상한 30%)
     """
     stressed_pd = base_pd * scenario_factor * industry_sensitivity
-    return min(stressed_pd, 1.0)  # 최대 100%
+    return min(stressed_pd, STRESS_PD_CAP)
+
+
+def calculate_stress_lgd(base_lgd: float, scenario_factor: float) -> float:
+    """
+    스트레스 상황 LGD 계산
+    LGD_stressed = min(LGD_base × F_lgd, 0.70)
+    """
+    return min(base_lgd * scenario_factor, STRESS_LGD_CAP)
 
 
 def calculate_capital_ratios(
@@ -257,9 +271,15 @@ def calculate_capital_ratios(
 
 
 def get_grade_from_pd(pd: float) -> str:
-    """PD로부터 등급 추정"""
+    """PD로부터 등급 추정 (해당 PD를 커버하는 가장 우량한 등급).
+
+    이전 구현은 `pd <= grade_pd * 1.5` 로 50% 여유를 뒀는데, 그 결과
+    PD 0.017 → BBB(0.0115) 처럼 실제보다 한 단계 낙관적인 등급이 나오고
+    get_pd_from_grade()로 되돌리면 PD가 최대 -32% 왜곡됐다.
+    RWA·EL·가격결정이 모두 이 값을 쓰므로 여유폭 없이 상한으로 판정한다.
+    """
     for grade, grade_pd in sorted(GRADE_PD_MAP.items(), key=lambda x: x[1]):
-        if pd <= grade_pd * 1.5:
+        if pd <= grade_pd:
             return grade
     return 'B-'
 
@@ -280,7 +300,8 @@ FINANCIAL_BENCHMARKS = {
     'ier':             {'threshold': 1.5,   'operator': 'GE', 'label': '이자보상배율(배)'},
     'debt_dependency': {'threshold': 50.0,  'operator': 'LE', 'label': '차입금의존도(%)'},
     'dscr':            {'threshold': 1.25,  'operator': 'GE', 'label': 'DSCR(배)'},
-    'op_margin':       {'threshold': 0.0,   'operator': 'GE', 'label': '영업이익률(%)'},
+    # 기준값이 0이므로 곱셈 여유폭이 성립하지 않는다 → 절대 여유폭 5%p 사용
+    'op_margin':       {'threshold': 0.0,   'operator': 'GE', 'label': '영업이익률(%)', 'margin_abs': 5.0},
 }
 
 # 코베넌트 코드 → 재무비율 매핑
@@ -386,7 +407,10 @@ def calculate_financial_ratios(stmt: dict, prev_stmt: dict = None,
     debt_dependency = round(total_borrowing / total_assets * 100, 2) if total_assets > 0 else None
 
     # 현금흐름
-    _principal = annual_principal or (total_borrowing * 0.1)  # 미제공 시 총차입금의 10% 추정
+    # annual_principal=0 (만기일시상환)은 유효한 값이므로 None 과 구분해야 한다.
+    # `or` 로 처리하면 0이 falsy로 걸려 총차입금 10%가 원금으로 잡히고
+    # DSCR이 크게 과소평가된다 (EBITDA 100·이자 20·차입 1000 기준 5.0 → 0.83).
+    _principal = (total_borrowing * 0.1) if annual_principal is None else annual_principal
     dscr        = calculate_dscr(ebitda, _principal, interest_expense)
     ocf_ratio   = round(operating_cf / total_debt * 100, 2) if total_debt > 0 else None
 
@@ -411,6 +435,12 @@ def calculate_financial_ratios(stmt: dict, prev_stmt: dict = None,
 
     # 신호등 판정
     def _signal(value, benchmark_key):
+        """기준값 대비 여유폭으로 pass / warning / fail 판정.
+
+        여유폭을 곱셈으로만 잡으면 기준값이 0인 지표(op_margin)에서
+        pass 경계와 warning 경계가 같은 값(0)으로 붕괴해 warning이 나오지
+        않는다. 기준값이 0이면 절대 여유폭(margin_abs)으로 대체한다.
+        """
         if value is None:
             return 'N/A'
         b = FINANCIAL_BENCHMARKS.get(benchmark_key)
@@ -418,13 +448,17 @@ def calculate_financial_ratios(stmt: dict, prev_stmt: dict = None,
             return 'N/A'
         op = b['operator']
         th = b['threshold']
+        margin_abs = b.get('margin_abs', 5.0)
+
         if op == 'LE':
-            if value <= th * 0.8:  return 'pass'
-            if value <= th:         return 'warning'
+            pass_line = th * 0.8 if th != 0 else -margin_abs
+            if value <= pass_line: return 'pass'
+            if value <= th:        return 'warning'
             return 'fail'
         elif op == 'GE':
-            if value >= th * 1.5:  return 'pass'
-            if value >= th:         return 'warning'
+            pass_line = th * 1.5 if th != 0 else margin_abs
+            if value >= pass_line: return 'pass'
+            if value >= th:        return 'warning'
             return 'fail'
         return 'N/A'
 

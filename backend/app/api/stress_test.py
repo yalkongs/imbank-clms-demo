@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
 from ..core.database import get_db
-from ..services.calculations import calculate_stress_pd
+from ..services.calculations import calculate_stress_pd, calculate_stress_lgd
 
 router = APIRouter(prefix="/api/stress-test", tags=["Stress Test"])
 
@@ -111,9 +111,9 @@ def get_scenario_result(scenario_id: str, db: Session = Depends(get_db)):
     base_lgd = float(portfolio[2]) if portfolio[2] else 0.40
     portfolio_rwa = float(portfolio[3]) if portfolio[3] else base_rwa * 0.8
 
-    # 스트레스 적용
-    stressed_pd = min(base_pd * factors['pd'], 0.30)
-    stressed_lgd = min(base_lgd * factors['lgd'], 0.70)
+    # 스트레스 적용 — 상한은 calculations 모듈 단일 정의를 따른다
+    stressed_pd = calculate_stress_pd(base_pd, factors['pd'])
+    stressed_lgd = calculate_stress_lgd(base_lgd, factors['lgd'])
     stressed_rwa = base_rwa * factors['rwa']
 
     base_el = base_pd * base_lgd * total_exposure
@@ -155,7 +155,7 @@ def get_scenario_result(scenario_id: str, db: Session = Depends(get_db)):
         ind_rwa = float(ind[4]) if ind[4] else ind_exposure * 0.5
 
         sensitivity = industry_sensitivity.get(ind_code, 1.0)
-        ind_stressed_pd = min(ind_pd * factors['pd'] * sensitivity, 0.30)
+        ind_stressed_pd = calculate_stress_pd(ind_pd, factors['pd'], sensitivity)
         ind_stressed_rwa = ind_rwa * (1 + (factors['rwa'] - 1) * sensitivity)
         rwa_increase_rate = ((ind_stressed_rwa / ind_rwa) - 1) * 100 if ind_rwa > 0 else 0
 

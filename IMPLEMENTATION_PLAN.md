@@ -789,6 +789,58 @@ frontend/src/App.tsx                       라우팅 3개 추가
       `vercel.json` · `api/index.py`를 제거했다. README에 배포 절차와 체크리스트,
       CLAUDE.md에 함정(dist 커밋 필수)을 문서화.
 
+### 리스크 산식 정합성 감사 (2026-08-02)
+
+`calculations.py` · `credit_models.py` · `stress_test.py` · `ecl.py`를 README의
+「핵심 수리 모형」과 대조한 결과. 각 항목은 실제 값으로 재현해 확인했다.
+
+**수정 완료**
+
+- [x] **스트레스 PD/LGD 상한 이중 정의** — `calculate_stress_pd()`는 상한 1.0인데
+      `stress_test.py`는 이 함수를 import만 하고 실제로는 `min(pd*f, 0.30)`을 인라인으로
+      계산했다(죽은 코드 + 상한 불일치). 같은 입력에 0.70 vs 0.30으로 2.3배 차이.
+      → 상한을 `STRESS_PD_CAP`/`STRESS_LGD_CAP` 단일 정의로 통일하고
+      `calculate_stress_lgd()`를 신설, `stress_test.py`가 이를 호출하도록 변경.
+- [x] **`_signal()` 신호등의 warning 구간 소실** — 여유폭을 곱셈으로만 계산해
+      기준값이 0인 `op_margin`에서 pass 경계와 warning 경계가 모두 0으로 붕괴했다.
+      영업이익률이 0% 이상이면 전부 pass, 음수만 fail로 3단계가 2단계로 퇴화.
+      → 기준값이 0이면 절대 여유폭(`margin_abs`, 5%p)을 쓰도록 수정.
+- [x] **`get_grade_from_pd()`의 낙관 편향** — `pd <= grade_pd * 1.5` 로 50% 여유를 둬
+      PD 0.017이 BBB(0.0115)로 매겨졌다. `get_pd_from_grade()`로 되돌리면 PD가
+      **-32%** 왜곡되고, 이 값이 RWA·EL·가격결정에 그대로 전파된다.
+      → 여유폭을 제거해 상한 기준으로 판정(왜곡 -32% → +7~9%, 보수적 방향).
+- [x] **DSCR의 만기일시상환 오분류** — `annual_principal or (total_borrowing*0.1)`에서
+      원금상환액 0(만기일시상환)이 falsy로 걸려 추정치로 덮어써졌다.
+      EBITDA 100·이자 20·차입 1000 기준 DSCR이 5.0 → 0.83으로 뒤집혀 fail 판정.
+      → `is None` 검사로 0과 미제공을 구분.
+- [x] **README의 RWA 자본요구량 공식 표기 오류** — `K = LGD × [Φ(…) − PD×LGD]`로
+      적혀 LGD가 중복 곱해진다(LGD²·PD 항 발생). 표기대로 계산하면 RWA가 +6.5% 어긋난다.
+      구현(`lgd*Φ(…) − pd*lgd`)은 Basel 표준과 일치(상대오차 1e-8)하므로 문서만 수정.
+- [x] **EWS 종합점수 가중치 설명 오류** — `ews_advanced.py`의 methodology가
+      4채널(0.40 재무 + 0.20×3)로 적혀 있었으나 실제 산출은 상장 6채널 / 비상장 5채널이다.
+      → 실제 생성 로직(`generate_ews_leading_data.py:534-549`)에 맞게 수정.
+
+**미해결 — 정책 판단 필요**
+
+- [ ] **EWS 점수 임계값이 코드 5곳에서 제각각** (아래 표). 특히 런타임 분류(60)와
+      시드 데이터 생성(75/55)이 달라, **같은 고객이 월말 재분류를 돌리기 전후로
+      건전성 등급이 바뀐다.** 정본을 정하고 통일해야 하며, `risk_level` 라벨 체계까지
+      맞추려면 EWS 데이터 재생성이 필요하다.
+
+  | 위치 | 경계 | 라벨 | 상태 |
+  |------|------|------|------|
+  | README / 본 문서 | 75 / 55 / 35 | NORMAL·WATCH·WARNING·CRITICAL | 기준 문서 |
+  | `generate_ews_leading_data.py:36-40` | 75 / 55 / 35 | 동일 | **호출처 없는 죽은 코드** |
+  | `generate_ews_leading_data.py:556` | 70 / 50 / 30 | LOW·MEDIUM·HIGH·CRITICAL | **DB 실제 값** |
+  | `generate_phase2_data.py:102` | 75 / 55 | 자산건전성 분류 시드 | 기준 문서와 일치 |
+  | `calculations.classify_asset_by_ews` | 60 | 최대 요주의까지만 | **근거 없는 값** |
+  | `calculations.determine_sicr` | 55 | SICR 트리거 | DB 경계(50)와 불일치 |
+
+- [ ] **`determine_sicr()`의 Stage 3 조건에 `pd_current >= 0.20` 포함** — IFRS 9의
+      Stage 3은 객관적 손상 증거를 요건으로 하는데, PD 20%(자산건전성상 회수의문 시작점)
+      만으로 손상 처리하면 충당금이 과대 계상될 수 있다. 설계 문서(Module 5)에는
+      PD 임계값 규정이 없다. 유지할지 DPD 90일 단독 조건으로 좁힐지 결정 필요.
+
 ### 미착수
 
 - [ ] **번들 크기 최적화** — 단일 청크 1.12MB (gzip 282KB). `manualChunks` 또는 라우트별
