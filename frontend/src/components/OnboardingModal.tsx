@@ -54,29 +54,37 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="modal-in w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
-        {/* 헤더 */}
-        <div className="relative px-6 pt-6 pb-5 rounded-t-2xl bg-gradient-to-br from-blue-600 to-blue-800 text-white overflow-hidden">
-          <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full" style={{ background: 'radial-gradient(circle, rgba(174,234,0,0.35), transparent 70%)' }} />
+        {/* 헤더 — 공식 로고는 흰 배경 시그니처이므로 흰 바탕에 두고,
+            브랜드 그라디언트(민트→라임)는 그 아래 띠로 쓴다. */}
+        <div className="relative rounded-t-2xl overflow-hidden">
           <button
             onClick={onClose}
             aria-label="닫기"
-            className="absolute top-4 right-4 p-1.5 rounded-lg text-white/80 hover:bg-white/15"
+            className="absolute top-4 right-4 z-10 p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
             <X size={18} />
           </button>
-          <div className="flex items-center gap-3 relative">
-            <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center">
-              <Building2 size={24} />
+
+          <div className="px-6 pt-6 pb-5 bg-white">
+            <div className="flex items-center gap-4">
+              <img
+                src="/brand/imbank-logo-h-kr.jpg"
+                alt="iM뱅크"
+                className="h-9 w-auto"
+              />
+              <div className="pl-4 border-l border-gray-200">
+                <h1 className="text-xl font-bold leading-tight text-gray-900">CLMS</h1>
+                <p className="text-sm text-gray-500">기업여신 전(全) 생애주기 통합 관리 시스템</p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-xl font-bold leading-tight">iM뱅크 CLMS</h1>
-              <p className="text-sm text-white/80">기업여신 전(全) 생애주기 통합 관리 시스템</p>
-            </div>
+            <p className="mt-4 text-sm text-gray-600 leading-relaxed">
+              심사 · 실행 · 모니터링 · 회수까지 — 기업여신의 리스크를 하나의 화면에서.
+              Basel · IFRS9 기반의 리스크 계산 엔진과 5채널 조기경보(EWS)를 갖춘 PoC 데모입니다.
+            </p>
           </div>
-          <p className="mt-4 text-sm text-white/90 leading-relaxed relative">
-            심사 · 실행 · 모니터링 · 회수까지 — 기업여신의 리스크를 하나의 화면에서.
-            Basel · IFRS9 기반의 리스크 계산 엔진과 5채널 조기경보(EWS)를 갖춘 PoC 데모입니다.
-          </p>
+
+          {/* 브랜드 그라디언트 띠 */}
+          <div className="im-gradient h-1.5" />
         </div>
 
         {/* 기능 소개 */}

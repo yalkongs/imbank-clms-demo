@@ -235,6 +235,81 @@ body {
 /* 브랜드 그라디언트 (심볼의 민트→라임) */
 .im-gradient { background: var(--im-gradient); }
 
+/* ============================================================
+   상태 표시 애니메이션
+   공식 스펙: "Animation: Subtle. No bouncy springs. Fades preferred."
+   깜빡임(on/off)은 시선을 뺏고 브랜드 톤과 어긋나므로, 밝기와 확산 링으로
+   '살아있음'을 표현한다. 위험도가 높을수록 주기를 짧게 가져간다.
+   ============================================================ */
+
+/* 신호등 점 — 색은 상태 클래스가 정한다 */
+.status-dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 9999px;
+  position: relative;
+  flex: none;
+}
+
+/* 확산하는 링 — 실시간·진행중처럼 '지금 동작 중'을 나타낼 때 */
+.status-dot.is-live::after,
+.status-dot.is-running::after,
+.status-dot.is-critical::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: inherit;
+  animation: status-ring 2s var(--ease-out) infinite;
+}
+
+@keyframes status-ring {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  70%  { transform: scale(2.6); opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+@keyframes status-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.45; }
+}
+
+.status-dot.is-live     { background: var(--im-mint); animation: status-breathe 2.4s ease-in-out infinite; }
+.status-dot.is-running  { background: var(--im-blue); animation: status-breathe 1.6s ease-in-out infinite; }
+.status-dot.is-safe     { background: var(--im-mint); }
+.status-dot.is-warning  { background: #F5A524; animation: status-breathe 1.8s ease-in-out infinite; }
+.status-dot.is-critical { background: #E5484D; animation: status-breathe 1.1s ease-in-out infinite; }
+.status-dot.is-idle     { background: #A1A1A8; }
+
+/* 위험/경보 배지 — 테두리가 은은하게 맥동한다 */
+.badge-alert {
+  animation: badge-alert 1.6s ease-in-out infinite;
+}
+@keyframes badge-alert {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.45); }
+  60%      { box-shadow: 0 0 0 6px rgba(229, 72, 77, 0); }
+}
+
+/* 진행중 행/카드 — 민트 쪽으로 아주 옅게 숨쉰다 */
+.is-processing {
+  animation: processing-tint 2.2s ease-in-out infinite;
+}
+@keyframes processing-tint {
+  0%, 100% { background-color: transparent; }
+  50%      { background-color: rgba(0, 199, 169, 0.06); }
+}
+
+/* 움직임을 줄이도록 설정한 사용자에게는 애니메이션을 끈다 (접근성) */
+@media (prefers-reduced-motion: reduce) {
+  .status-dot,
+  .status-dot::after,
+  .badge-alert,
+  .is-processing,
+  .pulse-soft {
+    animation: none !important;
+  }
+}
+
 /* --- Gradient Mesh 테마 ---
    body에 직접 소프트 radial 메시를 깔고(fixed), 셸/카드는 프로스티드 처리.
    컴포넌트 로직 변경 없이 data-theme 속성만으로 전환. */

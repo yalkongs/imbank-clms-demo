@@ -104,7 +104,7 @@ export default function Dashboard() {
         <div className="flex items-center space-x-4">
           <RegionFilter value={region} onChange={setRegion} />
           <div className="flex items-center space-x-2 text-sm text-gray-500">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            <span className="status-dot is-live"></span>
             <span>실시간 업데이트</span>
           </div>
         </div>
@@ -342,7 +342,7 @@ export default function Dashboard() {
               <AlertTriangle size={18} className="text-orange-500" />
               <h3 className="text-sm font-semibold text-gray-800">자동화 액션 현황</h3>
               {automationData.critical_pending > 0 && (
-                <span className="px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
+                <span className="badge-alert px-2 py-0.5 bg-red-100 text-red-700 rounded-full text-xs font-medium">
                   CRITICAL {automationData.critical_pending}건
                 </span>
               )}
@@ -378,9 +378,9 @@ export default function Dashboard() {
               {automationData.recent_actions.slice(0, 4).map((a: any, i: number) => (
                 <div key={i} className="flex items-center justify-between text-xs bg-gray-50 rounded px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${
-                      a.priority === 'CRITICAL' ? 'bg-red-500' :
-                      a.priority === 'HIGH' ? 'bg-orange-500' : 'bg-gray-400'
+                    <span className={`status-dot ${
+                      a.priority === 'CRITICAL' ? 'is-critical' :
+                      a.priority === 'HIGH' ? 'is-warning' : 'is-idle'
                     }`} />
                     <span className="text-gray-500">{a.trigger_label}</span>
                     <span className="font-medium text-gray-800">{a.company_name || a.customer_id}</span>

@@ -30,6 +30,10 @@ import math
 # (옛 절대 경로 /Users/yalkongs/code/Projects/... 가 하드코딩돼 있어 실행이 불가능했다)
 DB_PATH = str(pathlib.Path(__file__).parent / 'imbank_demo.db')
 
+import sys
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from base_date import AS_OF_DATE, month_ends, months_back  # noqa: E402
+
 def get_connection():
     return sqlite3.connect(DB_PATH)
 
@@ -762,10 +766,10 @@ def generate_vintage_analysis(conn):
 
     vintages = []
 
-    # 2021년 1월부터 2024년 6월까지 월별 OVERALL 데이터
-    start_date = datetime(2021, 1, 1)
-    for i in range(42):  # 3.5년
-        vintage_month = (start_date + timedelta(days=i*30)).strftime('%Y-%m')
+    # 기준월부터 거슬러 42개월(3.5년) 월별 OVERALL 데이터.
+    # 종전에는 2021-01-01 에 30일씩 더해, 같은 달이 두 번 나와
+    # vintage_id UNIQUE 제약을 위반하며 생성 자체가 실패했다.
+    for vintage_month in months_back(42):
 
         # 기본 건수/금액 (계절성 반영)
         month_num = int(vintage_month.split('-')[1])
@@ -806,7 +810,7 @@ def generate_vintage_analysis(conn):
     # 등급별 Vintage (최근 12개월)
     for grade in ['A+', 'A', 'BBB+', 'BBB', 'BB+', 'BB', 'B+', 'B']:
         for i in range(12):
-            vintage_month = (datetime(2024, 1, 1) - timedelta(days=i*30)).strftime('%Y-%m')
+            vintage_month = months_back(12)[11 - i]   # 기준월부터 거슬러 12개월
 
             # 등급별 기본 연체율 차등
             grade_factor = {
@@ -848,7 +852,7 @@ def generate_vintage_analysis(conn):
     # 업종별 Vintage (최근 6개월)
     for ind_code in ['MFG001', 'MFG003', 'MFG004', 'SVC001', 'SVC010', 'CON001', 'REA001']:
         for i in range(6):
-            vintage_month = (datetime(2024, 1, 1) - timedelta(days=i*30)).strftime('%Y-%m')
+            vintage_month = months_back(6)[5 - i]    # 기준월부터 거슬러 6개월
 
             # 업종별 리스크 차등
             industry_factor = {
@@ -1194,10 +1198,10 @@ def generate_capital_positions(conn):
 
     positions = []
 
-    # 2022년 1월부터 2024년 1월까지 월말 데이터
-    start_date = datetime(2022, 1, 31)
-    for i in range(25):
-        base_date = start_date + timedelta(days=i*30)
+    # 기준월부터 거슬러 25개월치 월말 스냅샷.
+    # 종전에는 2022-01-31 고정 시작에 30일씩 더해, 화면 기준일과 2년 이상
+    # 어긋나고 날짜도 월말이 아닌 '2026-02-07' 형태로 밀려 있었다.
+    for base_date in month_ends(25):
         base_date_str = base_date.strftime('%Y-%m-%d')
 
         # 자본 구성
@@ -1259,9 +1263,9 @@ def generate_model_performance(conn):
     models = ['MDL_CORP_RATING', 'MDL_RETAIL_RATING', 'MDL_LGD', 'MDL_EAD', 'MDL_PRICING']
 
     for model in models:
-        # 2022년 1월부터 2024년 1월까지
-        for i in range(25):
-            mon_date = (datetime(2022, 1, 1) + timedelta(days=i*30)).strftime('%Y-%m-%d')
+        # 기준월부터 거슬러 25개월치 월말 스냅샷
+        for mon_dt in month_ends(25):
+            mon_date = mon_dt.strftime('%Y-%m-%d')
 
             # 기본 성능 지표 (시간에 따라 약간 변동)
             base_gini = random.uniform(0.55, 0.70)

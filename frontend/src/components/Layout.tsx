@@ -183,7 +183,7 @@ export default function Layout() {
         {/* 하단 정보 */}
         <div className="p-4 border-t border-gray-200">
           <div className="flex items-center text-xs text-gray-500">
-            <span className="w-2 h-2 bg-green-500 rounded-full mr-2"></span>
+            <span className="status-dot is-live mr-2"></span>
             시스템 정상 운영중
           </div>
           <p className="text-xs text-gray-400 mt-1">v1.0.0 | Demo Mode</p>

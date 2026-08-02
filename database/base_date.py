@@ -32,6 +32,20 @@ def month_starts(n: int = 12) -> list:
     return [date(int(s[:4]), int(s[5:]), 1) for s in months_back(n)]
 
 
+def month_ends(n: int = 12) -> list:
+    """기준월부터 거슬러 n개월치 각 월 말일 date 목록 (오름차순).
+
+    자본비율처럼 월말 스냅샷으로 쌓이는 지표에 쓴다. 30일씩 더하는 방식은
+    달마다 날짜가 밀려 '2026-02-07' 같은 어정쩡한 기준일이 나온다.
+    """
+    out = []
+    for s in months_back(n):
+        y, m = int(s[:4]), int(s[5:])
+        ny, nm = (y + 1, 1) if m == 12 else (y, m + 1)
+        out.append(date(ny, nm, 1) - timedelta(days=1))
+    return out
+
+
 def days_before(days: int) -> date:
     """기준일에서 days 일 전."""
     return AS_OF_DATE - timedelta(days=days)
