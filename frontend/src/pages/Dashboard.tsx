@@ -86,7 +86,7 @@ export default function Dashboard() {
 
   // 포트폴리오 등급 분포 데이터
   const gradeDistribution = [
-    { name: 'AAA~A', value: 35, color: '#1e40af' },
+    { name: 'AAA~A', value: 35, color: '#00897B' },
     { name: 'BBB', value: 30, color: '#10b981' },
     { name: 'BB', value: 20, color: '#f59e0b' },
     { name: 'B이하', value: 15, color: '#ef4444' }

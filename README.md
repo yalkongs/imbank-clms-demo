@@ -20,6 +20,7 @@ Basel II/III IRB 방식의 신용리스크 계량화 체계를 기반으로, 19�
 - [시스템 아키텍처](#시스템-아키텍처)
 - [프로젝트 구조](#프로젝트-구조)
 - [설치 및 실행](#설치-및-실행)
+- [배포](#배포)
 - [API 엔드포인트](#api-엔드포인트)
 - [데이터 모델](#데이터-모델)
 - [시스템 상수 및 가정치](#시스템-상수-및-가정치)
@@ -163,7 +164,7 @@ Basel II/III IRB 방식의 신용리스크 계량화 체계를 기반으로, 19�
   b = (0.11852 - 0.05478 × ln(max(PD, 0.0001)))²
 
 자본요구량:
-  K = LGD × [Φ(Φ⁻¹(PD)/√(1-R) + √(R/(1-R))×Φ⁻¹(0.999)) - PD×LGD]
+  K = LGD × Φ(Φ⁻¹(PD)/√(1-R) + √(R/(1-R))×Φ⁻¹(0.999)) - PD×LGD
   K_adj = K × (1+(M-2.5)×b) / (1-1.5×b)
 
 위험가중자산:
@@ -209,6 +210,41 @@ F_pd: BASELINE=1.0, MILD=1.3, MODERATE=1.8, SEVERE=2.5, EXTREME=3.5
 비상장: S = 0.30×Txn + 0.20×Pub + 0.20×News + 0.15×Supply + 0.15×Fin
 
 등급: NORMAL(≥75) / WATCH(≥55) / WARNING(≥35) / CRITICAL(<35)
+```
+
+### 자산건전성 분류 및 대손충당금 — 감독규정 기준
+
+```
+연체기간 분류 (은행업감독업무시행세칙 별표3)
+  정상       연체 30일 미만
+  요주의     연체 30일 이상 90일 미만          (1개월 이상 3개월 미만)
+  고정       연체 90일 이상 중 회수예상가액 해당분
+  회수의문   회수예상가액 초과분 중 연체 90~364일
+  추정손실   회수예상가액 초과분 중 연체 365일 이상  (12개월 이상)
+
+  → 3개월 이상 연체 건은 담보 인정가액을 기준으로 분할분류한다.
+    PD·EWS 기준과 함께 가장 불리한 등급을 적용(보수주의).
+
+대손충당금 최저적립률 (은행업감독규정 제29조, 기업여신)
+  정상 0.85% / 요주의 7% / 고정 20% / 회수의문 50% / 추정손실 100%
+
+  회계상 충당금은 IFRS 9 ECL로 적립하고, 그 금액이 위 최저적립액에
+  미달하면 차액을 대손준비금으로 적립한다.
+```
+
+### IFRS 9 Stage 판정 (기업회계기준서 제1109호)
+
+```
+Stage 1  신용위험의 유의적 증가 없음                → 12개월 ECL
+Stage 2  SICR 발생                                  → 전기간 ECL
+         트리거: PD 2배 상승 | 등급 2 notch 하락
+                 | EWS < 55 | 연체 30일 이상(5.5.11 추정)
+Stage 3  신용손상 발생 (부록A)                      → 개별 평가
+         요건: 연체 90일 초과(B5.5.37 채무불이행 추정)
+               또는 워크아웃 등 객관적 손상 증거
+
+  PD 수치 단독(예: PD ≥ 20%)은 기준서상 손상 요건이 아니므로
+  Stage 3 판정에 쓰지 않는다.
 ```
 
 상세 수식은 [기술 보고서](CLMS_Technical_Report.md) 참조.
@@ -380,6 +416,56 @@ cd imbank-clms-demo
 lsof -ti:8000 | xargs kill 2>/dev/null
 lsof -ti:3000 | xargs kill 2>/dev/null
 ```
+
+---
+
+## 배포
+
+**배포 정본은 Render 하나다** (`render.yaml`). 과거에 Vercel 구성이 함께 있었으나
+서버리스 환경의 읽기 전용 파일시스템이 SQLite 데모와 맞지 않아 제거했다.
+
+### 구조
+
+```
+단일 uvicorn 프로세스
+  ├─ /api/*   FastAPI 라우터 25개
+  └─ /*       사전 빌드된 SPA (frontend/dist) 를 StaticFiles + FileResponse 로 서빙
+```
+
+프론트엔드를 별도 호스팅하지 않고 백엔드가 함께 서빙한다
+(`backend/app/main.py:110-127`). 따라서 **`frontend/dist`는 리포에 커밋되어야 한다.**
+`.gitignore`의 Python `dist/` 패턴에 걸리지 않도록 `!frontend/dist/` 예외가 있으니
+지우지 말 것. 데모 DB(`database/imbank_demo.db`)도 같은 이유로 `*.db` 예외로 추적한다.
+
+### 배포 전 체크리스트
+
+```bash
+# 1. 프론트엔드 빌드 — 번들 해시가 바뀌므로 반드시 dist 전체를 커밋한다
+cd frontend && npm run build
+
+# 2. index.html이 참조하는 asset이 실제로 존재하는지 확인
+cd .. && grep -o '/assets/[^"]*' frontend/dist/index.html | \
+  while read f; do [ -f "frontend/dist$f" ] && echo "OK $f" || echo "MISSING $f"; done
+
+# 3. 로컬에서 Render와 동일한 방식으로 기동해 확인
+cd backend && uvicorn app.main:app --port 8177
+#   /health, /api/dashboard/summary, SPA 딥링크(/covenant) 모두 200 이어야 한다
+
+git add frontend/dist && git commit
+```
+
+2단계에서 `MISSING`이 나오면 배포된 데모가 백지 화면이 된다. 신규 빌드 산출물을
+커밋하지 않고 `index.html`만 갱신했을 때 발생하는 전형적인 실수다.
+
+### 설정 요약
+
+| 항목 | 값 |
+|------|-----|
+| 런타임 | Python 3.13.4 |
+| 리전 | Singapore (무료 플랜 중 한국 최근접) |
+| 빌드 | `pip install -r requirements.txt` |
+| 기동 | `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| 헬스체크 | `/health` |
 
 ---
 

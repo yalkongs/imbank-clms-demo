@@ -20,15 +20,15 @@ import {
 
 // 색상 팔레트
 export const COLORS = {
-  primary: '#1e40af',
-  secondary: '#3b82f6',
-  accent: '#06b6d4',
-  success: '#10b981',
-  warning: '#f59e0b',
-  danger: '#ef4444',
-  critical: '#dc2626',
-  gray: '#6b7280',
-  palette: ['#1e40af', '#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899']
+  primary: '#00BFA5',    // iM 민트
+  secondary: '#00897B',  // 딥 민트
+  accent: '#4DD0E1',     // 틸
+  success: '#16A34A',
+  warning: '#F59E0B',
+  danger: '#EF4444',
+  critical: '#DC2626',
+  gray: '#6B7280',
+  palette: ['#00BFA5', '#4DD0E1', '#84CC16', '#00897B', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899']
 };
 
 // 공통 툴팁 스타일

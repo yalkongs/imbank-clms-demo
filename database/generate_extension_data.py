@@ -15,13 +15,24 @@ iM뱅크 CLMS - 확장 기능 데이터 생성 스크립트
 """
 
 import sqlite3
+import pathlib
+import sys
 import random
 from datetime import datetime, timedelta
 import uuid
 import json
 import math
 
-DB_PATH = '/Users/yalkongs/code/Projects/imbank-clms-demo/database/imbank_demo.db'
+# 리포 위치에 종속되지 않도록 스크립트 기준 상대 경로로 잡는다.
+# (옛 절대 경로 /Users/yalkongs/code/Projects/... 가 하드코딩돼 있어 실행이 불가능했다)
+DB_PATH = str(pathlib.Path(__file__).parent / 'imbank_demo.db')
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from base_date import AS_OF_DATE  # noqa: E402
+
+# 실행 시각이 아니라 시스템 기준일을 쓴다. 실행일 기준으로 만들면
+# 날이 갈수록 데이터 시점이 화면 기준일과 어긋난다.
+_NOW = datetime(AS_OF_DATE.year, AS_OF_DATE.month, AS_OF_DATE.day)
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
@@ -38,7 +49,7 @@ def random_date(start_year=2023, end_year=2024):
 
 def execute_schema_extension(conn):
     """스키마 확장 SQL 실행"""
-    with open('/Users/yalkongs/code/Projects/imbank-clms-demo/database/schema_extension.sql', 'r') as f:
+    with open(str(pathlib.Path(__file__).parent / 'schema_extension.sql'), 'r') as f:
         sql = f.read()
     cursor = conn.cursor()
     cursor.executescript(sql)
@@ -89,7 +100,7 @@ def generate_ews_indicator_values(conn, indicator_ids):
         for indicator_id in indicator_ids:
             # 최근 6개월 데이터 생성
             for month_offset in range(6):
-                date = (datetime.now() - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
+                date = (_NOW - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
 
                 # 지표별 값 범위 설정
                 if 'IND_001' in indicator_id:  # 매출채권회전일
@@ -216,18 +227,64 @@ def generate_external_signals(conn):
     conn.commit()
     print(f"✓ 외부 신호: {len(signals)}건 생성")
 
+# 신용등급대별 EWS 채널 점수 모수 (평균, 표준편차)
+# EWS는 "위험 신호가 없으면 높은 점수"인 지표이므로, 정상 차주는 고득점에 몰리고
+# 소수만 낮은 꼬리를 형성해야 조기경보로 기능한다.
+# 종전에는 random.uniform(0,100) 균등분포로 뽑아 점수가 차주의 실제 신용도와
+# 무관한 난수가 됐고, 평균 50 · CRITICAL(35 미만) 6.1% 라는 분포를 만들었다.
+# 그 결과 EWS만으로 여신의 15%가 요주의로 강등됐다.
+EWS_SCORE_PROFILE = {
+    'PRIME':  (86.0, 6.0),   # A- 이상
+    'MID':    (76.0, 8.0),   # BBB+ ~ BBB-
+    'SUB':    (58.0, 12.0),  # BB+ 이하
+}
+
+# 등급과 무관하게 위험 징후가 포착된 차주 비중.
+# EWS의 존재 이유가 '우량 등급인데 징후가 먼저 나타나는' 경우를 잡는 것이므로
+# 등급 기반 점수만으로는 경보가 전혀 발생하지 않는다. 이 비율이 CRITICAL 구간을 만든다.
+EWS_DISTRESS_RATE = 0.02
+EWS_DISTRESS_PROFILE = (30.0, 12.0)
+
+
+def _ews_profile_for(grade: str) -> tuple:
+    if not grade:
+        return EWS_SCORE_PROFILE['MID']
+    g = grade.upper()
+    if g.startswith('A') or g.startswith('AA'):
+        return EWS_SCORE_PROFILE['PRIME']
+    if g.startswith('BBB'):
+        return EWS_SCORE_PROFILE['MID']
+    return EWS_SCORE_PROFILE['SUB']
+
+
+def _sample_channel_score(mu: float, sigma: float) -> float:
+    return round(max(0.0, min(100.0, random.gauss(mu, sigma))), 1)
+
+
 def generate_composite_scores(conn):
-    """종합 EWS 점수 생성"""
+    """종합 EWS 점수 생성 — 차주 신용등급에 연동한다."""
     cursor = conn.cursor()
-    cursor.execute("SELECT customer_id FROM customer")
-    customers = [row[0] for row in cursor.fetchall()]
+    # 최신 신용등급을 함께 읽어 등급대별로 점수 분포를 달리한다.
+    cursor.execute("""
+        SELECT c.customer_id, (
+            SELECT crr.final_grade FROM credit_rating_result crr
+            WHERE crr.customer_id = c.customer_id
+            ORDER BY crr.rating_date DESC LIMIT 1
+        )
+        FROM customer c
+    """)
+    customers = cursor.fetchall()
 
     scores = []
-    for customer_id in customers:
-        financial = round(random.uniform(0, 100), 1)
-        operational = round(random.uniform(0, 100), 1)
-        external = round(random.uniform(0, 100), 1)
-        supply_chain = round(random.uniform(0, 100), 1)
+    for customer_id, grade in customers:
+        if random.random() < EWS_DISTRESS_RATE:
+            mu, sigma = EWS_DISTRESS_PROFILE
+        else:
+            mu, sigma = _ews_profile_for(grade)
+        financial = _sample_channel_score(mu, sigma)
+        operational = _sample_channel_score(mu, sigma)
+        external = _sample_channel_score(mu, sigma)
+        supply_chain = _sample_channel_score(mu, sigma)
         composite = round(financial * 0.4 + operational * 0.2 + external * 0.2 + supply_chain * 0.2, 1)
 
         risk_level = 'LOW' if composite >= 70 else 'MEDIUM' if composite >= 50 else 'HIGH' if composite >= 30 else 'CRITICAL'
@@ -242,7 +299,7 @@ def generate_composite_scores(conn):
         scores.append((
             f"ECS_{generate_uuid()}",
             customer_id,
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             financial,
             operational,
             external,
@@ -253,8 +310,12 @@ def generate_composite_scores(conn):
             recommendations[risk_level]
         ))
 
+    # score_id 를 매번 새 uuid 로 만들기 때문에 INSERT OR REPLACE 로는 갱신이 되지 않고
+    # 실행할 때마다 고객당 행이 하나씩 늘어난다(1,010 → 2,020 → 3,030 ...).
+    # 재실행 가능하도록 기존 행을 지우고 다시 넣는다.
+    cursor.execute("DELETE FROM ews_composite_score")
     cursor.executemany("""
-        INSERT OR REPLACE INTO ews_composite_score
+        INSERT INTO ews_composite_score
         (score_id, customer_id, score_date, financial_score, operational_score,
          external_score, supply_chain_score, composite_score, risk_level,
          predicted_default_prob, recommendation)
@@ -276,7 +337,7 @@ def generate_economic_cycle(conn):
     phases = ['EXPANSION', 'PEAK', 'CONTRACTION', 'TROUGH']
 
     for month_offset in range(24):
-        date = (datetime.now() - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
+        date = (_NOW - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
         phase_idx = (month_offset // 6) % 4
         phase = phases[phase_idx]
 
@@ -429,7 +490,7 @@ def generate_customer_profitability(conn):
         profitability_data.append((
             f"CP_{generate_uuid()}",
             customer_id,
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             round(loan_revenue, 0),
             round(loan_cost, 0),
             round(loan_el, 0),
@@ -735,7 +796,7 @@ def generate_real_estate_index(conn):
         for prop_type in property_types:
             base_index = 100
             for month_offset in range(12):
-                date = (datetime.now() - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
+                date = (_NOW - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
 
                 # 지역/유형별 변동성 차이
                 volatility = 0.02 if region == 'SEOUL' else 0.03 if region == 'GYEONGGI' else 0.04
@@ -828,7 +889,7 @@ def generate_collateral_valuations(conn):
 
         base_value = current_value
         for month_offset in range(6):
-            date = (datetime.now() - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
+            date = (_NOW - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
 
             change_pct = random.uniform(change_lo, change_hi)
             new_value = base_value * (1 + change_pct)
@@ -933,7 +994,7 @@ def generate_portfolio_optimization(conn):
 
     for i in range(5):
         run_id = f"OPT_{generate_uuid()}"
-        run_date = (datetime.now() - timedelta(days=30*i)).strftime('%Y-%m-%d %H:%M:%S')
+        run_date = (_NOW - timedelta(days=30*i)).strftime('%Y-%m-%d %H:%M:%S')
 
         current_portfolio = {}
         optimal_portfolio = {}
@@ -1054,7 +1115,7 @@ def generate_workout_data(conn):
             strategy,
             round(exposure * expected_recovery_rate, 0),
             round(expected_recovery_rate, 3),
-            (datetime.now() + timedelta(days=random.randint(90, 365))).strftime('%Y-%m-%d'),
+            (_NOW + timedelta(days=random.randint(90, 365))).strftime('%Y-%m-%d'),
             round(exposure * actual_recovery_rate, 0) if actual_recovery_rate else None,
             round(actual_recovery_rate, 3) if actual_recovery_rate else None,
             random_date(2023, 2024) if status in ['RECOVERED', 'LIQUIDATED', 'WRITTEN_OFF'] else None
@@ -1108,10 +1169,10 @@ def generate_workout_data(conn):
                 random_date(2023, 2024),
                 round(exposure, 0),
                 round(original_rate, 4),
-                (datetime.now() + timedelta(days=random.randint(30, 365))).strftime('%Y-%m-%d'),
+                (_NOW + timedelta(days=random.randint(30, 365))).strftime('%Y-%m-%d'),
                 round(exposure - haircut, 0),
                 round(new_rate, 4),
-                (datetime.now() + timedelta(days=random.randint(365, 1825))).strftime('%Y-%m-%d'),
+                (_NOW + timedelta(days=random.randint(365, 1825))).strftime('%Y-%m-%d'),
                 round(haircut, 0),
                 random.randint(0, 12),
                 round(haircut + (exposure * (original_rate - new_rate) * 3), 0),
@@ -1213,7 +1274,7 @@ def generate_esg_data(conn):
         assessments.append((
             f"ESG_{generate_uuid()}",
             customer_id,
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             round(e_score, 1),
             round(carbon_intensity, 1),
             round(random.uniform(0.3, 0.9), 2),
@@ -1313,7 +1374,7 @@ def generate_alm_data(conn):
 
         gaps.append((
             f"IRG_{generate_uuid()}",
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             bucket,
             round(fixed_assets, 0),
             round(floating_assets, 0),
@@ -1374,7 +1435,7 @@ def generate_alm_data(conn):
 
         results.append((
             f"ASR_{generate_uuid()}",
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             scenario_id,
             current_nim,
             round(stressed_nim, 4),
@@ -1409,7 +1470,7 @@ def generate_alm_data(conn):
 
         hedges.append((
             f"HP_{generate_uuid()}",
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             inst[0],
             round(notional, 0),
             inst[1],
@@ -1417,7 +1478,7 @@ def generate_alm_data(conn):
             inst[3] + random.uniform(-0.5, 0.5),
             'CD91' if inst[2] == 'FLOATING' else None,
             random.uniform(-0.1, 0.1),
-            (datetime.now() + timedelta(days=random.randint(365, 1825))).strftime('%Y-%m-%d'),
+            (_NOW + timedelta(days=random.randint(365, 1825))).strftime('%Y-%m-%d'),
             round(random.uniform(-50, 50) * 1e9, 0),
             round(random.uniform(-0.5, 0.5), 4),
             round(notional * 0.0001, 0),
@@ -1439,7 +1500,7 @@ def generate_alm_data(conn):
         if abs(current_gap) > 200 * 1e9:
             recommendations.append((
                 f"HR_{generate_uuid()}",
-                datetime.now().strftime('%Y-%m-%d'),
+                _NOW.strftime('%Y-%m-%d'),
                 bucket,
                 round(current_gap, 0),
                 0,

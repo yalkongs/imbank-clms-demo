@@ -12,6 +12,7 @@ from datetime import date
 import uuid
 
 from ..core.database import get_db
+from ..core.config import AS_OF_DATE
 from ..services.calculations import (
     determine_sicr,
     calculate_ecl_stage1,
@@ -277,7 +278,7 @@ def calculate_ecl_for_facility(
     개별 여신 ECL 재산출
     — PD/LGD 최신값 + SICR 판별 → Stage 결정 → ECL 산출 → 저장
     """
-    cd = calc_date or date.today().strftime('%Y-%m-%d')
+    cd = calc_date or AS_OF_DATE.strftime('%Y-%m-%d')
 
     fac = db.execute(
         text("""
@@ -286,7 +287,9 @@ def calculate_ecl_for_facility(
                    NULL AS credit_grade, rp.ttc_pd AS pd, rp.lgd
             FROM facility f
             JOIN customer c ON f.customer_id = c.customer_id
-            LEFT JOIN risk_parameter rp ON c.customer_id = rp.customer_id
+            -- risk_parameter 는 customer_id 를 갖지 않는다(application_id 기준).
+            -- 기존의 c.customer_id = rp.customer_id 조인은 항상 500을 냈다.
+            LEFT JOIN risk_parameter rp ON f.application_id = rp.application_id
             WHERE f.facility_id = :fid
         """),
         {"fid": facility_id}
@@ -317,14 +320,16 @@ def calculate_ecl_for_facility(
     if fac[5]:
         try:
             mat = date.fromisoformat(str(fac[5]))
-            today = date.today()
+            today = AS_OF_DATE
             remaining_months = max(0, (mat.year - today.year) * 12 + (mat.month - today.month))
         except Exception:
             pass
 
     # EWS 점수
     ews_row = db.execute(
-        text("SELECT composite_score FROM ews_alert WHERE customer_id=:cid ORDER BY created_at DESC LIMIT 1"),
+        # composite_score 는 ews_alert 가 아니라 ews_composite_score 에 있다.
+        # 기존 쿼리는 존재하지 않는 컬럼을 조회해 항상 500을 냈다.
+        text("SELECT composite_score FROM ews_composite_score WHERE customer_id=:cid ORDER BY score_date DESC LIMIT 1"),
         {"cid": cid}
     ).fetchone()
     ews_score = float(ews_row[0]) if ews_row else None
@@ -339,11 +344,26 @@ def calculate_ecl_for_facility(
     except ValueError:
         grade_drop_notches = 0
 
+    # 신용손상 증거 (기준서 1109호 부록A) — 워크아웃 진행 건은 채권 양보·
+    # 법적회수·상각 등 객관적 손상 사유에 해당한다. 정상화 종결(RECOVERED)은 제외.
+    wo_row = db.execute(
+        text("""
+            SELECT case_status, strategy FROM workout_case
+            WHERE facility_id=:fid AND case_status NOT IN ('RECOVERED')
+            ORDER BY case_open_date DESC LIMIT 1
+        """),
+        {"fid": facility_id}
+    ).fetchone()
+    credit_impaired = wo_row is not None
+    impairment_evidence = f"WORKOUT_{wo_row[1]}" if wo_row else None
+
     sicr_result = determine_sicr(
         pd_orig, pd_curr,
         ews_score=ews_score,
         dpd=dpd,
         grade_drop_notches=grade_drop_notches,
+        credit_impaired=credit_impaired,
+        impairment_evidence=impairment_evidence,
     )
     stage = sicr_result['recommended_stage']
 

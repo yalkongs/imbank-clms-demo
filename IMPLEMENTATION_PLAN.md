@@ -13,6 +13,7 @@
 5. [파일별 변경사항 요약](#5-파일별-변경사항-요약)
 6. [데이터 생성 계획](#6-데이터-생성-계획)
 7. [구현 현황 체크리스트](#7-구현-현황-체크리스트)
+8. [잔여 작업 (v2.0 이후)](#8-잔여-작업-v20-이후)
 
 ---
 
@@ -709,45 +710,224 @@ frontend/src/App.tsx                       라우팅 3개 추가
 
 ## 7. 구현 현황 체크리스트
 
+> **상태: Phase 1~3 전 항목 완료 (2026-08-02 검증)**
+>
+> 검증 방법: `app.openapi()` 기준 엔드포인트 집계, 파일 존재 확인, `App.tsx` 라우팅 확인.
+
+### 계획 대비 실적
+
+| 지표 | v1.2.0 | 목표 (v2.0) | **실제** |
+|------|--------|------------|---------|
+| API 엔드포인트 | 133개 | 173개 | **189개** |
+| 라우터 모듈 | — | — | **25개 등록** (`region_helper`는 헬퍼) |
+| UI 페이지 | 19개 | 24개 | **21개 라우트** (+ `ews/` 하위 6개) |
+
 ### Phase 1 — 여신 심사 고도화
 
-- [ ] `database/schema_phase1.sql` 작성
-- [ ] `database/generate_phase1_data.py` 작성 및 실행
-- [ ] `backend/app/services/calculations.py` 함수 추가
-- [ ] `backend/app/api/financial_analysis.py` 작성
-- [ ] `backend/app/api/group_credit.py` 작성
-- [ ] `backend/app/api/covenant.py` 작성
-- [ ] `backend/app/main.py` 라우터 등록
-- [ ] `frontend/src/pages/Applications.tsx` 탭 추가
-- [ ] `frontend/src/pages/Covenant.tsx` 신규 작성
-- [ ] `frontend/src/utils/api.ts` API 그룹 추가
-- [ ] `frontend/src/App.tsx` 라우팅 추가
+- [x] `database/schema_phase1.sql` 작성
+- [x] `database/generate_phase1_data.py` 작성 및 실행
+- [x] `backend/app/services/calculations.py` 함수 추가
+- [x] `backend/app/api/financial_analysis.py` 작성 — `/api/financial` 5개
+- [x] `backend/app/api/group_credit.py` 작성 — `/api/group-credit` 6개
+- [x] `backend/app/api/covenant.py` 작성 — `/api/covenants` 6개
+- [x] `backend/app/main.py` 라우터 등록
+- [x] `frontend/src/pages/Applications.tsx` 탭 추가
+- [x] `frontend/src/pages/Covenant.tsx` 신규 작성
+- [x] `frontend/src/utils/api.ts` API 그룹 추가
+- [x] `frontend/src/App.tsx` 라우팅 추가 (`/covenant`)
 
 ### Phase 2 — 부실 관리 핵심
 
-- [ ] `database/schema_phase2.sql` 작성
-- [ ] `database/generate_phase2_data.py` 작성 및 실행
-- [ ] `backend/app/services/calculations.py` ECL 함수 추가
-- [ ] `backend/app/api/asset_classification.py` 작성
-- [ ] `backend/app/api/ecl.py` 작성
-- [ ] `backend/app/api/delinquency.py` 작성
-- [ ] `backend/app/api/workout.py` 수정 (DPD 자동 이관)
-- [ ] `backend/app/main.py` 라우터 등록
-- [ ] `frontend/src/pages/AssetClassification.tsx` 신규 작성
-- [ ] `frontend/src/pages/Delinquency.tsx` 신규 작성
-- [ ] `frontend/src/pages/Workout.tsx` ECL 탭 추가
-- [ ] `frontend/src/utils/api.ts` API 그룹 추가
+- [x] `database/schema_phase2.sql` 작성
+- [x] `database/generate_phase2_data.py` 작성 및 실행
+- [x] `backend/app/services/calculations.py` ECL 함수 추가
+- [x] `backend/app/api/asset_classification.py` 작성 — `/api/classification` 7개
+- [x] `backend/app/api/ecl.py` 작성 — `/api/ecl` 7개
+- [x] `backend/app/api/delinquency.py` 작성 — `/api/delinquency` 7개
+- [x] `backend/app/api/workout.py` 수정 (DPD 자동 이관)
+- [x] `backend/app/main.py` 라우터 등록
+- [x] `frontend/src/pages/AssetClassification.tsx` 신규 작성
+- [x] `frontend/src/pages/Delinquency.tsx` 신규 작성
+- [x] `frontend/src/pages/Workout.tsx` ECL 탭 추가
+- [x] `frontend/src/utils/api.ts` API 그룹 추가
 
 ### Phase 3 — 연결 및 고도화
 
-- [ ] `database/schema_phase3.sql` 작성
-- [ ] `backend/app/api/automation.py` 작성
-- [ ] `backend/app/api/ews_advanced.py` 트리거 추가
-- [ ] `backend/app/api/models.py` LGD 백테스트 추가
-- [ ] `backend/app/main.py` 라우터 등록
-- [ ] `frontend/src/pages/Dashboard.tsx` 위젯 추가
-- [ ] `frontend/src/pages/Models.tsx` LGD 탭 추가
+- [x] `database/schema_phase3.sql` 작성
+- [x] `backend/app/api/automation.py` 작성 — `/api/automation` 6개
+- [x] `backend/app/api/ews_advanced.py` 트리거 추가
+- [x] `backend/app/api/models.py` LGD 백테스트 추가
+- [x] `backend/app/main.py` 라우터 등록
+- [x] `frontend/src/pages/Dashboard.tsx` 위젯 추가
+- [x] `frontend/src/pages/Models.tsx` LGD 탭 추가
 
 ---
 
-*최종 업데이트: 2026-02-20*
+## 8. 잔여 작업 (v2.0 이후)
+
+계획된 기능 구현은 완료되었고, 남은 항목은 배포·UI 마감 영역이다.
+
+### 완료 (2026-08-02)
+
+- [x] **`frontend/dist` gitignore 충돌 해소** — `.gitignore`의 Python `dist/` 패턴이 프론트 번들까지
+      제외해 신규 빌드 산출물을 커밋할 수 없었다. Render는 리포에 포함된 `frontend/dist`를
+      FastAPI가 직접 서빙하므로(`render.yaml` + `backend/app/main.py:110-127`) 커밋 시
+      asset 404가 발생하는 상태였다. `!frontend/dist/` 예외로 해소.
+- [x] **`*.db` negation 순서 정정** — `!database/imbank_demo.db`가 `*.db`보다 앞에 있어
+      무효화되던 문제. 데모 DB는 배포 필수 자산이므로 순서 교정.
+- [x] **Gradient Mesh 카드 커버리지 확대** — `rounded` / `rounded-2xl` / `rounded-t-xl`
+      변형 약 30개가 프로스티드 처리에서 누락되어 불투명 흰 박스로 남던 문제.
+- [x] **모달 가독성 회귀 수정** — 모달 패널이 전부 `bg-white rounded-xl shadow-2xl` 조합이라
+      카드 규칙에 걸려 반투명 처리되고 있었다. `shadow-xl`/`shadow-2xl` 예외 규칙 추가.
+
+- [x] **mesh 모달 내부 sticky 헤더 회귀** — 모달 패널을 불투명 예외로 돌리면서, 그 내부의
+      `bg-white rounded-t-xl` sticky 헤더(`CustomerProfitability.tsx:332`)가 카드 규칙에
+      걸려 반투명으로 남았다. 모달 하위 `bg-white` 전체를 불투명 예외로 방어.
+- [x] **차트 인라인 hex 브랜드 미적용 13건** — Tailwind `blue` 리매핑은 클래스명에만 적용되어
+      Recharts에 직접 넘기는 hex가 구 브랜드 블루로 남아 있었다. 9개 파일을 민트 스케일로 치환.
+- [x] **Vercel / Render 이중 배포 구성 정리** — Render를 단일 정본으로 확정하고
+      `vercel.json` · `api/index.py`를 제거했다. README에 배포 절차와 체크리스트,
+      CLAUDE.md에 함정(dist 커밋 필수)을 문서화.
+
+### 리스크 산식 정합성 감사 (2026-08-02)
+
+`calculations.py` · `credit_models.py` · `stress_test.py` · `ecl.py`를 README의
+「핵심 수리 모형」과 대조한 결과. 각 항목은 실제 값으로 재현해 확인했다.
+
+**수정 완료**
+
+- [x] **스트레스 PD/LGD 상한 이중 정의** — `calculate_stress_pd()`는 상한 1.0인데
+      `stress_test.py`는 이 함수를 import만 하고 실제로는 `min(pd*f, 0.30)`을 인라인으로
+      계산했다(죽은 코드 + 상한 불일치). 같은 입력에 0.70 vs 0.30으로 2.3배 차이.
+      → 상한을 `STRESS_PD_CAP`/`STRESS_LGD_CAP` 단일 정의로 통일하고
+      `calculate_stress_lgd()`를 신설, `stress_test.py`가 이를 호출하도록 변경.
+- [x] **`_signal()` 신호등의 warning 구간 소실** — 여유폭을 곱셈으로만 계산해
+      기준값이 0인 `op_margin`에서 pass 경계와 warning 경계가 모두 0으로 붕괴했다.
+      영업이익률이 0% 이상이면 전부 pass, 음수만 fail로 3단계가 2단계로 퇴화.
+      → 기준값이 0이면 절대 여유폭(`margin_abs`, 5%p)을 쓰도록 수정.
+- [x] **`get_grade_from_pd()`의 낙관 편향** — `pd <= grade_pd * 1.5` 로 50% 여유를 둬
+      PD 0.017이 BBB(0.0115)로 매겨졌다. `get_pd_from_grade()`로 되돌리면 PD가
+      **-32%** 왜곡되고, 이 값이 RWA·EL·가격결정에 그대로 전파된다.
+      → 여유폭을 제거해 상한 기준으로 판정(왜곡 -32% → +7~9%, 보수적 방향).
+- [x] **DSCR의 만기일시상환 오분류** — `annual_principal or (total_borrowing*0.1)`에서
+      원금상환액 0(만기일시상환)이 falsy로 걸려 추정치로 덮어써졌다.
+      EBITDA 100·이자 20·차입 1000 기준 DSCR이 5.0 → 0.83으로 뒤집혀 fail 판정.
+      → `is None` 검사로 0과 미제공을 구분.
+- [x] **README의 RWA 자본요구량 공식 표기 오류** — `K = LGD × [Φ(…) − PD×LGD]`로
+      적혀 LGD가 중복 곱해진다(LGD²·PD 항 발생). 표기대로 계산하면 RWA가 +6.5% 어긋난다.
+      구현(`lgd*Φ(…) − pd*lgd`)은 Basel 표준과 일치(상대오차 1e-8)하므로 문서만 수정.
+- [x] **EWS 종합점수 가중치 설명 오류** — `ews_advanced.py`의 methodology가
+      4채널(0.40 재무 + 0.20×3)로 적혀 있었으나 실제 산출은 상장 6채널 / 비상장 5채널이다.
+      → 실제 생성 로직(`generate_ews_leading_data.py:534-549`)에 맞게 수정.
+
+### 금융감독규정 반영 (2026-08-02)
+
+「은행업감독규정」·「은행업감독업무시행세칙 별표3」·「기업회계기준서 제1109호」를
+근거로 분류·충당금·Stage 판정을 규정 기준에 맞췄다.
+
+- [x] **대손충당금 최저적립률을 감독규정 제29조로 교정** — 정상 0.5%→**0.85%**,
+      요주의 2%→**7%** (고정 20% / 회수의문 50% / 추정손실 100%는 기존과 동일).
+      기존 값은 규정 최저기준에 미달했다.
+- [x] **연체기간 분류 경계를 시행세칙 별표3으로 교정** — 규정은 요주의 1개월 이상
+      3개월 미만, 고정 3개월 이상, 추정손실 12개월 이상이다. 기존 구현은
+      요주의 1\~30일 · 고정 31\~90일 · 회수의문 91\~180일 · 추정손실 181일 이상으로
+      한 단계씩 앞당겨져 있었고 12개월 기준이 6개월로 잡혀 있었다.
+      → 30 / 90 / 365일 경계로 상수화(`DPD_PRECAUTIONARY` 등).
+- [x] **회수예상가액 기준 분할분류 구현** — 규정상 3개월 이상 연체 건은 담보
+      회수예상가액 해당분을 고정, 초과분을 회수의문(12개월 미만)·추정손실(12개월 이상)로
+      나눈다. 기존에는 DPD만으로 단일 등급을 매겨 담보를 전혀 반영하지 못했다.
+      → `classify_asset()`에 `exposure`·`recoverable_value`를 받아 구간별 충당금을
+      산출하고, `asset_classification.py`가 `collateral.recognized_value` 합계를 넘긴다.
+- [x] **대손준비금 산출 추가** — IFRS 9 도입 후 회계상 충당금은 ECL로 적립하되
+      감독규정 최저적립액에 미달하면 차액을 대손준비금으로 적립해야 한다.
+      → `calculate_loan_loss_reserve()` 신설.
+- [x] **Stage 3 판정을 기준서 1109호 손상 정의로 교정** — PD 20% 단독 조건을 제거하고
+      연체 90일 초과(B5.5.37 채무불이행 추정) 또는 워크아웃 등 객관적 손상 증거로 한정.
+      `ecl.py`가 `workout_case`를 조회해 손상 사유를 전달한다. 아울러 Stage 3인데
+      `sicr=False`로 나와 SICR 집계에서 누락되던 것도 함께 고쳤다.
+- [x] **EWS 임계값을 용도별로 단일 상수화** — 자산건전성 강등선은
+      `EWS_THRESHOLD_PRECAUTIONARY`(35, CRITICAL 경계), SICR 트리거는
+      `EWS_THRESHOLD_SICR`(55, WATCH 경계). 본 시스템의 EWS 분포가 평균 59점이라
+      강등선을 75로 잡으면 차주의 **92%**, 55로 잡아도 **30%**가 요주의가 되어
+      과대적립이 된다. CRITICAL 기준이면 6%로, 연체 기준 요주의(7.6%)와 규모가 맞는다.
+
+**교정 효과** (전 여신 1,200건 재분류)
+
+| | 수정 전 | 수정 후 |
+|---|---|---|
+| 정상 | 6.4% | 73.3% |
+| 요주의 | 89.5% | 22.6% |
+| 고정 | — | 2.0% (27건) |
+| 회수의문 | — | 2.1% (18건) |
+| 필요충당금 | 1.32조 | 5,864억 |
+
+고정 27건 + 회수의문 18건 = 45건으로 연체 90일 이상 여신 수와 정확히 일치한다
+(담보 있으면 고정, 초과분은 회수의문).
+
+### 시드 데이터 분포 현실화 (2026-08-02)
+
+규정 기준으로 재분류했을 때 요주의가 22.6%까지 나온 원인은 산식이 아니라 **시드 데이터
+분포**였다. 감독원 「국내은행 원화대출 연체율 현황」(기업대출 0.84%, 중소기업 1.00%)을
+기준으로 맞췄다.
+
+- [x] **EWS 종합점수가 차주 위험과 무관한 난수였다** — `generate_extension_data.py`가
+      재무·운영·외부·공급망 점수를 `random.uniform(0, 100)` **균등분포**로 뽑고 있었다.
+      그 결과 평균 50점·CRITICAL 6.1%가 되어 EWS만으로 여신의 15%가 요주의로 강등됐다.
+      → 차주 신용등급대별 정규분포(PRIME 86 / MID 76 / SUB 58)로 바꾸고, 등급과 무관하게
+      징후가 나타나는 차주 2%를 별도로 심었다.
+- [x] **"신호 없음"이 정상 점수가 아니었다** — 뉴스 감성이 중립일 때 50점, 시장 신호가
+      정상일 때도 40점대라 무소식인 차주까지 WATCH로 끌려 내려갔다. 조기경보 지표는
+      신호가 없으면 정상(75점 이상)이어야 한다. → 기준선을 80점으로 재설정.
+- [x] **연체 표본을 '분류가 NORMAL 이 아닌 여신'에서 뽑고 있었다** — 그 집합은 대부분
+      EWS·PD로 요주의가 된 정상이행 여신이라, 연체율이 12.58%까지 올라갔다.
+      → 표본 수를 목표 연체율로 정하고(1개월 이상 1.5% + 단기 2%), 연체일수도 단기 편중
+      분포로 뽑는다. 종전에는 1\~365일을 균등에 가깝게 뽑아 장기 연체가 과대했다.
+- [x] **시드 스크립트가 분류 기준을 자체 정의하고 있었다** — `generate_phase2_data.py`가
+      DPD 경계와 충당금률을 따로 갖고 있어, 규정 반영분이 시드에 반영되지 않았다.
+      → `calculations.py`의 상수·함수를 그대로 import 하도록 바꿔 단일 정의로 만들었다.
+
+**분포 교정 결과**
+
+| 지표 | 교정 전 | 교정 후 | 실제 국내은행 |
+|---|---|---|---|
+| 정상 | 6.4% | **97.8%** | 97~98% |
+| 요주의 | 89.5% | **1.4%** | 1~2% |
+| NPL(고정이하) | — | **0.76%** | 0.5~0.7% |
+| 1개월 이상 연체율 | 12.58% | **1.67%** | 0.84%(기업) / 1.00%(중소) |
+| EWS 평균 | 59.2 | **77.5** | — |
+| EWS CRITICAL | 6.1% | **0.5%** | — |
+| 필요충당금 | 1.32조 | **2,037억** | — |
+
+연체율은 실제(0.84%)보다 다소 높게 두었다. 중소기업 비중이 높은 지방은행 포트폴리오를
+가정했고, 부실관리·EWS 화면에 표본이 남아야 하기 때문이다(WARNING 16명·CRITICAL 5명).
+
+**부수 발견 — 시드 스크립트 실행 불가 3건**
+
+- [x] `generate_data.py` · `generate_extension_data.py` · `generate_ews_leading_data.py`의
+      `DB_PATH`·`SCHEMA_PATH`가 옛 경로(`/Users/yalkongs/code/Projects/...`)로 하드코딩되어
+      있어 실행하면 즉시 죽었다. → 스크립트 기준 상대 경로로 교체.
+- [x] `ews_composite_score`가 실행할 때마다 고객당 행이 하나씩 쌓였다(1,010 → 3,030).
+      `score_id`를 매번 새 uuid로 만들어 `INSERT OR REPLACE`가 갱신으로 동작하지 않았다.
+- [x] Phase 2 재실행 시 분류·ECL이 누적되고 `facility.dpd`가 되돌려지지 않아 연체율이
+      실행할수록 올라갔다. → 두 스크립트를 멱등하게 수정.
+- [x] `max_dpd = random.randint(dpd, min(dpd + 30, 200))` — DPD가 200을 넘으면
+      빈 범위로 예외가 났다(12개월 이상 연체 표본에서 재현).
+
+**부수 발견 — 기존 500 오류 2건**
+
+`POST /api/ecl/calculate/{facility_id}`가 원래부터 동작하지 않았다. 감독규정 반영분을
+검증하다 드러났다.
+
+- [x] `risk_parameter`에 없는 `customer_id`로 조인 (`rp` 는 `application_id` 기준)
+- [x] `composite_score`를 `ews_alert`에서 조회 (실제로는 `ews_composite_score`에 있음)
+
+### 미착수
+
+- [ ] **번들 크기 최적화** — 단일 청크 1.12MB (gzip 282KB). `manualChunks` 또는 라우트별
+      `dynamic import()`로 코드 분할 여지.
+- [ ] **`caniuse-lite` 갱신** — 빌드 시 7개월 경과 경고.
+- [ ] **리포 위생** — 루트의 `generate_*_paper.py` 3개, PDF 4개를 `tools/` · `docs/`로 이동 검토.
+
+---
+
+*최종 업데이트: 2026-08-02*

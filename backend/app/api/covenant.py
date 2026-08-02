@@ -9,6 +9,7 @@ from sqlalchemy import text
 from typing import Optional
 from datetime import date, timedelta
 from ..core.database import get_db
+from ..core.config import AS_OF_DATE
 from ..services.calculations import check_covenant_compliance
 
 router = APIRouter(prefix="/api/covenants", tags=["Covenant Management"])
@@ -86,7 +87,7 @@ def get_covenants_by_facility(
     covenant_list = []
     breach_count = 0
     due_count = 0
-    today = date.today()
+    today = AS_OF_DATE
 
     for cv in covenants:
         next_check = cv[8]
@@ -147,7 +148,7 @@ def get_due_covenants(
 ):
     """점검 예정 코베넌트 목록 (30일 이내)"""
     region_cond = " AND c.region = :region" if region else ""
-    cutoff = date.today() + timedelta(days=days_ahead)
+    cutoff = AS_OF_DATE + timedelta(days=days_ahead)
 
     rows = db.execute(text(f"""
         SELECT cv.covenant_id, cv.facility_id, cv.covenant_type,
@@ -173,7 +174,7 @@ def get_due_covenants(
 
     items = []
     for r in rows:
-        overdue = date.fromisoformat(str(r[5])) < date.today() if r[5] else False
+        overdue = date.fromisoformat(str(r[5])) < AS_OF_DATE if r[5] else False
         items.append({
             "covenant_id":    r[0],
             "facility_id":    r[1],
@@ -228,7 +229,7 @@ def run_covenant_check(
         raise HTTPException(status_code=404, detail="Covenant not found")
 
     customer_id = cov[9]
-    today = date.today()
+    today = AS_OF_DATE
 
     # 실측값 자동 조회 (재무 코베넌트 + 값 미입력)
     _actual = actual_value
@@ -355,7 +356,7 @@ def get_breach_dashboard(
         })
 
     # 이번 달 점검 통과율
-    month_start = date.today().replace(day=1)
+    month_start = AS_OF_DATE.replace(day=1)
     monthly_stats = db.execute(text("""
         SELECT result, COUNT(*) FROM covenant_check
         WHERE check_date >= :start GROUP BY result
@@ -455,7 +456,7 @@ def apply_waiver(
     if not cov:
         raise HTTPException(status_code=404, detail="Covenant not found")
 
-    today = date.today()
+    today = AS_OF_DATE
     new_next_check = today + timedelta(days=waiver_period_days)
 
     db.execute(text("""
@@ -494,7 +495,7 @@ def apply_waiver(
 
 def _trigger_ews_alert(customer_id: str, covenant_id: str, covenant_name: str, db: Session):
     """코베넌트 기한이익상실 → EWS 경보 자동 생성"""
-    alert_id = f"EWS_COV_{customer_id}_{date.today().strftime('%Y%m%d')}"
+    alert_id = f"EWS_COV_{customer_id}_{AS_OF_DATE.strftime('%Y%m%d')}"
     db.execute(text("""
         INSERT OR IGNORE INTO ews_alert
         (alert_id, customer_id, alert_date, alert_type, alert_subtype,
@@ -503,6 +504,6 @@ def _trigger_ews_alert(customer_id: str, covenant_id: str, covenant_name: str, d
                 'CRITICAL', :desc, 'OPEN')
     """), {
         "aid": alert_id, "cid": customer_id,
-        "adate": str(date.today()),
+        "adate": str(AS_OF_DATE),
         "desc": f"코베넌트 기한이익상실 사유 발생: {covenant_name} (ID: {covenant_id})"
     })

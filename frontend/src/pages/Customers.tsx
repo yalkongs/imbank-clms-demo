@@ -210,7 +210,7 @@ export default function Customers() {
   const ratingDistribution = summary?.by_rating?.map((r: any, idx: number) => ({
     name: r.rating,
     value: r.count,
-    color: ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#f59e0b', '#f97316', '#ef4444'][idx % 8]
+    color: ['#00897B', '#00A892', '#00BFA5', '#57D7C2', '#93E7D8', '#f59e0b', '#f97316', '#ef4444'][idx % 8]
   })) || [];
 
   return (

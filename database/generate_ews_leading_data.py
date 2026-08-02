@@ -14,15 +14,21 @@ EWS 선행지표 강화 데이터 생성 스크립트
 """
 
 import sqlite3
+import pathlib
 import random
 import math
 from datetime import datetime, timedelta
 
-DB_PATH = '/Users/yalkongs/code/Projects/imbank-clms-demo/database/imbank_demo.db'
-SCHEMA_PATH = '/Users/yalkongs/code/Projects/imbank-clms-demo/database/schema_ews_leading.sql'
+# 리포 위치에 종속되지 않도록 스크립트 기준 상대 경로로 잡는다.
+# (옛 절대 경로 /Users/yalkongs/code/Projects/... 가 하드코딩돼 있어 실행이 불가능했다)
+DB_PATH = str(pathlib.Path(__file__).parent / 'imbank_demo.db')
+SCHEMA_PATH = str(pathlib.Path(__file__).parent / 'schema_ews_leading.sql')
 
 # 12개월 시계열 (2025-03 ~ 2026-02)
-MONTHS = [f"2025-{m:02d}" for m in range(3, 13)] + ["2026-01", "2026-02"]
+from base_date import AS_OF_DATE, AS_OF_MONTH, months_back  # noqa: E402
+
+# 기준월부터 거슬러 12개월. 기준일을 바꾸면 base_date.py 한 곳만 고치면 된다.
+MONTHS = months_back(12)
 
 # 신용등급별 위험 프로파일
 RISK_PROFILES = {
@@ -31,6 +37,9 @@ RISK_PROFILES = {
     'BBB+': 0.35, 'BBB': 0.42, 'BBB-': 0.50,
     'BB+': 0.60, 'BB': 0.70, 'B+': 0.82,
 }
+
+# 등급과 무관하게 위험 징후가 포착된 차주 비중 (generate_extension_data 와 동일 기준)
+EWS_DISTRESS_RATE = 0.02
 
 # EWS 등급 경계
 def ews_grade(score):
@@ -130,11 +139,22 @@ def load_customers(conn):
     """).fetchall()
     customers = []
     for r in rows:
+        # 등급이 우량해도 징후가 먼저 나타나는 차주를 일부 심는다.
+        # EWS는 이런 건을 잡으라고 있는 지표인데, risk 를 등급만으로 정하면
+        # 모든 채널 데이터가 고르게 양호해져 경보가 한 건도 발생하지 않는다.
+        # risk 를 올리면 거래행태·공적정보·뉴스·시장 데이터가 함께 나빠져
+        # 여러 채널이 동시에 악화된 '진짜 경보' 표본이 만들어진다.
+        # 종합점수는 6채널 가중평균이라 한두 채널만 나빠서는 CRITICAL(35 미만)이
+        # 나오지 않는다. 실제로도 여러 채널이 동시에 악화돼야 최고등급 경보가 뜬다.
+        # 따라서 징후 차주의 risk 를 충분히 높게 잡아 전 채널이 함께 나빠지도록 한다.
+        distressed = random.random() < EWS_DISTRESS_RATE
+        risk = 0.96 if distressed else RISK_PROFILES.get(r[6], 0.42)
         customers.append({
             'id': r[0], 'name': r[1], 'listed': r[2] == 'LISTED',
             'industry_code': r[3], 'industry_name': r[4],
             'size': r[5], 'grade': r[6],
-            'risk': RISK_PROFILES.get(r[6], 0.42),
+            'risk': risk,
+            'distressed': distressed,
         })
     return customers
 
@@ -506,9 +526,12 @@ def compute_channel_scores(conn, customers):
             """, (cid,)).fetchone()
             if mkt_row and mkt_row[0] is not None:
                 dd, cds, ipd = mkt_row
-                mkt_score = max(0, min(100, dd * 15 + max(0, 50 - cds * 0.1) - ipd * 100))
+                # DD(부도거리)가 클수록·CDS가 낮을수록 안전. 정상 수준(DD 3, CDS 100bp)에서
+                # 80점이 나오도록 기준선을 잡는다 — 종전 산식은 정상 기업도 40점대였다.
+                mkt_score = max(0, min(100,
+                    50 + min(dd, 6.0) * 8 - min(cds, 600) * 0.03 - ipd * 120))
             else:
-                mkt_score = 60 - risk * 30
+                mkt_score = 80 - risk * 35
         else:
             mkt_score = None
 
@@ -519,9 +542,11 @@ def compute_channel_scores(conn, customers):
         """, (cid,)).fetchone()
         if news_row and news_row[0] is not None:
             avg_sent, neg_ratio = news_row
-            news_score = max(0, min(100, 50 + avg_sent * 50 - neg_ratio * 30))
+            # 감성이 중립(0)이면 '위험 신호 없음'이므로 정상 수준(80점)이어야 한다.
+            # 종전 기준선 50점은 무소식인 차주까지 WATCH 구간으로 끌어내렸다.
+            news_score = max(0, min(100, 80 + avg_sent * 20 - neg_ratio * 45))
         else:
-            news_score = 55 - risk * 25
+            news_score = 80 - risk * 35
 
         # 5) 기존 재무점수 유지
         existing = cursor.execute("""
@@ -530,6 +555,13 @@ def compute_channel_scores(conn, customers):
         financial_score = existing[0] if existing else (70 - risk * 60)
         previous_composite = existing[1] if existing else None
 
+        # 재무·공급망 점수는 generate_extension_data 가 만들어 둔 값을 쓰는데,
+        # 그쪽은 징후 차주를 독립적으로 뽑기 때문에 여기서 지정한 차주와 어긋난다.
+        # 그 상태로는 6채널 중 두 채널만 양호하게 남아 종합점수가 41 아래로
+        # 내려가지 않아 CRITICAL 경보가 한 건도 생기지 않는다. 여기서 맞춰준다.
+        if cust.get('distressed'):
+            financial_score = round(max(0.0, min(100.0, random.gauss(26, 8))), 1)
+
         # 종합점수 산출
         if is_listed and mkt_score is not None:
             # 상장: 거래행태0.25 + 공적정보0.15 + 시장0.15 + 뉴스0.15 + 공급망(=기존supply_chain_score)0.15 + 재무0.15
@@ -537,6 +569,8 @@ def compute_channel_scores(conn, customers):
                 SELECT supply_chain_score FROM ews_composite_score WHERE customer_id = ?
             """, (cid,)).fetchone()
             sc_score = sc_score_row[0] if sc_score_row and sc_score_row[0] else (60 - risk * 30)
+            if cust.get('distressed'):
+                sc_score = round(max(0.0, min(100.0, random.gauss(26, 8))), 1)
             composite = (txn_score * 0.25 + pub_score * 0.15 + mkt_score * 0.15 +
                          news_score * 0.15 + sc_score * 0.15 + financial_score * 0.15)
         else:
@@ -545,6 +579,8 @@ def compute_channel_scores(conn, customers):
                 SELECT supply_chain_score FROM ews_composite_score WHERE customer_id = ?
             """, (cid,)).fetchone()
             sc_score = sc_score_row[0] if sc_score_row and sc_score_row[0] else (60 - risk * 30)
+            if cust.get('distressed'):
+                sc_score = round(max(0.0, min(100.0, random.gauss(26, 8))), 1)
             composite = (txn_score * 0.30 + pub_score * 0.20 + news_score * 0.20 +
                          sc_score * 0.15 + financial_score * 0.15)
 

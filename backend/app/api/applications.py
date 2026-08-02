@@ -7,6 +7,7 @@ from sqlalchemy import text
 from typing import Optional
 from datetime import datetime
 from ..core.database import get_db
+from ..core.config import AS_OF_DATE
 from ..services.calculations import (
     calculate_raroc, calculate_pricing, calculate_rwa,
     get_pd_from_grade, GRADE_PD_MAP
@@ -821,7 +822,7 @@ def approve_application(
     """), {"status": new_status, "app_id": application_id})
 
     # 승인 이력 추가
-    approval_id = f"APPR_{application_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    approval_id = f"APPR_{application_id}_{AS_OF_DATE.strftime('%Y%m%d%H%M%S')}"
     db.execute(text("""
         INSERT INTO approval_history
         (approval_id, application_id, approval_level, approver_name, decision, conditions, comments, decided_at)

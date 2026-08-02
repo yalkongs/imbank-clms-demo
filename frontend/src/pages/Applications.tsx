@@ -1554,7 +1554,7 @@ export default function Applications() {
                   What-if 분석
                 </button>
                 <button
-                  className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  className="btn-accent"
                   onClick={openApprovalModal}
                 >
                   <CheckCircle size={18} className="mr-2" />

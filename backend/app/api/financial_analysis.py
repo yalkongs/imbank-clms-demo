@@ -9,6 +9,7 @@ from sqlalchemy import text
 from typing import Optional
 from datetime import date
 from ..core.database import get_db
+from ..core.config import AS_OF_DATE
 from ..services.calculations import (
     calculate_financial_ratios, calculate_dscr,
     calculate_altman_z, FINANCIAL_BENCHMARKS
@@ -117,7 +118,7 @@ def get_financial_ratios(
         asset  = customer[5] or 0
         revenue = customer[6] or 0
         results.append({
-            'fiscal_year': date.today().year - 1,
+            'fiscal_year': AS_OF_DATE.year - 1,
             'stmt_type': 'ESTIMATED',
             'audited': False,
             'source': 'CUSTOMER_MASTER',

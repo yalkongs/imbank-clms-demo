@@ -42,7 +42,7 @@ import { capitalOptimizerApi } from '../utils/api';
 import { RegionFilter } from '../components';
 
 const COLORS = {
-  primary: '#1e40af',
+  primary: '#00897B',
   success: '#059669',
   warning: '#d97706',
   danger: '#dc2626',
