@@ -13,6 +13,7 @@
 5. [파일별 변경사항 요약](#5-파일별-변경사항-요약)
 6. [데이터 생성 계획](#6-데이터-생성-계획)
 7. [구현 현황 체크리스트](#7-구현-현황-체크리스트)
+8. [잔여 작업 (v2.0 이후)](#8-잔여-작업-v20-이후)
 
 ---
 
@@ -709,45 +710,85 @@ frontend/src/App.tsx                       라우팅 3개 추가
 
 ## 7. 구현 현황 체크리스트
 
+> **상태: Phase 1~3 전 항목 완료 (2026-08-02 검증)**
+>
+> 검증 방법: `app.openapi()` 기준 엔드포인트 집계, 파일 존재 확인, `App.tsx` 라우팅 확인.
+
+### 계획 대비 실적
+
+| 지표 | v1.2.0 | 목표 (v2.0) | **실제** |
+|------|--------|------------|---------|
+| API 엔드포인트 | 133개 | 173개 | **189개** |
+| 라우터 모듈 | — | — | **25개 등록** (`region_helper`는 헬퍼) |
+| UI 페이지 | 19개 | 24개 | **21개 라우트** (+ `ews/` 하위 6개) |
+
 ### Phase 1 — 여신 심사 고도화
 
-- [ ] `database/schema_phase1.sql` 작성
-- [ ] `database/generate_phase1_data.py` 작성 및 실행
-- [ ] `backend/app/services/calculations.py` 함수 추가
-- [ ] `backend/app/api/financial_analysis.py` 작성
-- [ ] `backend/app/api/group_credit.py` 작성
-- [ ] `backend/app/api/covenant.py` 작성
-- [ ] `backend/app/main.py` 라우터 등록
-- [ ] `frontend/src/pages/Applications.tsx` 탭 추가
-- [ ] `frontend/src/pages/Covenant.tsx` 신규 작성
-- [ ] `frontend/src/utils/api.ts` API 그룹 추가
-- [ ] `frontend/src/App.tsx` 라우팅 추가
+- [x] `database/schema_phase1.sql` 작성
+- [x] `database/generate_phase1_data.py` 작성 및 실행
+- [x] `backend/app/services/calculations.py` 함수 추가
+- [x] `backend/app/api/financial_analysis.py` 작성 — `/api/financial` 5개
+- [x] `backend/app/api/group_credit.py` 작성 — `/api/group-credit` 6개
+- [x] `backend/app/api/covenant.py` 작성 — `/api/covenants` 6개
+- [x] `backend/app/main.py` 라우터 등록
+- [x] `frontend/src/pages/Applications.tsx` 탭 추가
+- [x] `frontend/src/pages/Covenant.tsx` 신규 작성
+- [x] `frontend/src/utils/api.ts` API 그룹 추가
+- [x] `frontend/src/App.tsx` 라우팅 추가 (`/covenant`)
 
 ### Phase 2 — 부실 관리 핵심
 
-- [ ] `database/schema_phase2.sql` 작성
-- [ ] `database/generate_phase2_data.py` 작성 및 실행
-- [ ] `backend/app/services/calculations.py` ECL 함수 추가
-- [ ] `backend/app/api/asset_classification.py` 작성
-- [ ] `backend/app/api/ecl.py` 작성
-- [ ] `backend/app/api/delinquency.py` 작성
-- [ ] `backend/app/api/workout.py` 수정 (DPD 자동 이관)
-- [ ] `backend/app/main.py` 라우터 등록
-- [ ] `frontend/src/pages/AssetClassification.tsx` 신규 작성
-- [ ] `frontend/src/pages/Delinquency.tsx` 신규 작성
-- [ ] `frontend/src/pages/Workout.tsx` ECL 탭 추가
-- [ ] `frontend/src/utils/api.ts` API 그룹 추가
+- [x] `database/schema_phase2.sql` 작성
+- [x] `database/generate_phase2_data.py` 작성 및 실행
+- [x] `backend/app/services/calculations.py` ECL 함수 추가
+- [x] `backend/app/api/asset_classification.py` 작성 — `/api/classification` 7개
+- [x] `backend/app/api/ecl.py` 작성 — `/api/ecl` 7개
+- [x] `backend/app/api/delinquency.py` 작성 — `/api/delinquency` 7개
+- [x] `backend/app/api/workout.py` 수정 (DPD 자동 이관)
+- [x] `backend/app/main.py` 라우터 등록
+- [x] `frontend/src/pages/AssetClassification.tsx` 신규 작성
+- [x] `frontend/src/pages/Delinquency.tsx` 신규 작성
+- [x] `frontend/src/pages/Workout.tsx` ECL 탭 추가
+- [x] `frontend/src/utils/api.ts` API 그룹 추가
 
 ### Phase 3 — 연결 및 고도화
 
-- [ ] `database/schema_phase3.sql` 작성
-- [ ] `backend/app/api/automation.py` 작성
-- [ ] `backend/app/api/ews_advanced.py` 트리거 추가
-- [ ] `backend/app/api/models.py` LGD 백테스트 추가
-- [ ] `backend/app/main.py` 라우터 등록
-- [ ] `frontend/src/pages/Dashboard.tsx` 위젯 추가
-- [ ] `frontend/src/pages/Models.tsx` LGD 탭 추가
+- [x] `database/schema_phase3.sql` 작성
+- [x] `backend/app/api/automation.py` 작성 — `/api/automation` 6개
+- [x] `backend/app/api/ews_advanced.py` 트리거 추가
+- [x] `backend/app/api/models.py` LGD 백테스트 추가
+- [x] `backend/app/main.py` 라우터 등록
+- [x] `frontend/src/pages/Dashboard.tsx` 위젯 추가
+- [x] `frontend/src/pages/Models.tsx` LGD 탭 추가
 
 ---
 
-*최종 업데이트: 2026-02-20*
+## 8. 잔여 작업 (v2.0 이후)
+
+계획된 기능 구현은 완료되었고, 남은 항목은 배포·UI 마감 영역이다.
+
+### 완료 (2026-08-02)
+
+- [x] **`frontend/dist` gitignore 충돌 해소** — `.gitignore`의 Python `dist/` 패턴이 프론트 번들까지
+      제외해 신규 빌드 산출물을 커밋할 수 없었다. Render는 리포에 포함된 `frontend/dist`를
+      FastAPI가 직접 서빙하므로(`render.yaml` + `backend/app/main.py:110-127`) 커밋 시
+      asset 404가 발생하는 상태였다. `!frontend/dist/` 예외로 해소.
+- [x] **`*.db` negation 순서 정정** — `!database/imbank_demo.db`가 `*.db`보다 앞에 있어
+      무효화되던 문제. 데모 DB는 배포 필수 자산이므로 순서 교정.
+- [x] **Gradient Mesh 카드 커버리지 확대** — `rounded` / `rounded-2xl` / `rounded-t-xl`
+      변형 약 30개가 프로스티드 처리에서 누락되어 불투명 흰 박스로 남던 문제.
+- [x] **모달 가독성 회귀 수정** — 모달 패널이 전부 `bg-white rounded-xl shadow-2xl` 조합이라
+      카드 규칙에 걸려 반투명 처리되고 있었다. `shadow-xl`/`shadow-2xl` 예외 규칙 추가.
+
+### 미착수
+
+- [ ] **Vercel / Render 이중 배포 구성 정리** — `vercel.json`(서버리스 `api/index.py` + 정적 dist)과
+      `render.yaml`(단일 uvicorn)이 공존한다. 정본을 정하고 나머지는 제거하거나 문서화 필요.
+- [ ] **번들 크기 최적화** — 단일 청크 1.12MB (gzip 282KB). `manualChunks` 또는 라우트별
+      `dynamic import()`로 코드 분할 여지.
+- [ ] **`caniuse-lite` 갱신** — 빌드 시 7개월 경과 경고.
+- [ ] **리포 위생** — 루트의 `generate_*_paper.py` 3개, PDF 4개를 `tools/` · `docs/`로 이동 검토.
+
+---
+
+*최종 업데이트: 2026-08-02*
