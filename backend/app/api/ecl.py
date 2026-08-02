@@ -12,6 +12,7 @@ from datetime import date
 import uuid
 
 from ..core.database import get_db
+from ..core.config import AS_OF_DATE
 from ..services.calculations import (
     determine_sicr,
     calculate_ecl_stage1,
@@ -277,7 +278,7 @@ def calculate_ecl_for_facility(
     개별 여신 ECL 재산출
     — PD/LGD 최신값 + SICR 판별 → Stage 결정 → ECL 산출 → 저장
     """
-    cd = calc_date or date.today().strftime('%Y-%m-%d')
+    cd = calc_date or AS_OF_DATE.strftime('%Y-%m-%d')
 
     fac = db.execute(
         text("""
@@ -319,7 +320,7 @@ def calculate_ecl_for_facility(
     if fac[5]:
         try:
             mat = date.fromisoformat(str(fac[5]))
-            today = date.today()
+            today = AS_OF_DATE
             remaining_months = max(0, (mat.year - today.year) * 12 + (mat.month - today.month))
         except Exception:
             pass

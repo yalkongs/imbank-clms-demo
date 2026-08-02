@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from ..core.database import get_db
+from ..core.config import AS_OF_DATE
 
 router = APIRouter(prefix="/api/limits", tags=["Limits"])
 
@@ -297,7 +298,7 @@ def get_limit_trend(limit_id: str, db: Session = Depends(get_db)):
     # 30일 추이 생성
     trend = []
     for i in range(30):
-        date = datetime.now() - timedelta(days=29-i)
+        date = AS_OF_DATE - timedelta(days=29-i)
         # 현재값을 기준으로 약간의 변동
         util = current_util * random.uniform(0.9, 1.05)
         trend.append({

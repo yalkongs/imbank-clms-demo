@@ -25,7 +25,10 @@ DB_PATH = str(pathlib.Path(__file__).parent / 'imbank_demo.db')
 SCHEMA_PATH = str(pathlib.Path(__file__).parent / 'schema_ews_leading.sql')
 
 # 12개월 시계열 (2025-03 ~ 2026-02)
-MONTHS = [f"2025-{m:02d}" for m in range(3, 13)] + ["2026-01", "2026-02"]
+from base_date import AS_OF_DATE, AS_OF_MONTH, months_back  # noqa: E402
+
+# 기준월부터 거슬러 12개월. 기준일을 바꾸면 base_date.py 한 곳만 고치면 된다.
+MONTHS = months_back(12)
 
 # 신용등급별 위험 프로파일
 RISK_PROFILES = {

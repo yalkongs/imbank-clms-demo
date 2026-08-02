@@ -12,6 +12,7 @@ from datetime import date, timedelta
 import uuid
 
 from ..core.database import get_db
+from ..core.config import AS_OF_DATE
 from ..services.calculations import determine_delinquency_stage
 
 router = APIRouter(prefix="/api/delinquency", tags=["Delinquency Management"])
@@ -80,7 +81,7 @@ def get_delinquency_dashboard(
     npl_ratio = round(npl_exposure / total_outstanding * 100, 3) if total_outstanding > 0 else 0
 
     # 최근 7일 신규 연체
-    seven_days_ago = (date.today() - timedelta(days=7)).strftime('%Y-%m-%d')
+    seven_days_ago = (AS_OF_DATE - timedelta(days=7)).strftime('%Y-%m-%d')
     new_7d = db.execute(
         text("""
             SELECT COUNT(*), COALESCE(SUM(overdue_amount), 0)
@@ -94,7 +95,7 @@ def get_delinquency_dashboard(
     open_records = db.execute(
         text("SELECT delinquency_id, overdue_date FROM delinquency_record WHERE status='OPEN'")
     ).fetchall()
-    today = date.today()
+    today = AS_OF_DATE
     for rec in open_records:
         try:
             od = date.fromisoformat(str(rec[1]))
@@ -390,7 +391,7 @@ def record_collection_activity(
             "aid":     activity_id,
             "did":     delinquency_id,
             "fid":     facility_id,
-            "today":   date.today().strftime('%Y-%m-%d'),
+            "today":   AS_OF_DATE.strftime('%Y-%m-%d'),
             "atype":   activity_type,
             "result":  contact_result,
             "pdate":   promised_date,
@@ -416,7 +417,7 @@ def get_collection_performance(
     db: Session = Depends(get_db)
 ):
     """추심 성과 — 약속이행률, 회수율, 활동 유형별 효과"""
-    start_date = (date.today() - timedelta(days=months * 30)).strftime('%Y-%m-%d')
+    start_date = (AS_OF_DATE - timedelta(days=months * 30)).strftime('%Y-%m-%d')
 
     # 활동 유형별 집계
     type_rows = db.execute(

@@ -12,6 +12,7 @@ from datetime import date, datetime
 import uuid
 
 from ..core.database import get_db
+from ..core.config import AS_OF_DATE
 from ..services.calculations import classify_asset, PROVISION_RATES
 
 router = APIRouter(prefix="/api/classification", tags=["Asset Classification"])
@@ -267,7 +268,7 @@ def run_classification(
     월말 일괄 자산건전성 분류 실행
     — 모든 ACTIVE 여신에 대해 DPD/PD/EWS 기반 분류 산출 후 저장
     """
-    bd = base_date or date.today().strftime('%Y-%m-%d')
+    bd = base_date or AS_OF_DATE.strftime('%Y-%m-%d')
 
     # 대상 여신 조회
     facilities = db.execute(

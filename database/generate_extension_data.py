@@ -16,6 +16,7 @@ iM뱅크 CLMS - 확장 기능 데이터 생성 스크립트
 
 import sqlite3
 import pathlib
+import sys
 import random
 from datetime import datetime, timedelta
 import uuid
@@ -25,6 +26,13 @@ import math
 # 리포 위치에 종속되지 않도록 스크립트 기준 상대 경로로 잡는다.
 # (옛 절대 경로 /Users/yalkongs/code/Projects/... 가 하드코딩돼 있어 실행이 불가능했다)
 DB_PATH = str(pathlib.Path(__file__).parent / 'imbank_demo.db')
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from base_date import AS_OF_DATE  # noqa: E402
+
+# 실행 시각이 아니라 시스템 기준일을 쓴다. 실행일 기준으로 만들면
+# 날이 갈수록 데이터 시점이 화면 기준일과 어긋난다.
+_NOW = datetime(AS_OF_DATE.year, AS_OF_DATE.month, AS_OF_DATE.day)
 
 def get_connection():
     return sqlite3.connect(DB_PATH)
@@ -92,7 +100,7 @@ def generate_ews_indicator_values(conn, indicator_ids):
         for indicator_id in indicator_ids:
             # 최근 6개월 데이터 생성
             for month_offset in range(6):
-                date = (datetime.now() - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
+                date = (_NOW - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
 
                 # 지표별 값 범위 설정
                 if 'IND_001' in indicator_id:  # 매출채권회전일
@@ -291,7 +299,7 @@ def generate_composite_scores(conn):
         scores.append((
             f"ECS_{generate_uuid()}",
             customer_id,
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             financial,
             operational,
             external,
@@ -329,7 +337,7 @@ def generate_economic_cycle(conn):
     phases = ['EXPANSION', 'PEAK', 'CONTRACTION', 'TROUGH']
 
     for month_offset in range(24):
-        date = (datetime.now() - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
+        date = (_NOW - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
         phase_idx = (month_offset // 6) % 4
         phase = phases[phase_idx]
 
@@ -482,7 +490,7 @@ def generate_customer_profitability(conn):
         profitability_data.append((
             f"CP_{generate_uuid()}",
             customer_id,
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             round(loan_revenue, 0),
             round(loan_cost, 0),
             round(loan_el, 0),
@@ -788,7 +796,7 @@ def generate_real_estate_index(conn):
         for prop_type in property_types:
             base_index = 100
             for month_offset in range(12):
-                date = (datetime.now() - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
+                date = (_NOW - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
 
                 # 지역/유형별 변동성 차이
                 volatility = 0.02 if region == 'SEOUL' else 0.03 if region == 'GYEONGGI' else 0.04
@@ -881,7 +889,7 @@ def generate_collateral_valuations(conn):
 
         base_value = current_value
         for month_offset in range(6):
-            date = (datetime.now() - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
+            date = (_NOW - timedelta(days=30*month_offset)).strftime('%Y-%m-%d')
 
             change_pct = random.uniform(change_lo, change_hi)
             new_value = base_value * (1 + change_pct)
@@ -986,7 +994,7 @@ def generate_portfolio_optimization(conn):
 
     for i in range(5):
         run_id = f"OPT_{generate_uuid()}"
-        run_date = (datetime.now() - timedelta(days=30*i)).strftime('%Y-%m-%d %H:%M:%S')
+        run_date = (_NOW - timedelta(days=30*i)).strftime('%Y-%m-%d %H:%M:%S')
 
         current_portfolio = {}
         optimal_portfolio = {}
@@ -1107,7 +1115,7 @@ def generate_workout_data(conn):
             strategy,
             round(exposure * expected_recovery_rate, 0),
             round(expected_recovery_rate, 3),
-            (datetime.now() + timedelta(days=random.randint(90, 365))).strftime('%Y-%m-%d'),
+            (_NOW + timedelta(days=random.randint(90, 365))).strftime('%Y-%m-%d'),
             round(exposure * actual_recovery_rate, 0) if actual_recovery_rate else None,
             round(actual_recovery_rate, 3) if actual_recovery_rate else None,
             random_date(2023, 2024) if status in ['RECOVERED', 'LIQUIDATED', 'WRITTEN_OFF'] else None
@@ -1161,10 +1169,10 @@ def generate_workout_data(conn):
                 random_date(2023, 2024),
                 round(exposure, 0),
                 round(original_rate, 4),
-                (datetime.now() + timedelta(days=random.randint(30, 365))).strftime('%Y-%m-%d'),
+                (_NOW + timedelta(days=random.randint(30, 365))).strftime('%Y-%m-%d'),
                 round(exposure - haircut, 0),
                 round(new_rate, 4),
-                (datetime.now() + timedelta(days=random.randint(365, 1825))).strftime('%Y-%m-%d'),
+                (_NOW + timedelta(days=random.randint(365, 1825))).strftime('%Y-%m-%d'),
                 round(haircut, 0),
                 random.randint(0, 12),
                 round(haircut + (exposure * (original_rate - new_rate) * 3), 0),
@@ -1266,7 +1274,7 @@ def generate_esg_data(conn):
         assessments.append((
             f"ESG_{generate_uuid()}",
             customer_id,
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             round(e_score, 1),
             round(carbon_intensity, 1),
             round(random.uniform(0.3, 0.9), 2),
@@ -1366,7 +1374,7 @@ def generate_alm_data(conn):
 
         gaps.append((
             f"IRG_{generate_uuid()}",
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             bucket,
             round(fixed_assets, 0),
             round(floating_assets, 0),
@@ -1427,7 +1435,7 @@ def generate_alm_data(conn):
 
         results.append((
             f"ASR_{generate_uuid()}",
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             scenario_id,
             current_nim,
             round(stressed_nim, 4),
@@ -1462,7 +1470,7 @@ def generate_alm_data(conn):
 
         hedges.append((
             f"HP_{generate_uuid()}",
-            datetime.now().strftime('%Y-%m-%d'),
+            _NOW.strftime('%Y-%m-%d'),
             inst[0],
             round(notional, 0),
             inst[1],
@@ -1470,7 +1478,7 @@ def generate_alm_data(conn):
             inst[3] + random.uniform(-0.5, 0.5),
             'CD91' if inst[2] == 'FLOATING' else None,
             random.uniform(-0.1, 0.1),
-            (datetime.now() + timedelta(days=random.randint(365, 1825))).strftime('%Y-%m-%d'),
+            (_NOW + timedelta(days=random.randint(365, 1825))).strftime('%Y-%m-%d'),
             round(random.uniform(-50, 50) * 1e9, 0),
             round(random.uniform(-0.5, 0.5), 4),
             round(notional * 0.0001, 0),
@@ -1492,7 +1500,7 @@ def generate_alm_data(conn):
         if abs(current_gap) > 200 * 1e9:
             recommendations.append((
                 f"HR_{generate_uuid()}",
-                datetime.now().strftime('%Y-%m-%d'),
+                _NOW.strftime('%Y-%m-%d'),
                 bucket,
                 round(current_gap, 0),
                 0,

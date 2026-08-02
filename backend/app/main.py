@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 
 from .core.database import engine, Base
+from .core.config import AS_OF_DATE, AS_OF_MONTH, AS_OF_STR
 from .api import dashboard, applications, capital, portfolio, limits, stress_test, models, model_inference, customers, capital_optimizer
 from .api import ews_advanced, dynamic_limits, customer_profitability, collateral_monitoring, portfolio_optimization, workout, esg, alm
 # Phase 1: 여신 심사 고도화
@@ -104,6 +105,17 @@ app.include_router(automation.router)
 def health_check():
     """헬스체크 엔드포인트"""
     return {"status": "healthy"}
+
+
+@app.get("/api/system/as-of")
+def get_as_of_date():
+    """시스템 기준일 — 화면 상단 '기준' 배지와 각종 시점 표시에 쓴다.
+    프론트에 날짜를 하드코딩하지 않도록 단일 소스에서 내려준다."""
+    return {
+        "as_of_date":  AS_OF_STR,
+        "as_of_month": AS_OF_MONTH,
+        "label_ko":    f"{AS_OF_DATE.year}년 {AS_OF_DATE.month}월 {AS_OF_DATE.day}일 기준",
+    }
 
 
 # 프론트엔드 빌드 파일 서빙

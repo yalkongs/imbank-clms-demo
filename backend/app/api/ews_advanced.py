@@ -10,6 +10,7 @@ from sqlalchemy import text
 from typing import Optional
 import uuid
 from ..core.database import get_db
+from ..core.config import AS_OF_MONTH
 
 router = APIRouter(prefix="/api/ews-advanced", tags=["EWS Advanced"])
 
@@ -217,7 +218,7 @@ async def supply_chain_customers(
                COUNT(DISTINCT sc.partner_id) as partner_count
         FROM ews_supply_chain_temporal sc
         JOIN customer c ON sc.customer_id = c.customer_id
-        WHERE sc.reference_month = '2026-02'{rc}
+        WHERE sc.reference_month = '{AS_OF_MONTH}'{rc}
         GROUP BY sc.customer_id, c.customer_name, c.industry_name
         ORDER BY avg_cpd DESC
     """), rp)
@@ -248,7 +249,7 @@ async def supply_chain_dashboard(
             SUM(CASE WHEN sc.chain_default_probability > 0.1 THEN 1 ELSE 0 END) as high_risk_count
         FROM ews_supply_chain_temporal sc
         JOIN customer c ON sc.customer_id = c.customer_id
-        WHERE sc.reference_month = '2026-02'{rc}
+        WHERE sc.reference_month = '{AS_OF_MONTH}'{rc}
     """), rp).fetchone()
 
     trend = db.execute(text(f"""
@@ -643,7 +644,7 @@ async def transaction_behavior_dashboard(
             SUM(CASE WHEN t.salary_transfer = 0 THEN 1 ELSE 0 END) as no_salary_count
         FROM ews_transaction_behavior t
         JOIN customer c ON t.customer_id = c.customer_id
-        WHERE t.reference_month = '2026-02'{rc}
+        WHERE t.reference_month = '{AS_OF_MONTH}'{rc}
     """), rp).fetchone()
 
     # 월별 추이
@@ -692,7 +693,7 @@ async def transaction_behavior_anomalies(
                t.deposit_outflow_rate, t.overdraft_count
         FROM ews_transaction_behavior t
         JOIN customer c ON t.customer_id = c.customer_id
-        WHERE t.reference_month = '2026-02'
+        WHERE t.reference_month = '{AS_OF_MONTH}'
           AND (t.limit_utilization > 0.8 OR t.payment_delay_days > 7 OR t.overdraft_count > 2){rc}
         ORDER BY t.limit_utilization DESC
         LIMIT :lim
@@ -878,7 +879,7 @@ async def market_signals_dashboard(
             SUM(CASE WHEN m.cds_spread > 200 THEN 1 ELSE 0 END) as high_cds_count
         FROM ews_market_signal m
         JOIN customer c ON m.customer_id = c.customer_id
-        WHERE m.reference_month = '2026-02'{rc}
+        WHERE m.reference_month = '{AS_OF_MONTH}'{rc}
     """), rp).fetchone()
 
     trend = db.execute(text(f"""
@@ -923,7 +924,7 @@ async def market_signals_alerts(
                m.stock_price_change, m.cds_spread, m.distance_to_default, m.implied_pd
         FROM ews_market_signal m
         JOIN customer c ON m.customer_id = c.customer_id
-        WHERE m.reference_month = '2026-02'
+        WHERE m.reference_month = '{AS_OF_MONTH}'
           AND (m.distance_to_default < 2 OR m.cds_spread > 200 OR m.stock_price_change < -10){rc}
         ORDER BY m.distance_to_default ASC
         LIMIT :lim
@@ -984,7 +985,7 @@ async def news_sentiment_dashboard(
             SUM(CASE WHEN nm.avg_sentiment < -0.3 THEN 1 ELSE 0 END) as neg_alert_count
         FROM ews_news_sentiment_monthly nm
         JOIN customer c ON nm.customer_id = c.customer_id
-        WHERE nm.reference_month = '2026-02'{rc}
+        WHERE nm.reference_month = '{AS_OF_MONTH}'{rc}
     """), rp).fetchone()
 
     trend = db.execute(text(f"""

@@ -109,6 +109,15 @@ const navGroups: NavGroup[] = [
 export default function Layout() {
   const { onboarded, setOnboarded } = useTheme();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 — 화면에 날짜를 박아두지 않는다.
+  const [asOfLabel, setAsOfLabel] = useState('');
+
+  useEffect(() => {
+    fetch('/api/system/as-of')
+      .then(r => r.json())
+      .then(d => setAsOfLabel(d.label_ko))
+      .catch(() => setAsOfLabel(''));
+  }, []);
 
   // 최초 접속(온보딩 미완료) 시 소개 팝업 표시
   useEffect(() => {
@@ -184,7 +193,7 @@ export default function Layout() {
           <div className="flex items-center space-x-4">
             <h2 className="text-xl font-semibold text-gray-900">기업여신심사시스템</h2>
             <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
-              2024년 1월 기준
+              {asOfLabel}
             </span>
           </div>
 

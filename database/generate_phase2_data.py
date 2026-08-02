@@ -19,6 +19,9 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
+from base_date import AS_OF_DATE, month_starts  # noqa: E402
+
 DB_PATH   = os.path.join(os.path.dirname(__file__), "imbank_demo.db")
 SQL_FILE  = os.path.join(os.path.dirname(__file__), "schema_phase2.sql")
 
@@ -147,10 +150,9 @@ def generate_classification_and_ecl(conn: sqlite3.Connection):
     print(f"  대상 여신: {len(facilities)}건")
 
     # 12개월치 기준일 생성 (2024-01 ~ 2024-12)
-    base_dates = []
-    for m in range(12):
-        d = date(2024, 1, 1) + timedelta(days=30 * m)
-        base_dates.append(date(d.year, d.month, 1))
+    # 기준월부터 거슬러 12개월 (각 월 1일). 종전에는 2024-01 고정이라
+    # 화면 기준일과 분류 이력 시점이 2년 넘게 어긋나 있었다.
+    base_dates = month_starts(12)
 
     class_rows = []
     ecl_rows   = []
@@ -337,7 +339,7 @@ def generate_delinquency(conn: sqlite3.Connection):
     activity_rows     = []
     facility_updates  = []
 
-    today = date.today()
+    today = AS_OF_DATE   # 실행일이 아니라 시스템 기준일을 쓴다
 
     # 연체는 단기에 몰리고 장기로 갈수록 급감한다. 표본 중 1개월 미만 비중은
     # DELINQUENCY_RATE_SHORT / (SHORT + 1M) 로 잡고, 나머지를 sample_dpd() 로 뽑는다.
