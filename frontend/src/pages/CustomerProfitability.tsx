@@ -9,7 +9,7 @@ import {
   Users,
   Award
 } from 'lucide-react';
-import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton } from '../components';
+import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton, RegionFilter } from '../components';
 import { customerProfitabilityApi } from '../utils/api';
 import { formatAmount, formatPercent } from '../utils/format';
 
@@ -102,15 +102,9 @@ export default function CustomerProfitability() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">고객 생애가치(CLV), 교차판매, 이탈예측 분석</p>
         </div>
-        <select
-          value={region}
-          onChange={(e) => setRegion(e.target.value)}
-          className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {REGIONS.map((r) => (
-            <option key={r.value} value={r.value}>{r.label}</option>
-          ))}
-        </select>
+        {/* 지역 구분은 전 화면에서 같은 형태로 모두 노출한다.
+            드롭다운은 선택지가 숨겨져 화면마다 조작 방식이 달라 보였다. */}
+        <RegionFilter value={region} onChange={setRegion} />
       </div>
 
       {/* Summary Stats */}

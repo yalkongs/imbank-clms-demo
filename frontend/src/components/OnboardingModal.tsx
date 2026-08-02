@@ -79,7 +79,7 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
             </div>
             <p className="mt-4 text-sm text-gray-600 leading-relaxed">
               심사 · 실행 · 모니터링 · 회수까지 — 기업여신의 리스크를 하나의 화면에서.
-              Basel · IFRS9 기반의 리스크 계산 엔진과 5채널 조기경보(EWS)를 갖춘 PoC 데모입니다.
+              Basel · IFRS9 기반의 리스크 계산 엔진과 5채널 조기경보(EWS)를 갖춘 PoC 시스템입니다.
             </p>
           </div>
 
@@ -121,7 +121,7 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
               />
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              테마는 우측 상단 버튼으로 언제든 바꿀 수 있습니다.
+              테마는 우측 상단 설정(⚙)에서 언제든 바꿀 수 있습니다.
             </p>
           </div>
         </div>
@@ -153,7 +153,7 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
 
         {/* 푸터 */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-          <span className="text-xs text-gray-400">v1.0.0 · Demo Mode · © 2026 yalkongs</span>
+          <span className="text-xs text-gray-400">v1.0.0 · PoC · © 2026 yalkongs</span>
           <button
             onClick={onClose}
             className="btn-accent px-5 text-sm"

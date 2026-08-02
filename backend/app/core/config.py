@@ -4,12 +4,12 @@ from pathlib import Path
 
 
 class Settings(BaseSettings):
-    APP_NAME: str = "iM뱅크 CLMS Demo"
+    APP_NAME: str = "iM뱅크 CLMS"
     DEBUG: bool = True
     DATABASE_URL: str = f"sqlite:///{Path(__file__).parent.parent.parent.parent}/database/imbank_demo.db"
 
     # 시스템 기준일 (as-of date)
-    # 데모 데이터의 모든 시점 기준. 실행 시각(date.today())을 쓰면 날이 갈수록
+    # 데이터의 모든 시점 기준. 실행 시각(date.today())을 쓰면 날이 갈수록
     # 연체일수·잔존만기·기준월이 어긋나므로 고정 기준일을 단일 소스로 둔다.
     # 시드 데이터도 이 값을 기준으로 생성된다 (database/base_date.py 참조).
     AS_OF_DATE: date = date(2026, 7, 31)

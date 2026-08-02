@@ -9,8 +9,6 @@ import {
   Activity,
   Brain,
   Building2,
-  Bell,
-  Settings,
   Users,
   TrendingUp,
   AlertTriangle,
@@ -29,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeProvider';
 import OnboardingModal from './OnboardingModal';
-import ThemeToggle from './ThemeToggle';
+import { AlertMenu, SettingsMenu } from './HeaderMenus';
 
 interface NavItem {
   path: string;
@@ -104,7 +102,7 @@ const navGroups: NavGroup[] = [
 
 export default function Layout() {
   const { setOnboarded, setIntroOpen } = useTheme();
-  // 데모 특성상 접속·새로고침 때마다 소개 팝업을 띄운다.
+  // 접속·새로고침 때마다 소개 팝업을 띄운다.
   // (종전에는 localStorage 의 clms-onboarded 로 최초 1회만 표시했다.)
   const [showOnboarding, setShowOnboarding] = useState(true);
   // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 — 화면에 날짜를 박아두지 않는다.
@@ -179,7 +177,7 @@ export default function Layout() {
             <span className="status-dot is-live mr-2"></span>
             시스템 정상 운영중
           </div>
-          <p className="text-xs text-gray-400 mt-1">v1.0.0 | Demo Mode</p>
+          <p className="text-xs text-gray-400 mt-1">v1.0.0 | PoC</p>
           <p className="text-[10px] text-gray-400 mt-1">© 2026 yalkongs</p>
         </div>
       </aside>
@@ -196,8 +194,6 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center space-x-4">
-            {/* 테마 전환 (Classic / Mesh) */}
-            <ThemeToggle />
 
             {/* 소개 팝업 다시 보기 */}
             <button
@@ -208,16 +204,11 @@ export default function Layout() {
               <Info size={20} />
             </button>
 
-            {/* 알림 */}
-            <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
-              <Bell size={20} />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
+            {/* 알림 — EWS 경보 연동 */}
+            <AlertMenu />
 
-            {/* 설정 */}
-            <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
-              <Settings size={20} />
-            </button>
+            {/* 설정 — 화면 테마·기준일 */}
+            <SettingsMenu asOfLabel={asOfLabel} />
 
             {/* 사용자 */}
             <div className="flex items-center">
