@@ -285,6 +285,17 @@ def run_classification(
         """)
     ).fetchall()
 
+    # 담보 회수예상가액 (인정가액 합계) — 3개월 이상 연체 건의 분할분류에 쓴다.
+    # 시행세칙 별표3: 회수예상가액 해당분은 고정, 초과분은 회수의문/추정손실.
+    recoverable_map = {
+        r[0]: float(r[1] or 0)
+        for r in db.execute(text("""
+            SELECT facility_id, SUM(recognized_value)
+            FROM collateral WHERE facility_id IS NOT NULL
+            GROUP BY facility_id
+        """)).fetchall()
+    }
+
     from ..services.calculations import GRADE_PD_MAP
     inserted = 0
     updated  = 0
@@ -297,11 +308,18 @@ def run_classification(
         pd_val    = fac[6] or GRADE_PD_MAP.get(fac[5] or 'BBB', 0.02)
         ews_score = _get_facility_ews(db, cid)
 
-        result = classify_asset(dpd, pd_val, ews_score)
+        result = classify_asset(
+            dpd, pd_val, ews_score,
+            exposure=exposure,
+            recoverable_value=recoverable_map.get(fid, 0.0),
+        )
 
         cls         = result['classification']
         prov_rate   = result['provision_rate']
-        req_prov    = round(exposure * prov_rate, 2)
+        # 분할분류가 적용된 건은 구간별 합계를, 아니면 단일 요율로 산출한다.
+        req_prov    = result.get('required_provision')
+        if req_prov is None:
+            req_prov = round(exposure * prov_rate, 2)
         # 현재 충당금: 직전 기록의 existing_provision 사용 (없으면 필요충당금의 80%)
         ex_prov_row = db.execute(
             text("""

@@ -568,14 +568,38 @@ def calculate_group_pd(member_pds: list, member_exposures: list) -> float:
 # Phase 2 추가: 자산건전성 분류 / IFRS9 ECL / 연체 관리
 # ============================================================
 
-# 금감원 5단계 충당금 적립률
+# 대손충당금 최저적립률 — 은행업감독규정 제29조 (기업여신 기준)
+# 감독목적 최저적립 기준이며, 회계상 충당금은 IFRS 9 ECL로 산출한다.
+# 최저적립액 > ECL 이면 그 차액을 대손준비금으로 적립한다 (calculate_loan_loss_reserve 참조).
 PROVISION_RATES = {
-    'NORMAL':         0.005,   # 0.5%
-    'PRECAUTIONARY':  0.02,    # 2% (최소, 최대 5%)
+    'NORMAL':         0.0085,  # 0.85%
+    'PRECAUTIONARY':  0.07,    # 7%
     'SUBSTANDARD':    0.20,    # 20%
     'DOUBTFUL':       0.50,    # 50%
     'LOSS':           1.00,    # 100%
 }
+
+# 연체기간 경계 (은행업감독업무시행세칙 별표3 자산건전성 분류기준)
+#   요주의: 1개월 이상 3개월 미만
+#   고정  : 3개월 이상 연체 중 회수예상가액 해당 부분
+#   회수의문/추정손실: 회수예상가액 초과 부분을 12개월 기준으로 구분
+DPD_PRECAUTIONARY = 30    # 1개월
+DPD_SUBSTANDARD   = 90    # 3개월
+DPD_LOSS          = 365   # 12개월
+
+# EWS 종합점수 임계값 — 문서의 EWS 등급 경계(NORMAL 75 / WATCH 55 / WARNING 35)를
+# 그대로 쓰되, 용도에 따라 다른 지점을 잡는다. 하나의 상수로 통일해 시드 생성과
+# 런타임 재분류가 어긋나지 않도록 한다.
+#
+#  · 자산건전성 강등 = CRITICAL(35 미만). 감독규정상 요주의는 "채무상환능력 저하를
+#    초래할 수 있는 잠재적 요인이 존재하는 거래처"이고, EWS는 이를 보조 판단하는
+#    내부 지표다. 본 시스템의 EWS 분포는 평균 59점이라 WATCH(55)를 강등선으로
+#    잡으면 차주의 30%, NORMAL(75)로 잡으면 92%가 요주의가 되어 과대적립이 된다.
+#    CRITICAL 기준이면 6% 수준으로, 연체 기준 요주의(7.6%)와 규모가 맞는다.
+#  · SICR 트리거 = WATCH(55 미만). Stage 2는 전기간 ECL을 쌓는 회계상 판단이라
+#    자산건전성 강등보다 민감하게 잡는 것이 IFRS 9 취지에 맞다.
+EWS_THRESHOLD_PRECAUTIONARY = 35   # 미만이면 자산건전성 요주의로 강등
+EWS_THRESHOLD_SICR          = 55   # 미만이면 SICR 트리거 (Stage 2)
 
 # 분류 우선순위 (가장 불리한 것 적용)
 _CLASS_ORDER = ['NORMAL', 'PRECAUTIONARY', 'SUBSTANDARD', 'DOUBTFUL', 'LOSS']
@@ -589,15 +613,18 @@ def _class_rank(cls: str) -> int:
 
 
 def classify_asset_by_dpd(dpd: int) -> str:
-    """DPD 기준 자산건전성 분류"""
-    if dpd <= 0:
+    """DPD 기준 자산건전성 분류 (은행업감독업무시행세칙 별표3).
+
+    요주의 1개월 이상 3개월 미만 / 고정 3개월 이상 / 추정손실 12개월 이상.
+    담보 회수예상가액을 모르면 고정·회수의문을 나눌 수 없으므로, 여기서는
+    DPD 단독 판정만 하고 분할은 classify_asset()이 담당한다.
+    """
+    if dpd < DPD_PRECAUTIONARY:
         return 'NORMAL'
-    elif dpd <= 30:
+    elif dpd < DPD_SUBSTANDARD:
         return 'PRECAUTIONARY'
-    elif dpd <= 90:
+    elif dpd < DPD_LOSS:
         return 'SUBSTANDARD'
-    elif dpd <= 180:
-        return 'DOUBTFUL'
     else:
         return 'LOSS'
 
@@ -617,23 +644,40 @@ def classify_asset_by_pd(pd: float) -> str:
 
 
 def classify_asset_by_ews(ews_score: float) -> str:
-    """EWS 종합점수 기준 자산건전성 분류
-    EWS는 조기경보 지표 — 최대 요주의(PRECAUTIONARY)까지만 영향.
-    고정(SUBSTANDARD) 이상은 DPD/PD 기준으로만 결정.
+    """EWS 종합점수 기준 자산건전성 분류.
+
+    감독규정은 자산건전성을 FLC(미래상환능력) 기준으로 판정하도록 하며,
+    EWS는 그 판단을 보조하는 내부 조기경보 지표다. 고정 이하 등급은
+    '회수예상가액'을 기준으로 나뉘므로(시행세칙 별표3) EWS 점수만으로는
+    산정할 수 없다. 따라서 EWS는 최대 요주의까지만 영향을 준다.
+
+    임계값은 EWS_THRESHOLD_PRECAUTIONARY(35, CRITICAL 경계) — 상수 정의부의
+    근거 주석 참조. 단일 상수로 통일해 월말 재분류 전후로 같은 고객의 등급이
+    달라지지 않도록 한다.
     """
-    if ews_score >= 60:
+    if ews_score >= EWS_THRESHOLD_PRECAUTIONARY:
         return 'NORMAL'
     else:
         return 'PRECAUTIONARY'
 
 
-def classify_asset(dpd: int, pd: float, ews_score: float = None) -> dict:
+def classify_asset(dpd: int, pd: float, ews_score: float = None,
+                   exposure: float = None, recoverable_value: float = None) -> dict:
     """
-    금감원 기준 5단계 자산건전성 분류
-    보수주의 원칙: DPD / PD / EWS 중 가장 불리한 등급 적용
+    금감원 기준 5단계 자산건전성 분류 (은행업감독업무시행세칙 별표3)
+
+    보수주의 원칙: DPD / PD / EWS 중 가장 불리한 등급 적용.
+
+    3개월 이상 연체 건은 규정상 담보 회수예상가액을 기준으로 분할분류한다.
+      · 회수예상가액 해당 부분      → 고정
+      · 회수예상가액 초과 부분      → 12개월 미만 회수의문 / 12개월 이상 추정손실
+    exposure 와 recoverable_value 를 함께 주면 이 분할을 적용하고,
+    생략하면 DPD 단독 판정(단일 등급)으로 동작한다 — 기존 호출부 호환.
 
     Returns:
-        {classification, dpd_class, pd_class, ews_class, final_basis, provision_rate}
+        {classification, dpd_based_class, pd_based_class, ews_based_class,
+         final_class_basis, provision_rate,
+         provision_breakdown, required_provision}   ← 분할분류 시에만 의미 있음
     """
     dpd_class = classify_asset_by_dpd(dpd)
     pd_class  = classify_asset_by_pd(pd)
@@ -648,31 +692,100 @@ def classify_asset(dpd: int, pd: float, ews_score: float = None) -> dict:
     classes = {'DPD': dpd_class, 'PD': pd_class, 'EWS': ews_class}
     final_class = classes[final_basis]
 
-    return {
-        'classification':   final_class,
-        'dpd_based_class':  dpd_class,
-        'pd_based_class':   pd_class,
-        'ews_based_class':  ews_class,
+    result = {
+        'classification':    final_class,
+        'dpd_based_class':   dpd_class,
+        'pd_based_class':    pd_class,
+        'ews_based_class':   ews_class,
         'final_class_basis': final_basis,
-        'provision_rate':   PROVISION_RATES[final_class],
+        'provision_rate':    PROVISION_RATES[final_class],
+    }
+
+    # 회수예상가액 기준 분할분류 (3개월 이상 연체 건에만 적용)
+    if exposure is not None and recoverable_value is not None and dpd >= DPD_SUBSTANDARD:
+        secured   = max(min(recoverable_value, exposure), 0.0)
+        unsecured = max(exposure - secured, 0.0)
+        excess_class = 'LOSS' if dpd >= DPD_LOSS else 'DOUBTFUL'
+
+        breakdown = []
+        if secured > 0:
+            breakdown.append({
+                'classification': 'SUBSTANDARD', 'amount': round(secured, 2),
+                'provision_rate': PROVISION_RATES['SUBSTANDARD'],
+                'provision': round(secured * PROVISION_RATES['SUBSTANDARD'], 2),
+                'basis': '회수예상가액 해당분',
+            })
+        if unsecured > 0:
+            breakdown.append({
+                'classification': excess_class, 'amount': round(unsecured, 2),
+                'provision_rate': PROVISION_RATES[excess_class],
+                'provision': round(unsecured * PROVISION_RATES[excess_class], 2),
+                'basis': '회수예상가액 초과분',
+            })
+
+        required = round(sum(b['provision'] for b in breakdown), 2)
+        # 대표 등급은 가장 불리한 부분 — PD/EWS 판정보다 불리하면 그것으로 갱신
+        worst = max((b['classification'] for b in breakdown),
+                    key=_class_rank, default=final_class)
+        if _class_rank(worst) > _class_rank(final_class):
+            result['classification'] = worst
+            result['final_class_basis'] = 'DPD'
+            result['provision_rate'] = PROVISION_RATES[worst]
+
+        result['provision_breakdown'] = breakdown
+        result['required_provision']  = required
+        result['secured_amount']      = round(secured, 2)
+        result['unsecured_amount']    = round(unsecured, 2)
+
+    return result
+
+
+def calculate_loan_loss_reserve(regulatory_minimum: float, ifrs9_ecl: float) -> dict:
+    """
+    대손준비금 산출 — 은행업감독규정 제29조
+
+    IFRS 9 도입 후 회계상 충당금은 ECL로 적립하고, 그 금액이 감독규정
+    최저적립액에 미달하면 차액을 이익잉여금 내 대손준비금으로 적립한다.
+
+    Returns:
+        {regulatory_minimum, ifrs9_ecl, loan_loss_reserve, is_sufficient}
+    """
+    shortfall = max(regulatory_minimum - ifrs9_ecl, 0.0)
+    return {
+        'regulatory_minimum': round(regulatory_minimum, 2),
+        'ifrs9_ecl':          round(ifrs9_ecl, 2),
+        'loan_loss_reserve':  round(shortfall, 2),
+        'is_sufficient':      shortfall == 0.0,
     }
 
 
 def determine_sicr(pd_original: float, pd_current: float,
                    ews_score: float = None, dpd: int = 0,
-                   grade_drop_notches: int = 0) -> dict:
+                   grade_drop_notches: int = 0,
+                   credit_impaired: bool = False,
+                   impairment_evidence: str = None) -> dict:
     """
     SICR (Significant Increase in Credit Risk) 판별
     — IFRS 9 Stage 1 → Stage 2 이동 트리거
 
-    SICR 조건 (OR):
+    SICR 조건 (OR) — 기준서 1109호 5.5.11의 30일 연체 추정 포함:
       1. PD 2배 이상 상승
       2. 등급 2 notch 이상 하락
-      3. EWS 점수 WATCH 이하 (< 55점)
+      3. EWS 점수 WATCH 미만 (< 55점, EWS_THRESHOLD_SICR)
       4. DPD ≥ 30일
 
+    Stage 3(신용손상)은 기준서 1109호 부록A의 '신용이 손상된 금융자산'
+    정의를 따른다 — 채무불이행, 차입자의 유의적 재무적 어려움, 채권 양보,
+    파산 가능성 등 객관적 손상 증거. 연체 90일 초과는 B5.5.37의 반증가능한
+    채무불이행 추정으로 손상 요건이 된다.
+
+    PD 수치 단독(예: PD ≥ 20%)은 기준서상 손상 요건이 아니므로 Stage 3
+    판정에서 제외한다 — 자산건전성 '회수의문' 경계와 혼동한 결과였고,
+    그대로 두면 정상 이행 중인 저신용 여신까지 손상 처리되어 충당금이
+    과대 계상된다. 손상 증거는 credit_impaired 로 명시적으로 전달한다.
+
     Returns:
-        {sicr: bool, reasons: list[str], recommended_stage: int}
+        {sicr, reasons, recommended_stage, impairment_reason}
     """
     reasons = []
 
@@ -683,17 +796,28 @@ def determine_sicr(pd_original: float, pd_current: float,
     if grade_drop_notches >= 2:
         reasons.append('GRADE_DROP_2NOTCH')
 
-    if ews_score is not None and ews_score < 55:
+    if ews_score is not None and ews_score < EWS_THRESHOLD_SICR:
         reasons.append('EWS_WATCH')
 
-    if dpd >= 30:
+    if dpd >= DPD_PRECAUTIONARY:
         reasons.append('DPD_30')
 
     sicr = len(reasons) > 0
 
-    # Stage 결정
-    if dpd >= 90 or pd_current >= 0.20:
+    # Stage 3 — 객관적 손상 증거가 있을 때만
+    impairment_reason = None
+    if dpd >= DPD_SUBSTANDARD:
+        impairment_reason = 'DPD_90_DEFAULT'      # B5.5.37 채무불이행 추정
+    elif credit_impaired:
+        impairment_reason = impairment_evidence or 'CREDIT_IMPAIRED'
+
+    if impairment_reason:
         stage = 3
+        # 신용손상은 신용위험의 유의적 증가를 당연히 포함한다. 이를 반영하지 않으면
+        # 'SICR 발생 건수' 집계에서 Stage 3 건이 통째로 빠져 과소계상된다.
+        if impairment_reason not in reasons:
+            reasons.append(impairment_reason)
+        sicr = True
     elif sicr:
         stage = 2
     else:
@@ -703,6 +827,7 @@ def determine_sicr(pd_original: float, pd_current: float,
         'sicr': sicr,
         'reasons': reasons,
         'recommended_stage': stage,
+        'impairment_reason': impairment_reason,
     }
 
 
