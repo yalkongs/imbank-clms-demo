@@ -148,3 +148,100 @@ body {
 .strategy-MAINTAIN { @apply bg-gray-100 text-gray-800; }
 .strategy-REDUCE { @apply bg-yellow-100 text-yellow-800; }
 .strategy-EXIT { @apply bg-red-100 text-red-800; }
+
+/* ============================================================
+   iM뱅크 브랜드 변수 + 테마 시스템 (Classic / Gradient Mesh)
+   ============================================================ */
+:root {
+  --im-primary: #00BFA5;
+  --im-deep: #00897B;
+  --im-accent: #AEEA00;   /* 라임 */
+  --im-teal: #4DD0E1;
+  --im-ink: #0F2E2A;
+}
+
+/* 라임 강조 CTA */
+.btn-accent {
+  @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-semibold transition-colors duration-200;
+  background: var(--im-accent);
+  color: var(--im-ink);
+}
+.btn-accent:hover { background: #9BD400; }
+
+/* --- Gradient Mesh 테마 ---
+   body에 직접 소프트 radial 메시를 깔고(fixed), 셸/카드는 프로스티드 처리.
+   컴포넌트 로직 변경 없이 data-theme 속성만으로 전환. */
+[data-theme="mesh"] body {
+  background:
+    radial-gradient(46% 46% at 14% 18%, rgba(0, 191, 165, 0.30), transparent 62%),
+    radial-gradient(40% 40% at 86% 12%, rgba(174, 234, 0, 0.20), transparent 60%),
+    radial-gradient(52% 52% at 78% 82%, rgba(77, 208, 225, 0.26), transparent 62%),
+    radial-gradient(42% 42% at 22% 88%, rgba(0, 137, 123, 0.18), transparent 60%),
+    #eef4f2;
+  background-attachment: fixed;
+}
+
+[data-theme="mesh"] .app-root { background: transparent !important; }
+
+[data-theme="mesh"] .app-sidebar {
+  background: rgba(255, 255, 255, 0.70) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-right-color: rgba(255, 255, 255, 0.55) !important;
+}
+
+[data-theme="mesh"] .app-header {
+  background: rgba(255, 255, 255, 0.60) !important;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom-color: rgba(255, 255, 255, 0.55) !important;
+}
+
+/* 페이지 카드(전역 .card + 공통 white 카드 패턴)를 프로스티드로.
+   코드베이스에서 실제로 쓰이는 rounded 변형을 모두 커버한다.
+   rounded-full은 배지/아바타이므로 의도적으로 제외. */
+[data-theme="mesh"] .card,
+[data-theme="mesh"] .app-main .bg-white.rounded,
+[data-theme="mesh"] .app-main .bg-white.rounded-lg,
+[data-theme="mesh"] .app-main .bg-white.rounded-xl,
+[data-theme="mesh"] .app-main .bg-white.rounded-2xl,
+[data-theme="mesh"] .app-main .bg-white.rounded-t-xl {
+  background: rgba(255, 255, 255, 0.82) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+/* 모달 패널(bg-white + shadow-xl/2xl)은 가독성 우선 — 불투명 유지.
+   위 카드 규칙과 specificity가 같으므로 반드시 뒤에 와야 이긴다. */
+[data-theme="mesh"] .app-main .bg-white.shadow-xl,
+[data-theme="mesh"] .app-main .bg-white.shadow-2xl {
+  background: #ffffff !important;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-color: rgb(229, 231, 235);
+}
+
+/* 부드러운 테마 전환 */
+.app-root, .app-sidebar, .app-header, .card {
+  transition: background 0.4s ease, backdrop-filter 0.4s ease;
+}
+
+/* 온보딩 모달 등장 애니메이션 */
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.modal-in { animation: modal-in 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+
+/* 테마 미리보기 카드용 미니 메시 */
+.mini-mesh {
+  background:
+    radial-gradient(60% 60% at 20% 20%, rgba(0, 191, 165, 0.55), transparent 62%),
+    radial-gradient(55% 55% at 85% 25%, rgba(174, 234, 0, 0.45), transparent 60%),
+    radial-gradient(60% 60% at 75% 85%, rgba(77, 208, 225, 0.50), transparent 62%),
+    #eef4f2;
+}
+.mini-flat {
+  background: #f1f5f4;
+}

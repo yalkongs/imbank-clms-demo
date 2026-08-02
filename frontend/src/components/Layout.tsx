@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -24,8 +24,12 @@ import {
   Search,
   FileCheck,
   ListChecks,
-  AlertOctagon
+  AlertOctagon,
+  Info
 } from 'lucide-react';
+import { useTheme } from '../context/ThemeProvider';
+import OnboardingModal from './OnboardingModal';
+import ThemeToggle from './ThemeToggle';
 
 interface NavItem {
   path: string;
@@ -103,10 +107,27 @@ const navGroups: NavGroup[] = [
 ];
 
 export default function Layout() {
+  const { onboarded, setOnboarded } = useTheme();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // 최초 접속(온보딩 미완료) 시 소개 팝업 표시
+  useEffect(() => {
+    if (!onboarded) {
+      setShowOnboarding(true);
+    }
+  }, [onboarded]);
+
+  const closeOnboarding = () => {
+    setShowOnboarding(false);
+    setOnboarded(true);
+  };
+
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="app-root flex h-screen bg-gray-50">
+      {showOnboarding && <OnboardingModal onClose={closeOnboarding} />}
+
       {/* 사이드바 */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      <aside className="app-sidebar w-64 bg-white border-r border-gray-200 flex flex-col">
         {/* 로고 영역 */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <Building2 className="text-blue-600 mr-3" size={28} />
@@ -159,7 +180,7 @@ export default function Layout() {
       {/* 메인 콘텐츠 영역 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 헤더 */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
+        <header className="app-header h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
           <div className="flex items-center space-x-4">
             <h2 className="text-xl font-semibold text-gray-900">기업여신심사시스템</h2>
             <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
@@ -168,6 +189,18 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center space-x-4">
+            {/* 테마 전환 (Classic / Mesh) */}
+            <ThemeToggle />
+
+            {/* 소개 팝업 다시 보기 */}
+            <button
+              onClick={() => setShowOnboarding(true)}
+              aria-label="시스템 소개 다시 보기"
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+            >
+              <Info size={20} />
+            </button>
+
             {/* 알림 */}
             <button className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
               <Bell size={20} />
@@ -193,7 +226,7 @@ export default function Layout() {
         </header>
 
         {/* 페이지 콘텐츠 */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="app-main flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>
       </div>
