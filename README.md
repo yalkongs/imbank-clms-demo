@@ -20,6 +20,7 @@ Basel II/III IRB 방식의 신용리스크 계량화 체계를 기반으로, 19�
 - [시스템 아키텍처](#시스템-아키텍처)
 - [프로젝트 구조](#프로젝트-구조)
 - [설치 및 실행](#설치-및-실행)
+- [배포](#배포)
 - [API 엔드포인트](#api-엔드포인트)
 - [데이터 모델](#데이터-모델)
 - [시스템 상수 및 가정치](#시스템-상수-및-가정치)
@@ -380,6 +381,56 @@ cd imbank-clms-demo
 lsof -ti:8000 | xargs kill 2>/dev/null
 lsof -ti:3000 | xargs kill 2>/dev/null
 ```
+
+---
+
+## 배포
+
+**배포 정본은 Render 하나다** (`render.yaml`). 과거에 Vercel 구성이 함께 있었으나
+서버리스 환경의 읽기 전용 파일시스템이 SQLite 데모와 맞지 않아 제거했다.
+
+### 구조
+
+```
+단일 uvicorn 프로세스
+  ├─ /api/*   FastAPI 라우터 25개
+  └─ /*       사전 빌드된 SPA (frontend/dist) 를 StaticFiles + FileResponse 로 서빙
+```
+
+프론트엔드를 별도 호스팅하지 않고 백엔드가 함께 서빙한다
+(`backend/app/main.py:110-127`). 따라서 **`frontend/dist`는 리포에 커밋되어야 한다.**
+`.gitignore`의 Python `dist/` 패턴에 걸리지 않도록 `!frontend/dist/` 예외가 있으니
+지우지 말 것. 데모 DB(`database/imbank_demo.db`)도 같은 이유로 `*.db` 예외로 추적한다.
+
+### 배포 전 체크리스트
+
+```bash
+# 1. 프론트엔드 빌드 — 번들 해시가 바뀌므로 반드시 dist 전체를 커밋한다
+cd frontend && npm run build
+
+# 2. index.html이 참조하는 asset이 실제로 존재하는지 확인
+cd .. && grep -o '/assets/[^"]*' frontend/dist/index.html | \
+  while read f; do [ -f "frontend/dist$f" ] && echo "OK $f" || echo "MISSING $f"; done
+
+# 3. 로컬에서 Render와 동일한 방식으로 기동해 확인
+cd backend && uvicorn app.main:app --port 8177
+#   /health, /api/dashboard/summary, SPA 딥링크(/covenant) 모두 200 이어야 한다
+
+git add frontend/dist && git commit
+```
+
+2단계에서 `MISSING`이 나오면 배포된 데모가 백지 화면이 된다. 신규 빌드 산출물을
+커밋하지 않고 `index.html`만 갱신했을 때 발생하는 전형적인 실수다.
+
+### 설정 요약
+
+| 항목 | 값 |
+|------|-----|
+| 런타임 | Python 3.13.4 |
+| 리전 | Singapore (무료 플랜 중 한국 최근접) |
+| 빌드 | `pip install -r requirements.txt` |
+| 기동 | `cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
+| 헬스체크 | `/health` |
 
 ---
 

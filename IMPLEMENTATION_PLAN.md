@@ -780,10 +780,17 @@ frontend/src/App.tsx                       라우팅 3개 추가
 - [x] **모달 가독성 회귀 수정** — 모달 패널이 전부 `bg-white rounded-xl shadow-2xl` 조합이라
       카드 규칙에 걸려 반투명 처리되고 있었다. `shadow-xl`/`shadow-2xl` 예외 규칙 추가.
 
+- [x] **mesh 모달 내부 sticky 헤더 회귀** — 모달 패널을 불투명 예외로 돌리면서, 그 내부의
+      `bg-white rounded-t-xl` sticky 헤더(`CustomerProfitability.tsx:332`)가 카드 규칙에
+      걸려 반투명으로 남았다. 모달 하위 `bg-white` 전체를 불투명 예외로 방어.
+- [x] **차트 인라인 hex 브랜드 미적용 13건** — Tailwind `blue` 리매핑은 클래스명에만 적용되어
+      Recharts에 직접 넘기는 hex가 구 브랜드 블루로 남아 있었다. 9개 파일을 민트 스케일로 치환.
+- [x] **Vercel / Render 이중 배포 구성 정리** — Render를 단일 정본으로 확정하고
+      `vercel.json` · `api/index.py`를 제거했다. README에 배포 절차와 체크리스트,
+      CLAUDE.md에 함정(dist 커밋 필수)을 문서화.
+
 ### 미착수
 
-- [ ] **Vercel / Render 이중 배포 구성 정리** — `vercel.json`(서버리스 `api/index.py` + 정적 dist)과
-      `render.yaml`(단일 uvicorn)이 공존한다. 정본을 정하고 나머지는 제거하거나 문서화 필요.
 - [ ] **번들 크기 최적화** — 단일 청크 1.12MB (gzip 282KB). `manualChunks` 또는 라우트별
       `dynamic import()`로 코드 분할 여지.
 - [ ] **`caniuse-lite` 갱신** — 빌드 시 7개월 경과 경고.

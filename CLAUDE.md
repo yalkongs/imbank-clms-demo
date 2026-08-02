@@ -96,3 +96,19 @@ python generate_extension_data.py    # 확장 데이터
 - 백엔드는 SQLAlchemy ORM 모델(`backend/app/models/`)을 선언하지만 실제 쿼리는 `text()`로 raw SQL을 실행함. API 추가 시 이 패턴 유지.
 - `Applications.tsx`와 `ews_advanced.py`는 각각 100KB 내외의 대형 파일이므로 편집 시 주의.
 - DB WAL 파일(`imbank_demo.db-shm`, `imbank_demo.db-wal`)은 git 추적 불필요.
+
+## 배포 (Render 단일 정본)
+
+`render.yaml` 하나가 정본이다. 단일 uvicorn이 API와 SPA를 함께 서빙한다
+(`backend/app/main.py:110-127`). Vercel 구성은 서버리스 읽기 전용 파일시스템이
+SQLite 데모와 맞지 않아 제거했으므로 되살리지 말 것.
+
+- **`frontend/dist`는 반드시 커밋한다.** `.gitignore`의 `!frontend/dist/` 예외가
+  Python `dist/` 패턴을 상쇄하고 있다. 이 예외를 지우면 신규 번들이 커밋되지 않아
+  배포 데모가 백지 화면이 된다.
+- 프론트엔드를 수정했으면 `cd frontend && npm run build` 후 **dist 전체를** 커밋한다.
+  번들 파일명 해시가 바뀌므로 `index.html`만 커밋하면 asset 404가 난다.
+- `database/imbank_demo.db`도 배포 자산이라 `*.db` 예외로 추적한다.
+- 색상은 `tailwind.config.js`에서 Tailwind `blue` 스케일을 iM 민트로 리매핑해 처리한다.
+  단 이 리매핑은 클래스명에만 적용되므로 Recharts 등에 **인라인 hex를 직접 넘길 때는
+  민트 스케일(`#00897B`, `#00BFA5`, `#57D7C2` 등)을 직접 써야 한다.**
