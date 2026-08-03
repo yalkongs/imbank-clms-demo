@@ -12,6 +12,7 @@ from datetime import date
 import uuid
 
 from ..core.database import get_db
+from ..core.audit import record_audit
 from ..core.config import AS_OF_DATE
 from ..services.calculations import (
     determine_sicr,
@@ -436,6 +437,8 @@ def calculate_ecl_for_facility(
             "gap": round(ecl_final - float(ex_prov or 0), 2),
         }
     )
+    record_audit(db, "ECL_RECALC", "ecl_calculation", facility_id,
+                 after={"stage": stage, "ecl_final": ecl_final})
     db.commit()
 
     return {

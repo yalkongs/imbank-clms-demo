@@ -4,6 +4,9 @@ import { Layout } from './components';
 import CapitalHub from './pages/CapitalHub';
 import PortfolioHub from './pages/PortfolioHub';
 import LimitsHub from './pages/LimitsHub';
+import InclusiveFinance from './pages/InclusiveFinance';
+import PFMonitoring from './pages/PFMonitoring';
+import Governance from './pages/Governance';
 import {
   Dashboard,
   Applications,
@@ -54,6 +57,9 @@ function App() {
         <Route path="customer-browser" element={<CustomerBrowser />} />
         {/* Phase 1: 여신 심사 고도화 */}
         <Route path="covenant" element={<Covenant />} />
+        <Route path="inclusive-finance" element={<InclusiveFinance />} />
+        <Route path="pf-monitoring" element={<PFMonitoring />} />
+        <Route path="governance" element={<Governance />} />
         {/* Phase 2: 부실 관리 핵심 */}
         <Route path="asset-classification" element={<AssetClassification />} />
         <Route path="delinquency" element={<Delinquency />} />

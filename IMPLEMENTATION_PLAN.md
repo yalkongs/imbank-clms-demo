@@ -921,6 +921,33 @@ frontend/src/App.tsx                       라우팅 3개 추가
 - [x] `risk_parameter`에 없는 `customer_id`로 조인 (`rp` 는 `application_id` 기준)
 - [x] `composite_score`를 `ews_alert`에서 조회 (실제로는 `ews_composite_score`에 있음)
 
+### iM뱅크 전략 기능 확장 (2026-08-03)
+
+경영 환경 리서치(시중은행 전환 인가 조건·연체율 1%대·수도권 확장·PF 제도 개편)를
+바탕으로 8개 기능을 추가했다. 엔드포인트 190 → 204, 화면 21 → 24.
+
+**Phase A — 전략 직결**
+- [x] 포용금융 이행 현황 (`inclusive_finance.py` + `InclusiveFinance.tsx`) —
+      중신용(BBB+ 이하)·개인사업자 공급 실적 vs 인가 공언 목표, 세그먼트 건전성 병기.
+      실측: 중신용 달성률 55.6%, SOHO 11.1% (미달), SOHO 연체율 1.66%.
+- [x] 신규 진출 지역 빈티지 (`vintage_analysis` REGION 코호트 + `/api/delinquency/vintage-by-region`
+      + Portfolio 카드) — 수도권 MOB3 3.15% vs 대구경북 1.39%.
+- [x] 부동산PF 사업장 관리 (`pf_project`/`pf_progress` + `pf.py` + `PFMonitoring.tsx`) —
+      40개 사업장, 공정-분양 괴리 경보 6건, 2027 제도 시뮬레이션(RWA +36%, 충당금 237→1,285억).
+
+**Phase B — 내부통제**
+- [x] 전결권 DB화 (`approval_authority` 테이블) + 승인 API 금액-권한 검증
+      (담당자가 300억 승인 시도 → 403 차단 실증).
+- [x] audit_log 활성화 (`core/audit.py`) — 승인·분류실행·ECL 재산출에 감사 기록.
+- [x] 보고·감사 화면 (`governance.py` + `Governance.tsx`) — 업무보고서(인쇄 뷰)·전결 규정·감사 추적.
+
+**Phase C — 자본규제 연계**
+- [x] 스트레스완충자본 (`/api/stress-test/stress-capital-buffer` + StressTest 카드) —
+      SEVERE 시나리오 BIS 하락폭 기반 SCB, 요구 비율 = 10.5% + SCB.
+- [x] ALM 헷지 포지션 등록 POST (조회 전용이던 ALM 에 실행 기능).
+
+**남김 (후순위)**: 상환 스케줄 테이블(DSCR·EAD 실측화) — 계정계 성격이라 별도 판단 필요.
+
 ### 미착수
 
 - [ ] **번들 크기 최적화** — 단일 청크 1.12MB (gzip 282KB). `manualChunks` 또는 라우트별

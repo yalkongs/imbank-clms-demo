@@ -18,6 +18,8 @@ from .api import financial_analysis, group_credit, covenant
 from .api import asset_classification, ecl, delinquency
 # Phase 3: 자동화 브릿지
 from .api import automation
+# iM뱅크 전략 기능: 포용금융·PF 사업장
+from .api import inclusive_finance, pf, governance
 
 
 @asynccontextmanager
@@ -99,6 +101,11 @@ app.include_router(delinquency.router)
 
 # Phase 3: 자동화 브릿지
 app.include_router(automation.router)
+
+# iM뱅크 전략 기능
+app.include_router(inclusive_finance.router)
+app.include_router(pf.router)
+app.include_router(governance.router)
 
 
 @app.get("/health")

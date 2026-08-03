@@ -319,6 +319,49 @@ def get_roll_rate(
     return {"roll_rates": roll_rates, "stages": stages}
 
 
+@router.get("/vintage-by-region")
+def get_vintage_by_region(db: Session = Depends(get_db)):
+    """지역별 신규취급 빈티지 곡선 — 시중은행 전환 후 수도권 확장 리스크 감시.
+
+    연고지(대구경북)는 관계형 금융 정보가 있어 조기 부실이 낮고, 신규 진출한
+    수도권은 초기 부실률이 높게 시작해 심사 데이터가 쌓이며 개선되는지를 본다.
+    코호트(취급월)별 MOB 3/6/12 연체율을 지역끼리 비교한다.
+    """
+    rows = db.execute(text("""
+        SELECT vintage_month, cohort_value,
+               mob_3_delinquent_rate, mob_6_delinquent_rate, mob_12_delinquent_rate,
+               origination_count, origination_amount
+        FROM vintage_analysis
+        WHERE cohort_type = 'REGION'
+        ORDER BY vintage_month, cohort_value
+    """)).fetchall()
+
+    labels = {"CAPITAL": "수도권", "DAEGU_GB": "대구경북", "BUSAN_GN": "부산경남"}
+    months: dict = {}
+    for r in rows:
+        m = months.setdefault(r[0], {"month": r[0]})
+        code = r[1]
+        m[f"{code}_mob3"] = round((r[2] or 0) * 100, 2)
+        m[f"{code}_mob6"] = round((r[3] or 0) * 100, 2)
+        m[f"{code}_mob12"] = round((r[4] or 0) * 100, 2)
+
+    # 지역별 최근 6개 코호트 평균 (요약 카드용)
+    summary = []
+    for code, label in labels.items():
+        recent = [r for r in rows if r[1] == code][-6:]
+        if not recent:
+            continue
+        summary.append({
+            "region": code,
+            "region_label": label,
+            "avg_mob3": round(sum((r[2] or 0) for r in recent) / len(recent) * 100, 2),
+            "avg_mob12": round(sum((r[4] or 0) for r in recent) / len(recent) * 100, 2),
+            "cohort_count": len(recent),
+        })
+
+    return {"labels": labels, "curve": list(months.values()), "summary": summary}
+
+
 @router.get("/vintage-delinquency")
 def get_vintage_delinquency(
     db: Session = Depends(get_db)

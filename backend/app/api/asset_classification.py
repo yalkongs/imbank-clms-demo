@@ -12,6 +12,7 @@ from datetime import date, datetime
 import uuid
 
 from ..core.database import get_db
+from ..core.audit import record_audit
 from ..core.config import AS_OF_DATE
 from ..services.calculations import classify_asset, PROVISION_RATES
 
@@ -399,6 +400,8 @@ def run_classification(
             {"cls": cls, "fid": fid}
         )
 
+    record_audit(db, "CLASSIFICATION_RUN", "asset_classification", bd,
+                 after={"inserted": inserted, "updated": updated})
     db.commit()
     return {
         "message":    f"분류 완료: {inserted}건 신규, {updated}건 갱신",

@@ -4,11 +4,13 @@
 금리 갭 분석, 시나리오 분석, 헷지 제안
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
+import uuid
 from ..core.database import get_db
+from ..core.audit import record_audit
 
 router = APIRouter(prefix="/api/alm", tags=["ALM - Interest Rate Risk"])
 
@@ -487,3 +489,40 @@ async def get_alm_dashboard(db: Session = Depends(get_db)):
             "total_notional": pending_recommendations[1]
         }
     }
+
+@router.post("/hedge-positions")
+def create_hedge_position(
+    instrument_type: str,
+    notional_amount: float,
+    fixed_rate: float = None,
+    floating_index: str = "CD91",
+    maturity_date: str = None,
+    db: Session = Depends(get_db),
+):
+    """헷지 포지션 등록 — ALM 이 조회 전용에 머물지 않도록 실행 기능을 연다.
+
+    PoC 단순화: MTM 0, 효과성 100% 로 초기 등록하고 감사 기록을 남긴다.
+    """
+    if instrument_type not in ("IRS", "FRA", "CAP", "FLOOR", "SWAPTION"):
+        raise HTTPException(status_code=422, detail="지원하지 않는 상품 유형")
+    if notional_amount <= 0:
+        raise HTTPException(status_code=422, detail="명목금액은 양수여야 합니다")
+
+    pid = f"HDG_{uuid.uuid4().hex[:10].upper()}"
+    db.execute(text("""
+        INSERT INTO hedge_position
+        (position_id, position_date, instrument_type, notional_amount,
+         pay_leg, receive_leg, fixed_rate, floating_index,
+         maturity_date, mtm_value, hedge_effectiveness, status)
+        VALUES (:pid, :pdate, :itype, :notional,
+                'FIXED', 'FLOATING', :frate, :fidx,
+                :mat, 0, 1.0, 'ACTIVE')
+    """), {
+        "pid": pid, "pdate": AS_OF_STR, "itype": instrument_type,
+        "notional": notional_amount, "frate": fixed_rate,
+        "fidx": floating_index, "mat": maturity_date,
+    })
+    record_audit(db, "HEDGE_CREATE", "hedge_position", pid,
+                 after={"instrument": instrument_type, "notional": notional_amount})
+    db.commit()
+    return {"position_id": pid, "status": "ACTIVE"}

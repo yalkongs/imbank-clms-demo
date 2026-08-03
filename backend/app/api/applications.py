@@ -7,6 +7,7 @@ from sqlalchemy import text
 from typing import Optional
 from datetime import datetime
 from ..core.database import get_db
+from ..core.audit import record_audit
 from ..core.config import AS_OF_DATE
 from ..services.calculations import (
     calculate_raroc, calculate_pricing, calculate_rwa,
@@ -27,14 +28,35 @@ REVIEW_STAGES = {
     "COMPLETED": {"name": "완료", "order": 8}
 }
 
-# 승인 권한 기준
-APPROVAL_AUTHORITY = {
-    "STAFF": {"limit": 500000000, "name": "담당자"},         # 5억
-    "TEAM_LEAD": {"limit": 5000000000, "name": "팀장"},      # 50억
-    "DEPT_HEAD": {"limit": 20000000000, "name": "부서장"},   # 200억
-    "EXECUTIVE": {"limit": 100000000000, "name": "임원"},    # 1000억
-    "COMMITTEE": {"limit": float('inf'), "name": "여신위원회"}
+# 승인 권한 기준 — DB(approval_authority)가 정본.
+# 종전에는 여기 하드코딩돼 있어 전결 규정을 바꾸려면 배포가 필요했고,
+# approve API 는 권한 검증 없이 파라미터로 받은 레벨을 그대로 기록했다.
+_AUTHORITY_FALLBACK = {
+    "STAFF": {"limit": 500000000, "name": "담당자"},
+    "TEAM_LEAD": {"limit": 5000000000, "name": "팀장"},
+    "DEPT_HEAD": {"limit": 20000000000, "name": "부서장"},
+    "EXECUTIVE": {"limit": 100000000000, "name": "임원"},
+    "COMMITTEE": {"limit": float('inf'), "name": "여신위원회"},
 }
+
+
+def load_approval_authority(db) -> dict:
+    """DB 의 전결권 규정을 읽는다. 테이블이 없으면 폴백 상수를 쓴다."""
+    try:
+        rows = db.execute(text("""
+            SELECT authority_level, authority_name, amount_limit
+            FROM approval_authority WHERE status = 'ACTIVE'
+            ORDER BY display_order
+        """)).fetchall()
+        if rows:
+            return {
+                r[0]: {"name": r[1],
+                       "limit": float('inf') if r[2] is None else float(r[2])}
+                for r in rows
+            }
+    except Exception:
+        pass
+    return _AUTHORITY_FALLBACK
 
 
 @router.get("")
@@ -193,7 +215,7 @@ def get_pending_applications(db: Session = Depends(get_db)):
             "existing_facility_count": r[19],
             "existing_exposure": r[20],
             # 승인 필요 권한
-            "required_authority": get_required_authority(r[8])
+            "required_authority": get_required_authority(r[8], db)
         }
         for r in results
     ]
@@ -585,7 +607,7 @@ def get_application_detail(application_id: str, db: Session = Depends(get_db)):
             for h in approval_history
         ],
         "financial_ratios": financial_ratios,
-        "required_authority": get_required_authority(app[6]),
+        "required_authority": get_required_authority(app[6], db),
         "review_stages": REVIEW_STAGES
     }
 
@@ -808,6 +830,24 @@ def approve_application(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
+    # 전결권 검증 — 승인 금액이 승인자 권한 한도를 넘으면 거부한다.
+    # 종전에는 파라미터로 받은 레벨을 검증 없이 그대로 기록했다.
+    if decision in ("APPROVE", "CONDITIONAL"):
+        authority = load_approval_authority(db)
+        effective_amount = approved_amount if approved_amount is not None else float(app[0] or 0)
+        required = get_required_authority(effective_amount, db)
+        level = approval_level or required["level"]
+        if level not in authority:
+            raise HTTPException(status_code=422, detail=f"알 수 없는 승인 권한: {level}")
+        if effective_amount > authority[level]["limit"]:
+            raise HTTPException(
+                status_code=403,
+                detail=(f"전결권 초과: {authority[level]['name']} 한도 "
+                        f"{authority[level]['limit']/1e8:,.0f}억 < 승인금액 "
+                        f"{effective_amount/1e8:,.0f}억 — {required['name']} 이상 결재 필요"),
+            )
+        approval_level = level
+
     # 상태 업데이트
     new_status = "APPROVED" if decision == "APPROVE" else (
         "CONDITIONAL" if decision == "CONDITIONAL" else "REJECTED"
@@ -830,13 +870,20 @@ def approve_application(
     """), {
         "appr_id": approval_id,
         "app_id": application_id,
-        "level": approval_level or get_required_authority(app[0])["level"],
+        "level": approval_level or get_required_authority(app[0], db)["level"],
         "approver": approver_name or "시스템",
         "decision": decision,
         "conditions": conditions,
         "comments": comments
     })
 
+    record_audit(
+        db, f"LOAN_{decision}", "loan_application", application_id,
+        before={"status": app[1]},
+        after={"status": new_status, "approved_amount": approved_amount,
+               "approval_level": approval_level},
+        user_id=approver_name or "김여신",
+    )
     db.commit()
 
     return {
@@ -849,12 +896,14 @@ def approve_application(
     }
 
 
-def get_required_authority(amount: float) -> dict:
-    """금액에 따른 필요 승인 권한 반환"""
+def get_required_authority(amount: float, db=None) -> dict:
+    """금액에 따른 필요 승인 권한 반환 (DB 규정 우선)"""
+    authority = load_approval_authority(db) if db is not None else _AUTHORITY_FALLBACK
     if amount is None:
-        return {"level": "STAFF", "name": "담당자"}
+        first = next(iter(authority))
+        return {"level": first, "name": authority[first]["name"]}
 
-    for level, info in APPROVAL_AUTHORITY.items():
+    for level, info in authority.items():
         if amount <= info["limit"]:
             return {"level": level, "name": info["name"], "limit": info["limit"]}
 

@@ -256,3 +256,44 @@ def compare_scenarios(db: Session = Depends(get_db)):
         })
 
     return results
+
+@router.get("/stress-capital-buffer")
+def get_stress_capital_buffer(db: Session = Depends(get_db)):
+    """스트레스완충자본(SCB) 산출 — 스트레스테스트 결과를 자본 요구량으로 연결.
+
+    도입 취지: 위기상황분석 결과 자본비율 하락폭이 큰 은행일수록 평시에
+    완충자본을 더 쌓게 한다. 산식(PoC): SCB = min(max(기준 BIS - SEVERE
+    시나리오 BIS, 0), 2.5%p). 최종 요구 비율 = 규제최소 10.5% + SCB.
+    종전에는 스트레스테스트가 분석 화면에 머물고 자본 요구량으로 이어지지
+    않았다.
+    """
+    cap = db.execute(text("""
+        SELECT bis_ratio FROM capital_position ORDER BY base_date DESC LIMIT 1
+    """)).fetchone()
+    base_bis = round(float(cap[0]) * 100, 2) if cap else 0
+
+    # SEVERE 시나리오 재현 (comparison 과 동일 로직 축약)
+    factors = {"pd": 2.5, "lgd": 1.5, "rwa": 1.35}
+    capital = db.execute(text("""
+        SELECT total_capital, total_rwa FROM capital_position
+        ORDER BY base_date DESC LIMIT 1
+    """)).fetchone()
+    total_capital, base_rwa = float(capital[0]), float(capital[1])
+    stressed_bis = round(total_capital / (base_rwa * factors["rwa"]) * 100, 2)
+
+    drop = max(base_bis - stressed_bis, 0)
+    scb = round(min(drop, 2.5), 2)
+    required = round(10.5 + scb, 2)
+
+    return {
+        "base_bis": base_bis,
+        "severe_stressed_bis": stressed_bis,
+        "bis_drop": round(drop, 2),
+        "scb": scb,
+        "scb_cap": 2.5,
+        "regulatory_minimum": 10.5,
+        "required_ratio": required,
+        "headroom": round(base_bis - required, 2),
+        "meets_requirement": base_bis >= required,
+        "note": "SCB = min(max(기준 BIS − SEVERE 스트레스 BIS, 0), 2.5%p) — PoC 산식",
+    }

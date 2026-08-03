@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import {
   Activity,
   AlertTriangle,
@@ -17,8 +18,10 @@ export default function StressTest() {
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [results, setResults] = useState<any>(null);
   const [resultLoading, setResultLoading] = useState(false);
+  const [scb, setScb] = useState<any>(null);
 
   useEffect(() => {
+    axios.get('/api/stress-test/stress-capital-buffer').then(r => setScb(r.data)).catch(() => {});
     loadScenarios();
   }, []);
 
@@ -87,6 +90,34 @@ export default function StressTest() {
           <h1 className="text-2xl font-bold text-gray-900">스트레스 테스트</h1>
           <p className="text-sm text-gray-500 mt-1">시나리오 기반 포트폴리오 충격 분석</p>
         </div>
+
+      {/* 스트레스완충자본 — 테스트 결과가 자본 요구량으로 이어진다 */}
+      {scb && (
+        <div className={`rounded-xl border p-4 flex items-center justify-between ${scb.meets_requirement ? 'border-gray-200 bg-white' : 'border-red-300 bg-red-50'}`}>
+          <div className="flex items-center gap-6 text-sm">
+            <div>
+              <p className="text-xs text-gray-500">SEVERE 시나리오 BIS 하락폭</p>
+              <p className="text-lg font-bold tabular">{scb.bis_drop}%p</p>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div>
+              <p className="text-xs text-gray-500">스트레스완충자본 (SCB)</p>
+              <p className="text-lg font-bold tabular text-blue-700">{scb.scb}%p <span className="text-xs text-gray-400">(상한 {scb.scb_cap})</span></p>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div>
+              <p className="text-xs text-gray-500">요구 자본비율 (10.5% + SCB)</p>
+              <p className="text-lg font-bold tabular">{scb.required_ratio}%</p>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div>
+              <p className="text-xs text-gray-500">현재 BIS 대비 여유</p>
+              <p className={`text-lg font-bold tabular ${scb.headroom > 0 ? 'text-green-600' : 'text-red-600'}`}>{scb.headroom > 0 ? '+' : ''}{scb.headroom}%p</p>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-400 max-w-[200px] text-right">{scb.note}</p>
+        </div>
+      )}
         <button
           onClick={runStressTest}
           disabled={!selectedScenario || resultLoading}

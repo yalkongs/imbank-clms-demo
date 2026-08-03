@@ -849,6 +849,51 @@ def generate_vintage_analysis(conn):
             )
             vintages.append(vintage)
 
+    # 지역별 Vintage (최근 18개월) — 시중은행 전환 후 수도권 확장 리스크 감시용.
+    # 수도권은 신규 진출 지역이라 관계형 금융 정보가 없어 초기 부실률이 연고지
+    # (대구경북)보다 높게 형성되고, 시간이 갈수록 심사 데이터가 쌓여 개선되는
+    # 궤적을 모사한다. 부산경남은 중간.
+    REGION_PROFILES = {
+        'DAEGU_GB': {'label': '대구경북', 'factor': 0.7,  'trend': 0.0},    # 연고지: 낮고 안정
+        'CAPITAL':  {'label': '수도권',   'factor': 1.9,  'trend': -0.03},  # 신규: 높지만 개선 중
+        'BUSAN_GN': {'label': '부산경남', 'factor': 1.15, 'trend': -0.01},
+    }
+    region_months = months_back(18)
+    for region_code, prof in REGION_PROFILES.items():
+        for i, vintage_month in enumerate(region_months):
+            # trend 는 최근 코호트일수록 부실률이 낮아지는(개선) 방향
+            month_factor = max(0.35, prof['factor'] + prof['trend'] * i)
+
+            base_count = random.randint(25, 60)
+            base_amount = base_count * random.uniform(250, 500)
+
+            mob_3_del_rate = random.uniform(0.012, 0.028) * month_factor
+            mob_6_del_rate = mob_3_del_rate * random.uniform(1.3, 1.8)
+            mob_12_del_rate = mob_6_del_rate * random.uniform(1.2, 1.5)
+            mob_12_dr = mob_12_del_rate * random.uniform(0.3, 0.5)
+            mob_24_dr = mob_12_dr * random.uniform(1.5, 2.0)
+            cum_loss = mob_24_dr * random.uniform(0.4, 0.6)
+
+            vintages.append((
+                f"VIN_{vintage_month.replace('-', '')}_REGION_{region_code}",
+                vintage_month,
+                'REGION',
+                region_code,
+                base_count,
+                base_amount,
+                int(base_count * mob_3_del_rate),
+                mob_3_del_rate,
+                int(base_count * mob_6_del_rate),
+                mob_6_del_rate,
+                int(base_count * mob_12_del_rate),
+                mob_12_del_rate,
+                int(base_count * mob_12_dr),
+                mob_12_dr,
+                int(base_count * mob_24_dr),
+                mob_24_dr,
+                cum_loss,
+            ))
+
     # 업종별 Vintage (최근 6개월)
     for ind_code in ['MFG001', 'MFG003', 'MFG004', 'SVC001', 'SVC010', 'CON001', 'REA001']:
         for i in range(6):

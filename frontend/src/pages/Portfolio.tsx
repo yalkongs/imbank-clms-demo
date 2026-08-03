@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import {
   TrendingUp,
   TrendingDown,
@@ -7,7 +8,7 @@ import {
   Building2,
   BarChart3
 } from 'lucide-react';
-import { Card, StatCard, Table, CellFormatters, DonutChart, GroupedBarChart, COLORS, RegionFilter } from '../components';
+import { Card, StatCard, Table, CellFormatters, DonutChart, GroupedBarChart, COLORS, RegionFilter, TrendChart } from '../components';
 import { portfolioApi } from '../utils/api';
 import { formatAmount, formatPercent, formatRatio, getStrategyColorClass, getStrategyLabel } from '../utils/format';
 
@@ -20,6 +21,7 @@ const REGIONS = [
 
 export default function Portfolio() {
   const [loading, setLoading] = useState(true);
+  const [regionVintage, setRegionVintage] = useState<any>(null);
   const [strategyMatrix, setStrategyMatrix] = useState<any>(null);
   const [concentration, setConcentration] = useState<any>(null);
   const [selectedIndustry, setSelectedIndustry] = useState<string | null>(null);
@@ -30,6 +32,7 @@ export default function Portfolio() {
   const [showRegionAnalysis, setShowRegionAnalysis] = useState(false);
 
   useEffect(() => {
+    axios.get('/api/delinquency/vintage-by-region').then(r => setRegionVintage(r.data)).catch(() => {});
     loadData();
   }, []);
 
@@ -484,6 +487,46 @@ export default function Portfolio() {
               </div>
             ))}
           </div>
+        </Card>
+      )}
+
+      {/* 신규 진출 지역 여신 품질 — 시중은행 전환 후 수도권 확장 리스크.
+          연고지(대구경북) 대비 신규 지역(수도권) 코호트의 조기 연체율을 비교한다. */}
+      {regionVintage && (
+        <Card title="지역별 신규취급 빈티지 (조기 연체율)">
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            {regionVintage.summary?.map((r: any) => (
+              <div key={r.region}
+                className={`p-4 rounded-xl border ${r.region === 'CAPITAL' ? 'border-amber-300 bg-amber-50' : 'border-gray-200 bg-gray-50'}`}>
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gray-800">{r.region_label}</p>
+                  {r.region === 'CAPITAL' && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-amber-200 text-amber-800 rounded-full font-semibold">신규 진출</span>
+                  )}
+                </div>
+                <p className="text-2xl font-bold tabular mt-2">{r.avg_mob3}%</p>
+                <p className="text-xs text-gray-500">MOB3 조기 연체율 (최근 {r.cohort_count}개 코호트 평균)</p>
+                <p className="text-xs text-gray-400 mt-1">MOB12 {r.avg_mob12}%</p>
+              </div>
+            ))}
+          </div>
+          <TrendChart
+            data={(regionVintage.curve || []).map((c: any) => ({
+              period: c.month,
+              capital: c.CAPITAL_mob3,
+              daegu: c.DAEGU_GB_mob3,
+              busan: c.BUSAN_GN_mob3,
+            }))}
+            lines={[
+              { key: 'capital', name: '수도권 (신규)', color: '#F5A524' },
+              { key: 'daegu', name: '대구경북 (연고지)', color: COLORS.primary },
+              { key: 'busan', name: '부산경남', color: COLORS.accent },
+            ]}
+            height={220}
+          />
+          <p className="text-xs text-gray-400 mt-2">
+            취급월(코호트)별 3개월 경과 시점 연체율 — 신규 지역은 심사 데이터 축적에 따라 개선 추세인지가 관건
+          </p>
         </Card>
       )}
     </div>

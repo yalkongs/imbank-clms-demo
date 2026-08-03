@@ -23,6 +23,9 @@ import {
   FileCheck,
   ListChecks,
   AlertOctagon,
+  HeartHandshake,
+  ShieldCheck,
+  Landmark,
   Info
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeProvider';
@@ -45,6 +48,7 @@ const navGroups: NavGroup[] = [
     title: '현황',
     items: [
       { path: '/', label: '대시보드', icon: <LayoutDashboard size={20} /> },
+      { path: '/governance', label: '보고·감사', icon: <ShieldCheck size={20} /> },
     ]
   },
   {
@@ -54,6 +58,7 @@ const navGroups: NavGroup[] = [
     items: [
       { path: '/applications', label: '여신신청', icon: <FileText size={20} /> },
       { path: '/covenant', label: '코베넌트 관리', icon: <FileCheck size={20} /> },
+      { path: '/inclusive-finance', label: '포용금융 이행', icon: <HeartHandshake size={20} /> },
     ]
   },
   {
@@ -62,6 +67,7 @@ const navGroups: NavGroup[] = [
       { path: '/ews-advanced', label: 'EWS 조기경보', icon: <AlertTriangle size={20} /> },
       { path: '/collateral-monitoring', label: '담보 모니터링', icon: <Home size={20} /> },
       { path: '/asset-classification', label: '자산건전성 분류', icon: <ListChecks size={20} /> },
+      { path: '/pf-monitoring', label: 'PF 사업장', icon: <Landmark size={20} /> },
     ]
   },
   {
