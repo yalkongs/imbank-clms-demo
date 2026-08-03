@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   FileText,
@@ -118,6 +118,19 @@ export default function Layout() {
   const [mockNoticeDone, setMockNoticeDone] = useState(false);
   // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 — 화면에 날짜를 박아두지 않는다.
   const [asOfLabel, setAsOfLabel] = useState('');
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // 접속·새로고침 시에는 항상 대시보드에서 시작한다.
+  // 소개 팝업 → 모의 데이터 고지 → 대시보드 카운트업으로 이어지는 진입 경험을
+  // 어느 화면에서 새로고침해도 동일하게 유지하기 위함이다. (마운트 1회만 실행)
+  useEffect(() => {
+    if (location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetch('/api/system/as-of')
