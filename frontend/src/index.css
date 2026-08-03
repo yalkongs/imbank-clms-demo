@@ -232,6 +232,12 @@ body {
 .btn-mint:hover  { background: var(--im-mint-600); }
 .btn-mint:active { transform: scale(0.98); }
 
+/* space-y-* 유틸은 형제 요소마다 margin-top 을 얹는다. 페이지 루트(space-y-6)에
+   조건부 렌더되는 fixed 오버레이(상세 모달 등)도 형제로 취급돼 뷰포트에서
+   24px 아래로 밀리고, 그 틈으로 상단 콘텐츠가 겹쳐 보였다.
+   fixed 요소는 뷰포트 기준으로 배치되므로 margin 이 있을 이유가 없다. */
+.fixed { margin: 0 !important; }
+
 /* 브랜드 그라디언트 (심볼의 민트→라임) */
 .im-gradient { background: var(--im-gradient); }
 
