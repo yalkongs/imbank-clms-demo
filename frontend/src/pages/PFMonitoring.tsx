@@ -27,6 +27,15 @@ export default function PFMonitoring() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // 전역 검색에서 ?project= 로 진입하면 해당 사업장 상세를 바로 연다
+  useEffect(() => {
+    try {
+      const pid = new URLSearchParams(window.location.search).get('project');
+      if (pid) openDetail(pid);
+    } catch { /* 무시 */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     Promise.all([
       axios.get('/api/pf/dashboard'),
@@ -60,6 +69,10 @@ export default function PFMonitoring() {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <a href="/api/export/pf-projects.csv" download
+           className="self-start flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap">
+          ⬇ CSV 내려받기
+        </a>
       </div>
     );
   }

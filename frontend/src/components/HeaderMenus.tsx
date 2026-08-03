@@ -105,7 +105,7 @@ export function AlertMenu() {
               return (
                 <button
                   key={a.alert_id}
-                  onClick={() => { setOpen(false); navigate('/ews-advanced'); }}
+                  onClick={() => { setOpen(false); navigate(`/customer-browser?q=${encodeURIComponent(a.customer_name || '')}`); }}
                   className={`w-full text-left px-4 py-3 hover:bg-gray-50 border-b border-gray-50
                               flex gap-3 ${isNew ? 'bg-blue-50/40' : ''}`}
                 >

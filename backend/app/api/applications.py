@@ -293,6 +293,55 @@ def get_applications_summary(region: Optional[str] = None, db: Session = Depends
     }
 
 
+@router.get("/approval-inbox")
+def get_approval_inbox(
+    level: str = "TEAM_LEAD",
+    db: Session = Depends(get_db),
+):
+    """결재함 — 심사 진행 중이며 지정 전결 레벨의 결재가 필요한 신청 목록.
+
+    필요 전결 레벨은 신청 금액으로 산출한다(전결 규정 DB 기준). 조회자의
+    레벨과 비교해 '내가 결재 가능한 건'과 '상위 결재 필요 건'을 구분한다.
+    """
+    authority = load_approval_authority(db)
+    if level not in authority:
+        raise HTTPException(422, f"알 수 없는 권한: {level}")
+    my_limit = authority[level]["limit"]
+
+    rows = db.execute(text("""
+        SELECT la.application_id, c.customer_name, la.requested_amount,
+               la.application_date, la.current_stage, la.status,
+               g.final_grade
+        FROM loan_application la
+        JOIN customer c ON la.customer_id = c.customer_id
+        LEFT JOIN (SELECT application_id, final_grade FROM credit_rating_result) g
+          ON la.application_id = g.application_id
+        WHERE la.status IN ('REVIEWING', 'SCREENING', 'RECEIVED')
+        ORDER BY la.requested_amount DESC
+        LIMIT 40
+    """)).fetchall()
+
+    items = []
+    for r in rows:
+        amount = float(r[2] or 0)
+        req = get_required_authority(amount, db)
+        items.append({
+            "application_id": r[0], "customer_name": r[1],
+            "requested_amount": round(amount, 2),
+            "application_date": r[3], "current_stage": r[4], "status": r[5],
+            "credit_grade": r[6],
+            "required_level": req["level"], "required_name": req["name"],
+            "can_approve": amount <= my_limit,
+        })
+
+    return {
+        "level": level, "level_name": authority[level]["name"],
+        "my_limit": None if my_limit == float("inf") else my_limit,
+        "actionable": sum(1 for i in items if i["can_approve"]),
+        "items": items,
+    }
+
+
 @router.get("/{application_id}")
 def get_application_detail(application_id: str, db: Session = Depends(get_db)):
     """여신신청 상세 조회 - 종합 심사 정보"""
@@ -876,6 +925,41 @@ def approve_application(
         "conditions": conditions,
         "comments": comments
     })
+
+    # 승인과 동시에 업종 한도를 예약한다 — 심사와 한도관리의 연결 고리.
+    # (limit_reservation 은 그간 어떤 흐름에서도 쓰이지 않던 빈 테이블이었다)
+    if decision in ("APPROVE", "CONDITIONAL"):
+        try:
+            ind = db.execute(text("""
+                SELECT c.industry_name FROM loan_application la
+                JOIN customer c ON la.customer_id = c.customer_id
+                WHERE la.application_id = :app_id
+            """), {"app_id": application_id}).fetchone()
+            if ind:
+                lim = db.execute(text("""
+                    SELECT limit_id FROM limit_definition
+                    WHERE limit_name = :nm
+                """), {"nm": f"{ind[0]} 산업한도"}).fetchone()
+                if lim:
+                    db.execute(text("""
+                        INSERT OR REPLACE INTO limit_reservation
+                        (reservation_id, limit_id, application_id, reserved_amount,
+                         reserved_at, expires_at, status)
+                        VALUES (:rid, :lid, :app_id, :amt, :dt,
+                                date(:dt, '+30 day'), 'ACTIVE')
+                    """), {
+                        "rid": f"RSV_{application_id}",
+                        "lid": lim[0], "app_id": application_id,
+                        "amt": approved_amount or float(app[0] or 0),
+                        "dt": AS_OF_DATE.strftime('%Y-%m-%d'),
+                    })
+                    db.execute(text("""
+                        UPDATE limit_exposure
+                        SET reserved_amount = COALESCE(reserved_amount, 0) + :amt
+                        WHERE limit_id = :lid
+                    """), {"amt": approved_amount or float(app[0] or 0), "lid": lim[0]})
+        except Exception:
+            pass   # 예약 실패가 승인을 막지 않는다
 
     record_audit(
         db, f"LOAN_{decision}", "loan_application", application_id,

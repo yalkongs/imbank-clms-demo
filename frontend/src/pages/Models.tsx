@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import {
   Brain,
   Activity,
@@ -27,6 +28,7 @@ type TabType = 'registry' | 'backtest' | 'override' | 'vintage' | 'lgd';
 
 export default function Models() {
   const [loading, setLoading] = useState(true);
+  const [ewsVal, setEwsVal] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<TabType>('registry');
   const [models, setModels] = useState<any[]>([]);
   const [status, setStatus] = useState<any>(null);
@@ -44,6 +46,7 @@ export default function Models() {
   const [recoveryData, setRecoveryData] = useState<any>(null);
 
   useEffect(() => {
+    axios.get('/api/models/ews-validation').then(r => setEwsVal(r.data)).catch(() => {});
     loadData();
   }, []);
 
@@ -170,6 +173,38 @@ export default function Models() {
           <h1 className="text-2xl font-bold text-gray-900">모델관리 (MRM)</h1>
           <p className="text-sm text-gray-500 mt-1">신용평가모델 성능 모니터링 및 검증 관리</p>
         </div>
+
+      {/* EWS 백테스트 실측 — 외부 검증 데이터셋(부도 라벨) 기반. 이 화면에서 유일하게
+          실측 라벨에 근거한 성능 수치다. */}
+      {ewsVal?.available && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-800">EWS 모델 백테스트 (실측 검증)</h3>
+            <span className="text-[11px] text-gray-400">{ewsVal.source}</span>
+          </div>
+          <div className="grid grid-cols-5 gap-4 text-center">
+            <div><p className="text-2xl font-bold tabular">{ewsVal.overall.n_defaults.toLocaleString()}</p><p className="text-xs text-gray-500 mt-1">부도 라벨</p></div>
+            <div><p className="text-2xl font-bold tabular text-blue-700">{ewsVal.overall.detection_rate}%</p><p className="text-xs text-gray-500 mt-1">탐지율</p></div>
+            <div><p className="text-2xl font-bold tabular">{ewsVal.overall.avg_lead_months}개월</p><p className="text-xs text-gray-500 mt-1">평균 리드타임</p></div>
+            <div><p className="text-2xl font-bold tabular">{ewsVal.overall.alert_before_6m}%</p><p className="text-xs text-gray-500 mt-1">부도 6개월 전 경보</p></div>
+            <div><p className="text-2xl font-bold tabular">{ewsVal.overall.alert_before_12m}%</p><p className="text-xs text-gray-500 mt-1">부도 12개월 전 경보</p></div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-400 mb-2">피처 중요도 TOP 5</p>
+            <div className="space-y-1.5">
+              {ewsVal.features.slice(0, 5).map((f: any) => (
+                <div key={f.rank} className="flex items-center gap-2 text-xs">
+                  <span className="w-44 truncate text-gray-600">{f.rank}. {f.name}</span>
+                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${f.relative}%` }} />
+                  </div>
+                  <span className="w-10 text-right tabular text-gray-400">{f.relative}%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* 요약 카드 */}

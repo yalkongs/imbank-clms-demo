@@ -25,6 +25,7 @@ import {
   AlertOctagon,
   HeartHandshake,
   ShieldCheck,
+  Stamp,
   Landmark,
   Info
 } from 'lucide-react';
@@ -32,6 +33,9 @@ import { useTheme } from '../context/ThemeProvider';
 import OnboardingModal from './OnboardingModal';
 import { AlertMenu, SettingsMenu } from './HeaderMenus';
 import MockDataNotice from './MockDataNotice';
+import UserMenu from './UserMenu';
+import CommandPalette from './CommandPalette';
+import StoryTour from './StoryTour';
 
 interface NavItem {
   path: string;
@@ -44,7 +48,7 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const navGroups: NavGroup[] = [
+export const navGroups: NavGroup[] = [
   {
     title: '현황',
     items: [
@@ -58,6 +62,7 @@ const navGroups: NavGroup[] = [
     title: '여신 업무',
     items: [
       { path: '/applications', label: '여신신청', icon: <FileText size={20} /> },
+      { path: '/approval-inbox', label: '결재함', icon: <Stamp size={20} /> },
       { path: '/covenant', label: '코베넌트 관리', icon: <FileCheck size={20} /> },
       { path: '/inclusive-finance', label: '포용금융 이행', icon: <HeartHandshake size={20} /> },
     ]
@@ -116,6 +121,9 @@ export default function Layout() {
   // (ⓘ 로 소개를 다시 열었다 닫을 때는 반복하지 않는다)
   const [showMockNotice, setShowMockNotice] = useState(false);
   const [mockNoticeDone, setMockNoticeDone] = useState(false);
+  // 스토리 투어 — null 이면 비활성. 온보딩에서 '스토리 투어'로 닫으면 고지 확인 후 시작
+  const [tourStep, setTourStep] = useState<number | null>(null);
+  const [pendingTour, setPendingTour] = useState(false);
   // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 — 화면에 날짜를 박아두지 않는다.
   const [asOfLabel, setAsOfLabel] = useState('');
 
@@ -139,15 +147,17 @@ export default function Layout() {
       .catch(() => setAsOfLabel(''));
   }, []);
 
-  const closeOnboarding = () => {
+  const closeOnboarding = (startTour?: boolean) => {
     setShowOnboarding(false);
     // 테마 선택은 계속 저장한다 — 팝업 표시 여부와는 무관하다.
     setOnboarded(true);
+    if (startTour) setPendingTour(true);
     if (!mockNoticeDone) {
       // 카운트업은 고지까지 닫힌 뒤 시작해야 하므로 introOpen 을 유지한다
       setShowMockNotice(true);
     } else {
       setIntroOpen(false);
+      if (startTour) setTourStep(0);
     }
   };
 
@@ -155,12 +165,20 @@ export default function Layout() {
     setShowMockNotice(false);
     setMockNoticeDone(true);
     setIntroOpen(false);   // 이제 대시보드 카운트업 시작
+    if (pendingTour) {
+      setPendingTour(false);
+      setTourStep(0);
+    }
   };
 
   return (
     <div className="app-root flex h-screen bg-gray-50">
       {showOnboarding && <OnboardingModal onClose={closeOnboarding} />}
       {showMockNotice && <MockDataNotice onConfirm={confirmMockNotice} />}
+      <CommandPalette />
+      {tourStep !== null && (
+        <StoryTour step={tourStep} onStep={setTourStep} onExit={() => setTourStep(null)} />
+      )}
 
       {/* 사이드바 */}
       <aside className="app-sidebar w-64 bg-white border-r border-gray-200 flex flex-col">
@@ -240,22 +258,23 @@ export default function Layout() {
               <Info size={20} />
             </button>
 
+            {/* 전역 검색 (Cmd+K) */}
+            <button
+              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
+              aria-label="검색"
+              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+            >
+              <Search size={20} />
+            </button>
+
             {/* 알림 — EWS 경보 연동 */}
             <AlertMenu />
 
             {/* 설정 — 화면 테마·기준일 */}
             <SettingsMenu asOfLabel={asOfLabel} />
 
-            {/* 사용자 */}
-            <div className="flex items-center">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
-                김
-              </div>
-              <div className="ml-2">
-                <p className="text-sm font-medium text-gray-900">김여신</p>
-                <p className="text-xs text-gray-500">심사역</p>
-              </div>
-            </div>
+            {/* 사용자 — 역할 전환 */}
+            <UserMenu />
           </div>
         </header>
 

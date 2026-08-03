@@ -542,6 +542,17 @@ export default function Customers() {
                     </div>
                   </div>
 
+                  {/* 여신 거래가 없는 잠재고객 — 0억원 그리드를 나열하면 시스템 결함처럼
+                      보이므로 명시적 안내로 대체한다 (1,010명 중 311명이 해당) */}
+                  {(customerDetail?.facility_summary?.total_count ?? customerDetail?.facilities?.length ?? 0) === 0 && (customerDetail?.credit_ratings?.length ?? 0) === 0 ? (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-5 py-6 text-center">
+                      <p className="text-sm font-semibold text-gray-700">여신 거래가 없는 잠재 고객입니다</p>
+                      <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                        심사 신청·신용평가·여신 실행 이력이 아직 없습니다.<br/>
+                        기본 정보와 재무 정보는 영업 참고용으로 제공됩니다.
+                      </p>
+                    </div>
+                  ) : (<>
                   {/* Credit Rating History */}
                   <div>
                     <h3 className="text-sm font-semibold text-gray-700 mb-3">신용등급 이력</h3>
@@ -656,6 +667,7 @@ export default function Customers() {
                       </div>
                     </div>
                   </div>
+                  </>)}
 
                   {/* Industry Limit */}
                   {customerDetail.industry_limit && (

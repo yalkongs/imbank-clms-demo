@@ -48,7 +48,7 @@ function ThemeCard({
   );
 }
 
-export default function OnboardingModal({ onClose }: { onClose: () => void }) {
+export default function OnboardingModal({ onClose }: { onClose: (startTour?: boolean) => void }) {
   const { theme, setTheme } = useTheme();
 
   return (
@@ -58,7 +58,7 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
             브랜드 그라디언트(민트→라임)는 그 아래 띠로 쓴다. */}
         <div className="relative rounded-t-2xl overflow-hidden">
           <button
-            onClick={onClose}
+            onClick={() => onClose()}
             aria-label="닫기"
             className="absolute top-4 right-4 z-10 p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
           >
@@ -133,9 +133,9 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
             <p className="text-[11px] font-semibold text-gray-400 tracking-wider mb-2">구축 규모</p>
             <div className="grid grid-cols-4 gap-3 text-center">
               {[
-                { n: '21',     l: '화면' },
-                { n: '190',    l: 'API' },
-                { n: '80',     l: 'DB 테이블' },
+                { n: '25',     l: '화면' },
+                { n: '210',    l: 'API' },
+                { n: '84',     l: 'DB 테이블' },
                 { n: '1,200',  l: '여신' },
               ].map(s => (
                 <div key={s.l}>
@@ -154,12 +154,22 @@ export default function OnboardingModal({ onClose }: { onClose: () => void }) {
         {/* 푸터 */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
           <span className="text-xs text-gray-400">v1.0.0 · PoC · © 2026 yalkongs</span>
-          <button
-            onClick={onClose}
-            className="btn-accent px-5 text-sm"
-          >
-            시작하기
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 스토리 투어 — 한 기업의 생애주기 악화 경로(경보→위반→강등→연체→회수)를
+                화면 순서대로 안내한다 */}
+            <button
+              onClick={() => onClose(true)}
+              className="btn-mint px-5 text-sm"
+            >
+              🧭 스토리 투어
+            </button>
+            <button
+              onClick={() => onClose()}
+              className="btn-accent px-5 text-sm"
+            >
+              시작하기
+            </button>
+          </div>
         </div>
       </div>
     </div>

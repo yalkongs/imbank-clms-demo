@@ -159,6 +159,10 @@ export default function AssetClassification() {
             금감원 기준 5단계 분류 — DPD · PD · EWS 보수주의 원칙 적용
           </p>
         </div>
+        <a href="/api/export/classification.csv" download
+           className="self-start flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap">
+          ⬇ CSV 내려받기
+        </a>
         <button
           onClick={handleRunClassification}
           disabled={running}

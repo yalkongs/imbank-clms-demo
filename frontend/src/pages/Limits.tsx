@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import {
   AlertTriangle,
   CheckCircle,
@@ -15,6 +16,7 @@ import { formatAmount, formatPercent, formatInputAmount, parseFormattedNumber } 
 
 export default function Limits() {
   const [loading, setLoading] = useState(true);
+  const [reservations, setReservations] = useState<any[]>([]);
   const [limits, setLimits] = useState<any[]>([]);
   const [industryLimits, setIndustryLimits] = useState<any[]>([]);
   const [filter, setFilter] = useState('ALL');
@@ -32,6 +34,7 @@ export default function Limits() {
   const [checkLoading, setCheckLoading] = useState(false);
 
   useEffect(() => {
+    axios.get('/api/limits/reservations').then(r => setReservations(Array.isArray(r.data) ? r.data : (r.data?.reservations || []))).catch(() => {});
     loadData();
   }, []);
 
@@ -428,6 +431,34 @@ export default function Limits() {
           </div>
         </div>
       </Card>
+
+      {/* 한도 예약 — 승인된 신청이 실행 전까지 선점한 한도. 심사와 한도관리의 연결 고리 */}
+      {reservations.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-800 mb-3">한도 예약 ({reservations.length}건)</h3>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                <th className="py-2 pr-4">예약</th><th className="py-2 pr-4">한도</th>
+                <th className="py-2 pr-4">신청</th><th className="py-2 pr-4 text-right">예약 금액</th>
+                <th className="py-2 pr-4">예약일</th><th className="py-2">만료일</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reservations.map((r: any) => (
+                <tr key={r.reservation_id} className="border-b border-gray-50">
+                  <td className="py-2 pr-4 text-xs">{r.reservation_id}</td>
+                  <td className="py-2 pr-4">{r.limit_name || r.limit_id}</td>
+                  <td className="py-2 pr-4 text-xs">{r.application_id}</td>
+                  <td className="py-2 pr-4 text-right tabular">{((r.reserved_amount || 0) / 1e8).toFixed(1)}억</td>
+                  <td className="py-2 pr-4 text-xs text-gray-500">{r.reserved_at}</td>
+                  <td className="py-2 text-xs text-gray-500">{r.expires_at}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

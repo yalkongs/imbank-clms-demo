@@ -297,3 +297,93 @@ def get_stress_capital_buffer(db: Session = Depends(get_db)):
         "meets_requirement": base_bis >= required,
         "note": "SCB = min(max(기준 BIS − SEVERE 스트레스 BIS, 0), 2.5%p) — PoC 산식",
     }
+
+@router.get("/custom")
+def run_custom_scenario(
+    pd_mult: float = 1.0,        # PD 배수 (1.0~4.0)
+    lgd_mult: float = 1.0,       # LGD 배수 (1.0~2.0)
+    property_shock: float = 0.0, # 부동산 가격 충격 (%) — 음수
+    rate_bp: int = 0,            # 금리 충격 (bp)
+    db: Session = Depends(get_db),
+):
+    """사용자 정의 시나리오 플레이그라운드.
+
+    고정 5개 시나리오와 달리 충격을 직접 조립한다. 계산은 기존 엔진을 재사용:
+      · RWA/BIS  : 스트레스 RWA 계수(1 + (pd_mult-1)*0.45)
+      · ECL      : PD·LGD 배수에 선형 (Stage 구성 불변 가정)
+      · PF       : 부동산 충격이 분양률에 전이 → 괴리 경보 재산출,
+                   자기자본비율 하락(가격하락의 절반이 자본 잠식 가정)
+      · 이자부담 : 금리 충격 → 평균 이자보상배율 근사 (EBITDA 불변, 이자비용 증가)
+    """
+    pd_mult = max(0.5, min(pd_mult, 4.0))
+    lgd_mult = max(0.5, min(lgd_mult, 2.0))
+    property_shock = max(-40.0, min(property_shock, 0.0))
+    rate_bp = max(0, min(rate_bp, 400))
+
+    # 자본
+    cap = db.execute(text("""
+        SELECT total_capital, total_rwa, bis_ratio FROM capital_position
+        ORDER BY base_date DESC LIMIT 1
+    """)).fetchone()
+    total_capital, base_rwa = float(cap[0]), float(cap[1])
+    base_bis = round(float(cap[2]) * 100, 2)
+    rwa_factor = 1 + (pd_mult - 1) * 0.45
+    stressed_bis = round(total_capital / (base_rwa * rwa_factor) * 100, 2)
+
+    # ECL
+    base_ecl = float(db.execute(text("""
+        SELECT COALESCE(SUM(e.ecl_final), 0) FROM ecl_calculation e
+        JOIN (SELECT facility_id, MAX(calc_date) latest
+              FROM ecl_calculation GROUP BY facility_id) mx
+          ON e.facility_id = mx.facility_id AND e.calc_date = mx.latest
+    """)).fetchone()[0])
+    stressed_ecl = round(base_ecl * pd_mult * lgd_mult, 2)
+
+    # PF — 부동산 충격 전이
+    pf_rows = db.execute(text("""
+        SELECT project_type, progress_rate, presale_rate, equity_ratio, exposure
+        FROM pf_project WHERE status != 'COMPLETED'
+    """)).fetchall()
+    base_watch = sum(
+        1 for t, pr, ps, eq, _ in pf_rows
+        if (t == 'MAIN' and (pr or 0) - (ps or 0) >= 30) or eq < 5)
+    stressed_watch = 0
+    stressed_low_equity_exp = 0.0
+    pf_total = sum(r[4] for r in pf_rows) or 1
+    for t, pr, ps, eq, exp in pf_rows:
+        # 가격 하락 → 분양률 비례 하락, 자기자본은 하락분의 절반 잠식
+        ps2 = max(0.0, (ps or 0) * (1 + property_shock / 100))
+        eq2 = max(0.0, eq + property_shock * 0.5)
+        if (t == 'MAIN' and (pr or 0) - ps2 >= 30) or eq2 < 5:
+            stressed_watch += 1
+        if eq2 < 10:
+            stressed_low_equity_exp += exp
+
+    # 이자보상배율 근사 — 재무제표 집계
+    fin = db.execute(text("""
+        SELECT SUM(operating_profit), SUM(interest_expense)
+        FROM financial_statement WHERE fiscal_year = (
+            SELECT MAX(fiscal_year) FROM financial_statement)
+    """)).fetchone()
+    op, ie = float(fin[0] or 0), float(fin[1] or 1)
+    borrow = float(db.execute(text(
+        "SELECT COALESCE(SUM(total_borrowing),0) FROM financial_statement "
+        "WHERE fiscal_year = (SELECT MAX(fiscal_year) FROM financial_statement)"
+    )).fetchone()[0])
+    ie_stressed = ie + borrow * rate_bp / 10000
+    icr_base = round(op / ie, 2) if ie else 0
+    icr_stressed = round(op / ie_stressed, 2) if ie_stressed else 0
+
+    return {
+        "inputs": {"pd_mult": pd_mult, "lgd_mult": lgd_mult,
+                   "property_shock": property_shock, "rate_bp": rate_bp},
+        "bis": {"base": base_bis, "stressed": stressed_bis,
+                "delta": round(stressed_bis - base_bis, 2),
+                "breach": stressed_bis < 10.5},
+        "ecl": {"base": round(base_ecl, 2), "stressed": stressed_ecl,
+                "delta": round(stressed_ecl - base_ecl, 2)},
+        "pf": {"base_watchlist": base_watch, "stressed_watchlist": stressed_watch,
+               "low_equity_share": round(stressed_low_equity_exp / pf_total * 100, 1)},
+        "icr": {"base": icr_base, "stressed": icr_stressed},
+        "note": "PoC 근사 산식 — 각 전이 계수는 화면에 명시된 가정을 따른다",
+    }

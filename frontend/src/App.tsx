@@ -1,38 +1,43 @@
 import React from 'react';
+import { Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components';
-import CapitalHub from './pages/CapitalHub';
-import PortfolioHub from './pages/PortfolioHub';
-import LimitsHub from './pages/LimitsHub';
-import InclusiveFinance from './pages/InclusiveFinance';
-import PFMonitoring from './pages/PFMonitoring';
-import Governance from './pages/Governance';
-import {
-  Dashboard,
-  Applications,
-  Capital,
-  CapitalOptimizer,
-  Portfolio,
-  Limits,
-  StressTest,
-  Models,
-  Customers,
-  EWSAdvanced,
-  DynamicLimits,
-  CustomerProfitability,
-  CollateralMonitoring,
-  PortfolioOptimization,
-  Workout,
-  ESG,
-  ALM,
-  CustomerBrowser,
-  Covenant,
-  AssetClassification,
-  Delinquency
-} from './pages';
+const CapitalHub = React.lazy(() => import('./pages/CapitalHub'));
+const PortfolioHub = React.lazy(() => import('./pages/PortfolioHub'));
+const LimitsHub = React.lazy(() => import('./pages/LimitsHub'));
+const InclusiveFinance = React.lazy(() => import('./pages/InclusiveFinance'));
+const PFMonitoring = React.lazy(() => import('./pages/PFMonitoring'));
+const Governance = React.lazy(() => import('./pages/Governance'));
+const ApprovalInbox = React.lazy(() => import('./pages/ApprovalInbox'));
+import Dashboard from './pages/Dashboard';
+const Applications = React.lazy(() => import('./pages/Applications'));
+const Capital = React.lazy(() => import('./pages/Capital'));
+const CapitalOptimizer = React.lazy(() => import('./pages/CapitalOptimizer'));
+const Portfolio = React.lazy(() => import('./pages/Portfolio'));
+const Limits = React.lazy(() => import('./pages/Limits'));
+const StressTest = React.lazy(() => import('./pages/StressTest'));
+const Models = React.lazy(() => import('./pages/Models'));
+const Customers = React.lazy(() => import('./pages/Customers'));
+const EWSAdvanced = React.lazy(() => import('./pages/EWSAdvanced'));
+const DynamicLimits = React.lazy(() => import('./pages/DynamicLimits'));
+const CustomerProfitability = React.lazy(() => import('./pages/CustomerProfitability'));
+const CollateralMonitoring = React.lazy(() => import('./pages/CollateralMonitoring'));
+const PortfolioOptimization = React.lazy(() => import('./pages/PortfolioOptimization'));
+const Workout = React.lazy(() => import('./pages/Workout'));
+const ESG = React.lazy(() => import('./pages/ESG'));
+const ALM = React.lazy(() => import('./pages/ALM'));
+const CustomerBrowser = React.lazy(() => import('./pages/CustomerBrowser'));
+const Covenant = React.lazy(() => import('./pages/Covenant'));
+const AssetClassification = React.lazy(() => import('./pages/AssetClassification'));
+const Delinquency = React.lazy(() => import('./pages/Delinquency'));
 
 function App() {
   return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-96">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    }>
     <Routes>
       <Route path="/" element={<Layout />}>
         <Route index element={<Dashboard />} />
@@ -60,11 +65,13 @@ function App() {
         <Route path="inclusive-finance" element={<InclusiveFinance />} />
         <Route path="pf-monitoring" element={<PFMonitoring />} />
         <Route path="governance" element={<Governance />} />
+        <Route path="approval-inbox" element={<ApprovalInbox />} />
         {/* Phase 2: 부실 관리 핵심 */}
         <Route path="asset-classification" element={<AssetClassification />} />
         <Route path="delinquency" element={<Delinquency />} />
       </Route>
     </Routes>
+    </Suspense>
   );
 }
 

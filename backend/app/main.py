@@ -19,7 +19,7 @@ from .api import asset_classification, ecl, delinquency
 # Phase 3: 자동화 브릿지
 from .api import automation
 # iM뱅크 전략 기능: 포용금융·PF 사업장
-from .api import inclusive_finance, pf, governance
+from .api import inclusive_finance, pf, governance, export, search
 
 
 @asynccontextmanager
@@ -106,6 +106,8 @@ app.include_router(automation.router)
 app.include_router(inclusive_finance.router)
 app.include_router(pf.router)
 app.include_router(governance.router)
+app.include_router(export.router)
+app.include_router(search.router)
 
 
 @app.get("/health")

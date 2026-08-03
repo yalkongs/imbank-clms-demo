@@ -209,6 +209,10 @@ export default function Delinquency() {
             DPD 추적 · 연체 단계 관리 · 추심 활동 기록 · Roll Rate 분석
           </p>
         </div>
+        <a href="/api/export/delinquency.csv" download
+           className="self-start flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap">
+          ⬇ CSV 내려받기
+        </a>
       </div>
 
       {/* KPI 카드 */}

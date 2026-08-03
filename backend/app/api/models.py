@@ -573,6 +573,58 @@ def get_model_specifications(model_id: str, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/ews-validation")
+def get_ews_validation(db: Session = Depends(get_db)):
+    """EWS 모델 백테스트 실측 지표 — 외부 검증 데이터셋(부도 라벨 3,951건) 기반.
+
+    ews_corporate_v24 프로젝트의 리드타임 백테스트 산출물을 이관한 것으로,
+    이 화면의 성능 수치 중 유일하게 실측 라벨에 근거한다.
+    """
+    overall = db.execute(text("""
+        SELECT n_defaults, n_detected, detection_rate_pct, avg_lead_months,
+               median_lead_months, pct_alert_before_3m, pct_alert_before_6m,
+               pct_alert_before_12m, alert_threshold_score, computed_ym
+        FROM ews_validation_metrics WHERE scope_type = 'OVERALL' LIMIT 1
+    """)).fetchone()
+
+    folds = db.execute(text("""
+        SELECT scope_value, n_defaults, detection_rate_pct, avg_lead_months
+        FROM ews_validation_metrics WHERE scope_type = 'FOLD'
+        ORDER BY CAST(scope_value AS INTEGER)
+    """)).fetchall()
+
+    features = db.execute(text("""
+        SELECT rank, feature_name, importance FROM ews_feature_importance
+        ORDER BY rank LIMIT 10
+    """)).fetchall()
+
+    if not overall:
+        return {"available": False,
+                "note": "검증 데이터 미이관 — database/import_ews_validation.py 실행 필요"}
+
+    max_imp = max((f[2] for f in features), default=1) or 1
+    return {
+        "available": True,
+        "source": "ews_corporate_v24 백테스트 (기업 60,000 · 부도 라벨 3,951)",
+        "overall": {
+            "n_defaults": overall[0], "n_detected": overall[1],
+            "detection_rate": overall[2],
+            "avg_lead_months": overall[3], "median_lead_months": overall[4],
+            "alert_before_3m": overall[5], "alert_before_6m": overall[6],
+            "alert_before_12m": overall[7],
+            "threshold": overall[8], "computed_ym": overall[9],
+        },
+        "folds": [
+            {"fold": f[0], "n_defaults": f[1], "detection_rate": f[2],
+             "avg_lead_months": f[3]} for f in folds
+        ],
+        "features": [
+            {"rank": f[0], "name": f[1], "importance": f[2],
+             "relative": round(f[2] / max_imp * 100, 1)} for f in features
+        ],
+    }
+
+
 @router.get("/{model_id}")
 def get_model_detail(model_id: str, db: Session = Depends(get_db)):
     """모델 상세 정보"""
@@ -1317,4 +1369,5 @@ def get_recovery_timeline(db: Session = Depends(get_db)):
         ],
         "by_strategy": sorted(by_strategy, key=lambda x: x["avg_days"]),
     }
+
 

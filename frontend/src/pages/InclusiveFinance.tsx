@@ -86,11 +86,17 @@ export default function InclusiveFinance() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">포용금융 이행 현황</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          시중은행 전환 인가 시 공언한 중신용·개인사업자 여신 확대 — 공급 실적과 건전성을 함께 관리
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">포용금융 이행 현황</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            시중은행 전환 인가 시 공언한 중신용·개인사업자 여신 확대 — 공급 실적과 건전성을 함께 관리
+          </p>
+        </div>
+        <a href="/api/export/inclusive.csv" download
+           className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 whitespace-nowrap">
+          ⬇ CSV 내려받기
+        </a>
       </div>
 
       {/* 핵심 지표: 공급(왼쪽 2개) + 건전성(오른쪽 2개) */}

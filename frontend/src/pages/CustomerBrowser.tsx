@@ -102,7 +102,11 @@ export default function CustomerBrowser() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, page_size: 15, total_count: 0, total_pages: 0 });
-  const [search, setSearch] = useState('');
+  // 전역 검색(Cmd+K)·알림 딥링크에서 ?q= 로 진입하면 검색어를 미리 채운다
+  const [search, setSearch] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('q') || ''; }
+    catch { return ''; }
+  });
   const [sizeFilter, setSizeFilter] = useState('');
   const [industries, setIndustries] = useState<{ industry_code: string; industry_name: string; customer_count: number }[]>([]);
   const [industryFilter, setIndustryFilter] = useState('');

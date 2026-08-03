@@ -19,6 +19,17 @@ export default function StressTest() {
   const [results, setResults] = useState<any>(null);
   const [resultLoading, setResultLoading] = useState(false);
   const [scb, setScb] = useState<any>(null);
+  const [custom, setCustom] = useState({ pd_mult: 1.5, lgd_mult: 1.2, property_shock: -10, rate_bp: 100 });
+  const [customResult, setCustomResult] = useState<any>(null);
+  const [customBusy, setCustomBusy] = useState(false);
+
+  const runCustom = () => {
+    setCustomBusy(true);
+    axios.get('/api/stress-test/custom', { params: custom })
+      .then(r => setCustomResult(r.data))
+      .catch(console.error)
+      .finally(() => setCustomBusy(false));
+  };
 
   useEffect(() => {
     axios.get('/api/stress-test/stress-capital-buffer').then(r => setScb(r.data)).catch(() => {});
@@ -118,6 +129,73 @@ export default function StressTest() {
           <p className="text-[11px] text-gray-400 max-w-[200px] text-right">{scb.note}</p>
         </div>
       )}
+
+      {/* 사용자 정의 시나리오 플레이그라운드 — 고정 5개 시나리오를 넘어 충격을 직접 조립 */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800">사용자 정의 시나리오</h3>
+            <p className="text-xs text-gray-400 mt-0.5">충격을 직접 조립해 포트폴리오 전체 파급을 봅니다 (PoC 근사 산식)</p>
+          </div>
+          <button onClick={runCustom} disabled={customBusy}
+            className="btn-mint px-5 text-sm disabled:opacity-50">
+            {customBusy ? '계산 중...' : '시뮬레이션 실행'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-4 gap-6 mb-2">
+          {([
+            ['pd_mult', 'PD 배수', 1, 4, 0.1, 'x'],
+            ['lgd_mult', 'LGD 배수', 1, 2, 0.1, 'x'],
+            ['property_shock', '부동산 가격', -40, 0, 1, '%'],
+            ['rate_bp', '금리 충격', 0, 400, 25, 'bp'],
+          ] as const).map(([key, label, min, max, step, unit]) => (
+            <div key={key}>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-gray-500">{label}</span>
+                <span className="font-bold tabular text-gray-900">{(custom as any)[key]}{unit}</span>
+              </div>
+              <input type="range" min={min} max={max} step={step}
+                value={(custom as any)[key]}
+                onChange={e => setCustom(c => ({ ...c, [key]: parseFloat(e.target.value) }))}
+                className="w-full accent-[#00C7A9]" />
+            </div>
+          ))}
+        </div>
+
+        {customResult && (
+          <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100">
+            <div className={`rounded-lg p-3 ${customResult.bis.breach ? 'bg-red-50' : 'bg-gray-50'}`}>
+              <p className="text-xs text-gray-500">BIS 비율</p>
+              <p className="text-lg font-bold tabular">
+                {customResult.bis.base}% → <span className={customResult.bis.breach ? 'text-red-600' : ''}>{customResult.bis.stressed}%</span>
+              </p>
+              {customResult.bis.breach && <p className="text-[11px] text-red-600 font-semibold mt-0.5">규제최소 10.5% 하회</p>}
+            </div>
+            <div className="rounded-lg p-3 bg-gray-50">
+              <p className="text-xs text-gray-500">IFRS9 ECL</p>
+              <p className="text-lg font-bold tabular">
+                {(customResult.ecl.base/1e8).toFixed(0)} → {(customResult.ecl.stressed/1e8).toFixed(0)}억
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">+{(customResult.ecl.delta/1e8).toFixed(0)}억</p>
+            </div>
+            <div className="rounded-lg p-3 bg-gray-50">
+              <p className="text-xs text-gray-500">PF 워치리스트</p>
+              <p className="text-lg font-bold tabular">
+                {customResult.pf.base_watchlist} → <span className={customResult.pf.stressed_watchlist > customResult.pf.base_watchlist ? 'text-red-600' : ''}>{customResult.pf.stressed_watchlist}곳</span>
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">저자본 비중 {customResult.pf.low_equity_share}%</p>
+            </div>
+            <div className="rounded-lg p-3 bg-gray-50">
+              <p className="text-xs text-gray-500">이자보상배율 (포트폴리오)</p>
+              <p className="text-lg font-bold tabular">
+                {customResult.icr.base} → <span className={customResult.icr.stressed < 1.5 ? 'text-red-600' : ''}>{customResult.icr.stressed}</span>
+              </p>
+              {customResult.icr.stressed < 1.5 && <p className="text-[11px] text-red-600 mt-0.5">기준 1.5배 미만</p>}
+            </div>
+          </div>
+        )}
+      </div>
         <button
           onClick={runStressTest}
           disabled={!selectedScenario || resultLoading}
