@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { delinquencyApi } from '../utils/api';
 import {
   AlertCircle,
@@ -92,6 +93,8 @@ export default function Delinquency() {
   const [expandedId, setExpandedId]   = useState<string | null>(null);
   const [expandedDetail, setExpandedDetail] = useState<any>(null);
   const [loading, setLoading]     = useState(true);
+  const [transferCandidates, setTransferCandidates] = useState<any[]>([]);
+  const [transferring, setTransferring] = useState(false);
   const [activityModal, setActivityModal] = useState<ActivityModalState>({
     open: false, delinquencyId: '', facilityId: '', companyName: '',
   });
@@ -100,6 +103,7 @@ export default function Delinquency() {
   });
 
   useEffect(() => {
+    axios.get('/api/delinquency/transfer-candidates').then(r => setTransferCandidates(r.data)).catch(() => {});
     loadDashboard();
   }, []);
 
@@ -140,6 +144,19 @@ export default function Delinquency() {
     } catch (e) {
       console.error(e);
     }
+  };
+
+
+  const runAutoTransfer = async () => {
+    setTransferring(true);
+    try {
+      await axios.post('/api/workout/auto-transfer-npl');
+      const r = await axios.get('/api/delinquency/transfer-candidates');
+      setTransferCandidates(r.data);
+      loadDashboard();
+      if (tab === 'list') loadList(filterStage);
+    } catch (e) { console.error(e); }
+    finally { setTransferring(false); }
   };
 
   const handleTabChange = (t: typeof tab) => {
@@ -227,6 +244,43 @@ export default function Delinquency() {
       )}
 
       {/* 탭 */}
+
+      {/* 워크아웃 이관 임박 (DPD 75~89) — 90일 도달 시 자동 이관되므로 마지막 관리 기회 */}
+      {transferCandidates.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="status-dot is-warning" />
+              <h3 className="text-sm font-semibold text-amber-900">
+                워크아웃 이관 임박 {transferCandidates.length}건 (DPD 75~89)
+              </h3>
+            </div>
+            <button
+              onClick={runAutoTransfer}
+              disabled={transferring}
+              className="px-3 py-1.5 text-xs font-semibold bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+            >
+              {transferring ? '이관 중...' : 'DPD 90+ 자동 이관 실행'}
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {transferCandidates.map(t => (
+              <div key={t.delinquency_id} className="flex items-center justify-between text-sm bg-white rounded-lg px-3 py-2">
+                <div>
+                  <span className="font-medium text-gray-900">{t.customer_name}</span>
+                  <span className="text-xs text-gray-400 ml-2">{t.facility_id}</span>
+                </div>
+                <div className="flex items-center gap-4 text-xs">
+                  <span className="tabular">DPD <b className="text-amber-700">{t.dpd}</b> (D-{t.days_to_transfer})</span>
+                  <span className="tabular text-gray-500">잔액 {fmtAmt(t.outstanding)}</span>
+                  <span className="tabular text-red-600">무담보 {fmtAmt(t.unsecured_exposure)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-xl border border-gray-200">
         <div className="border-b border-gray-200 px-6">
           <nav className="flex gap-6">

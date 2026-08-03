@@ -150,10 +150,15 @@ def get_active_delinquencies(
                 d.overdue_date, d.overdue_amount, d.overdue_type,
                 d.dpd, d.delinquency_stage, d.assigned_officer,
                 f.outstanding_amount, f.facility_type,
+                COALESCE(col.recognized, 0) AS collateral_value,
                 c.customer_name, c.industry_name
             FROM delinquency_record d
             JOIN facility f ON d.facility_id = f.facility_id
             JOIN customer c ON d.customer_id = c.customer_id
+            LEFT JOIN (
+                SELECT facility_id, SUM(recognized_value) AS recognized
+                FROM collateral GROUP BY facility_id
+            ) col ON f.facility_id = col.facility_id
             {where}
             ORDER BY d.dpd DESC
             LIMIT :lim OFFSET :off
@@ -169,8 +174,8 @@ def get_active_delinquencies(
             "delinquency_id":  r[0],
             "facility_id":     r[1],
             "customer_id":     r[2],
-            "company_name":    r[11],
-            "industry":        r[12],
+            "company_name":    r[12],
+            "industry":        r[13],
             "overdue_date":    str(r[3]),
             "overdue_amount":  round(r[4] or 0, 2),
             "overdue_type":    r[5],
@@ -180,6 +185,8 @@ def get_active_delinquencies(
             "stage_color":     meta['color'],
             "outstanding":     round(r[9] or 0, 2),
             "facility_type":   r[10],
+            "collateral_value": round(r[11] or 0, 2),
+            "unsecured_exposure": round(max((r[9] or 0) - (r[11] or 0), 0), 2),
             "credit_grade":    None,
             "assigned_officer": r[8],
         })
@@ -269,6 +276,39 @@ def get_facility_delinquency_history(
         "max_dpd_12m":   facility[4] or 0 if facility else 0,
         "delinquencies": result,
     }
+
+
+@router.get("/transfer-candidates")
+def get_transfer_candidates(db: Session = Depends(get_db)):
+    """워크아웃 이관 임박 여신 (DPD 75~89) — 90일 도달 시 자동 이관 대상.
+
+    이관 전 마지막 관리 기회를 놓치지 않도록 별도 목록으로 노출한다.
+    이관 실행은 기존 POST /api/workout/auto-transfer-npl 을 쓴다.
+    """
+    rows = db.execute(text("""
+        SELECT d.delinquency_id, d.facility_id, c.customer_name, d.dpd,
+               d.overdue_amount, f.outstanding_amount,
+               COALESCE(col.recognized, 0) AS collateral
+        FROM delinquency_record d
+        JOIN facility f ON d.facility_id = f.facility_id
+        JOIN customer c ON d.customer_id = c.customer_id
+        LEFT JOIN (
+            SELECT facility_id, SUM(recognized_value) AS recognized
+            FROM collateral GROUP BY facility_id
+        ) col ON f.facility_id = col.facility_id
+        WHERE d.status = 'OPEN' AND d.dpd BETWEEN 75 AND 89
+        ORDER BY d.dpd DESC
+    """)).fetchall()
+    return [
+        {
+            "delinquency_id": r[0], "facility_id": r[1], "customer_name": r[2],
+            "dpd": r[3], "days_to_transfer": 90 - r[3],
+            "overdue_amount": round(r[4] or 0, 2),
+            "outstanding": round(r[5] or 0, 2),
+            "unsecured_exposure": round(max((r[5] or 0) - (r[6] or 0), 0), 2),
+        }
+        for r in rows
+    ]
 
 
 @router.get("/roll-rate")

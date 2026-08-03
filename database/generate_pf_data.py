@@ -35,9 +35,21 @@ CREATE TABLE IF NOT EXISTS pf_project (
     presale_rate    REAL,               -- 분양률 (%)
     ltv             REAL,
     maturity_date   TEXT,
+    units           INTEGER,            -- 세대/실 수
+    completion_date TEXT,               -- 준공 예정
     status          TEXT DEFAULT 'ACTIVE',   -- ACTIVE / COMPLETED / WATCHLIST
     base_date       TEXT,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS pf_participation (
+    participation_id TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL,
+    lender_name     TEXT NOT NULL,
+    tranche         TEXT NOT NULL,      -- SENIOR / MEZZANINE
+    commitment      REAL NOT NULL,      -- 약정액
+    drawn           REAL NOT NULL,      -- 인출액
+    is_self         INTEGER DEFAULT 0,  -- iM뱅크 자행 여부
+    UNIQUE(project_id, lender_name, tranche)
 );
 CREATE TABLE IF NOT EXISTS pf_progress (
     progress_id     TEXT PRIMARY KEY,
@@ -68,11 +80,12 @@ def main():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.executescript(SCHEMA)
+    cur.execute("DELETE FROM pf_participation")
     cur.execute("DELETE FROM pf_progress")
     cur.execute("DELETE FROM pf_project")
 
     months = months_back(12)
-    projects, progress_rows = [], []
+    projects, progress_rows, participation_rows = [], [], []
 
     n_projects = 40
     for i in range(n_projects):
@@ -95,9 +108,14 @@ def main():
             maturity = f"202{random.choice([6, 7])}-{random.randint(1, 12):02d}-01"
         else:
             progress = round(random.uniform(15, 95), 1)
-            # 분양률은 공정률과 대체로 동행하지만 일부 사업장은 크게 뒤처진다(위험)
-            lag = random.choices([random.uniform(-5, 10), random.uniform(25, 55)],
-                                 weights=[0.75, 0.25])[0]
+            # 분양률은 공정률과 대체로 동행하지만 일부 사업장은 크게 뒤처진다(위험).
+            # 난수에만 맡기면 시드 변경 때 위험 표본이 사라질 수 있어,
+            # 매 4번째 사업장은 확정적으로 분양 부진으로 만든다.
+            if i % 4 == 1:
+                lag = random.uniform(30, 55)
+                progress = max(progress, 45.0)   # 공정은 충분히 진행된 상태
+            else:
+                lag = random.uniform(-5, 10)
             presale = round(max(0.0, min(100.0, progress - lag)), 1)
             maturity = f"202{random.choice([7, 8])}-{random.randint(1, 12):02d}-01"
 
@@ -105,12 +123,40 @@ def main():
         status = "WATCHLIST" if (ptype == "MAIN" and gap >= 30) or equity_ratio < 5 else "ACTIVE"
 
         pid = f"PF{i+1:03d}"
+        units = random.randint(120, 1800) if prop in ("APT", "OFFICETEL") else None
+        completion = maturity  # 준공 예정 ≈ 만기 (본PF)
         projects.append((
             pid, name, ptype, prop, region,
             random.choice(DEVELOPERS), random.choice(CONSTRUCTORS),
             round(exposure, 2), equity_ratio, progress, presale,
-            round(random.uniform(55, 85), 1), maturity, status, AS_OF_STR,
+            round(random.uniform(55, 85), 1), maturity, units,
+            completion, status, AS_OF_STR,
         ))
+
+        # 대주단 구성 — iM뱅크는 모든 사업장에 참여(자행 익스포저가 exposure),
+        # 나머지는 신디케이션 참여기관. 자행 비중 25~60%.
+        SYND = ["NH농협은행", "부산은행", "경남은행", "신한캐피탈", "한국투자증권",
+                "메리츠증권", "우리금융캐피탈", "IBK기업은행", "새마을금고중앙회"]
+        self_share = random.uniform(0.25, 0.60)
+        total_facility = exposure / self_share       # 사업장 총 여신
+        participation_rows.append((
+            str(uuid.uuid4())[:12], pid, "iM뱅크", "SENIOR",
+            round(total_facility * self_share, 2),
+            round(total_facility * self_share * (0.0 if ptype == "BRIDGE" else min(1.0, progress / 100 + 0.15)), 2),
+            1,
+        ))
+        remain = 1.0 - self_share
+        n_others = random.randint(2, 4)
+        others = random.sample(SYND, n_others)
+        for j, lender in enumerate(others):
+            share = remain / n_others
+            tranche = "MEZZANINE" if j == n_others - 1 and random.random() < 0.4 else "SENIOR"
+            participation_rows.append((
+                str(uuid.uuid4())[:12], pid, lender, tranche,
+                round(total_facility * share, 2),
+                round(total_facility * share * (0.0 if ptype == "BRIDGE" else min(1.0, progress / 100 + 0.1)), 2),
+                0,
+            ))
 
         # 12개월 추이 — 현재값에서 거꾸로 완만하게 감소
         p_cur, s_cur = progress, presale
@@ -126,19 +172,25 @@ def main():
         INSERT INTO pf_project
         (project_id, project_name, project_type, property_type, region,
          developer_name, constructor_name, exposure, equity_ratio,
-         progress_rate, presale_rate, ltv, maturity_date, status, base_date)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+         progress_rate, presale_rate, ltv, maturity_date, units,
+         completion_date, status, base_date)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, projects)
     cur.executemany("""
         INSERT INTO pf_progress (progress_id, project_id, reference_month,
                                  progress_rate, presale_rate)
         VALUES (?,?,?,?,?)
     """, progress_rows)
+    cur.executemany("""
+        INSERT INTO pf_participation
+        (participation_id, project_id, lender_name, tranche, commitment, drawn, is_self)
+        VALUES (?,?,?,?,?,?,?)
+    """, participation_rows)
     conn.commit()
 
-    n_watch = sum(1 for p in projects if p[13] == "WATCHLIST")
+    n_watch = sum(1 for p in projects if p[15] == "WATCHLIST")
     total = sum(p[7] for p in projects)
-    print(f"✓ PF 사업장 {len(projects)}곳 (워치리스트 {n_watch}) · 추이 {len(progress_rows)}건")
+    print(f"✓ PF 사업장 {len(projects)}곳 · 대주단 {len(participation_rows)}행 (워치리스트 {n_watch}) · 추이 {len(progress_rows)}건")
     print(f"  총 익스포저 {total/1e12:.2f}조")
     conn.close()
 

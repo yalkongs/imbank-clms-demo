@@ -484,6 +484,34 @@ export default function Workout() {
                   )}
                 </div>
 
+                {/* 회수 마일스톤 타임라인 — 전략별 절차의 진행 경과 */}
+                {selectedCase?.milestones?.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-lg font-bold text-gray-900 mb-3">회수 절차 진행 경과</h3>
+                    <ol className="relative border-l-2 border-gray-200 ml-2 space-y-4">
+                      {selectedCase.milestones.map((m: any) => (
+                        <li key={m.seq} className="ml-4">
+                          <span className={`absolute -left-[7px] mt-1 w-3 h-3 rounded-full border-2 border-white ${
+                            m.status === 'DONE' ? 'bg-green-500'
+                            : m.status === 'IN_PROGRESS' ? 'bg-blue-500 status-dot is-running'
+                            : 'bg-gray-300'
+                          }`} />
+                          <div className="flex items-center justify-between">
+                            <p className={`text-sm ${m.status === 'DONE' ? 'text-gray-900 font-medium'
+                              : m.status === 'IN_PROGRESS' ? 'text-blue-700 font-semibold' : 'text-gray-400'}`}>
+                              {m.step_name}
+                              {m.status === 'IN_PROGRESS' && <span className="ml-2 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full">진행 중</span>}
+                            </p>
+                            <p className="text-xs text-gray-400 tabular">
+                              {m.status === 'DONE' ? m.actual_date : `예정 ${m.planned_date}`}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
                 {/* Right: Recovery Scenarios */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-bold text-gray-900 flex items-center">

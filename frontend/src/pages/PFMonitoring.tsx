@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Building, AlertTriangle, Scale, Landmark } from 'lucide-react';
 import { Card, StatCard, RegionFilter } from '../components';
-import { COLORS } from '../components/Charts';
+import { COLORS, TrendChart } from '../components/Charts';
 import { formatAmount, formatPercent, formatNumber } from '../utils/format';
 import axios from 'axios';
 
@@ -23,6 +23,8 @@ export default function PFMonitoring() {
   const [alerts, setAlerts] = useState<any[]>([]);
   const [region, setRegion] = useState('');
   const [tab, setTab] = useState<'projects' | 'simulation'>('projects');
+  const [detail, setDetail] = useState<any>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -39,6 +41,13 @@ export default function PFMonitoring() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  const openDetail = (projectId: string) => {
+    axios.get(`/api/pf/projects/${projectId}`).then(r => {
+      setDetail(r.data);
+      setDetailOpen(true);
+    }).catch(console.error);
+  };
 
   useEffect(() => {
     axios
@@ -162,7 +171,7 @@ export default function PFMonitoring() {
               </thead>
               <tbody>
                 {projects.map(p => (
-                  <tr key={p.project_id} className="border-b border-gray-50 hover:bg-gray-50">
+                  <tr key={p.project_id} onClick={() => openDetail(p.project_id)} className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer">
                     <td className="py-2.5 pr-4">
                       <p className="font-medium text-gray-900">{p.project_name}</p>
                       <p className="text-xs text-gray-400">{p.developer} · {p.constructor}</p>
@@ -254,6 +263,92 @@ export default function PFMonitoring() {
               <p className="text-sm tabular mt-3 text-red-600">+{formatAmount(simulation.delta.provision, 'billion')}</p>
               <p className="text-xs text-gray-500">충당금 추가 적립</p>
             </Card>
+          </div>
+        </div>
+      )}
+
+      {/* 사업장 상세 모달 */}
+      {detailOpen && detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setDetailOpen(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b bg-white sticky top-0 flex items-center justify-between rounded-t-xl">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">{detail.project_name}</h3>
+                <p className="text-xs text-gray-500">
+                  {detail.type_label} · {detail.property_label} · {detail.region_label}
+                  {detail.units ? ` · ${formatNumber(detail.units)}세대` : ''}
+                </p>
+              </div>
+              <button onClick={() => setDetailOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400 text-xl leading-none">&times;</button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* 개요 */}
+              <div className="grid grid-cols-4 gap-4 text-sm">
+                <div><p className="text-xs text-gray-500">자행 익스포저</p><p className="font-bold tabular">{formatAmount(detail.exposure, 'billion')}</p></div>
+                <div><p className="text-xs text-gray-500">자기자본비율</p>
+                  <p className={`font-bold tabular ${detail.equity_ratio < 10 ? 'text-red-600' : ''}`}>{formatPercent(detail.equity_ratio)} <span className="text-xs text-gray-400">({detail.equity_band})</span></p></div>
+                <div><p className="text-xs text-gray-500">LTV</p><p className="font-bold tabular">{formatPercent(detail.ltv)}</p></div>
+                <div><p className="text-xs text-gray-500">준공 예정</p><p className="font-bold tabular">{detail.completion_date || '—'}</p></div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="p-3 bg-gray-50 rounded-lg"><p className="text-xs text-gray-500">시행사</p><p className="font-medium">{detail.developer}</p></div>
+                <div className="p-3 bg-gray-50 rounded-lg"><p className="text-xs text-gray-500">시공사</p><p className="font-medium">{detail.constructor}</p></div>
+              </div>
+
+              {/* 공정·분양 추이 */}
+              {detail.trend?.length > 0 && detail.type_label === '본PF' && (
+                <div>
+                  <p className="text-sm font-semibold text-gray-800 mb-2">공정률 vs 분양률 (12개월)</p>
+                  <TrendChart
+                    data={detail.trend.map((t: any) => ({ period: t.month, progress: t.progress, presale: t.presale }))}
+                    lines={[
+                      { key: 'progress', name: '공정률', color: COLORS.primary },
+                      { key: 'presale', name: '분양률', color: '#F5A524' },
+                    ]}
+                    height={200}
+                  />
+                </div>
+              )}
+
+              {/* 대주단 */}
+              <div>
+                <p className="text-sm font-semibold text-gray-800 mb-2">
+                  대주단 구성 — 총 약정 {formatAmount(detail.syndication?.total_commitment || 0, 'billion')}
+                  <span className="text-xs text-gray-400 ml-2">자행 비중 {formatPercent(detail.syndication?.self_share || 0)}</span>
+                </p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                      <th className="py-1.5">기관</th><th className="py-1.5">트랜치</th>
+                      <th className="py-1.5 text-right">약정액</th><th className="py-1.5 text-right">인출액</th>
+                      <th className="py-1.5 text-right">인출률</th><th className="py-1.5 text-right">지분</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.syndication?.lenders?.map((l: any) => (
+                      <tr key={l.name + l.tranche} className={`border-b border-gray-50 ${l.is_self ? 'bg-blue-50/50 font-medium' : ''}`}>
+                        <td className="py-1.5">{l.name}{l.is_self && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded-full">자행</span>}</td>
+                        <td className="py-1.5">{l.tranche_label}</td>
+                        <td className="py-1.5 text-right tabular">{formatAmount(l.commitment, 'billion')}</td>
+                        <td className="py-1.5 text-right tabular">{formatAmount(l.drawn, 'billion')}</td>
+                        <td className="py-1.5 text-right tabular">{formatPercent(l.drawn_rate)}</td>
+                        <td className="py-1.5 text-right tabular">{formatPercent(l.share)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* 제도 영향 */}
+              <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-sm">
+                <p className="font-semibold text-amber-800 mb-1">2027 제도 시나리오 적용 시</p>
+                <p className="text-amber-700 text-xs">
+                  자기자본비율 {detail.equity_band} 구간 → 위험가중치 {Math.round((detail.scenario_risk_weight || 0) * 100)}% ·
+                  충당금률 {formatPercent((detail.scenario_provision_rate || 0) * 100)}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       )}

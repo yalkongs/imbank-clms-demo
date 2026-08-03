@@ -146,6 +146,18 @@ def get_pf_project(project_id: str, db: Session = Depends(get_db)):
         FROM pf_progress WHERE project_id = :pid ORDER BY reference_month
     """), {"pid": project_id}).fetchall()
 
+    # 대주단 구성 — 자행 우선, 약정액 내림차순
+    lenders = db.execute(text("""
+        SELECT lender_name, tranche, commitment, drawn, is_self
+        FROM pf_participation WHERE project_id = :pid
+        ORDER BY is_self DESC, commitment DESC
+    """), {"pid": project_id}).fetchall()
+    total_commit = sum(l[2] for l in lenders) or 1
+
+    extra = db.execute(text("""
+        SELECT units, completion_date FROM pf_project WHERE project_id = :pid
+    """), {"pid": project_id}).fetchone()
+
     band = _band_for(row[8])
     return {
         "project_id": row[0], "project_name": row[1],
@@ -159,9 +171,27 @@ def get_pf_project(project_id: str, db: Session = Depends(get_db)):
         "scenario_provision_rate": band["provision_rate"],
         "progress_rate": row[9], "presale_rate": row[10],
         "ltv": row[11], "maturity_date": row[12], "status": row[13],
+        "units": extra[0] if extra else None,
+        "completion_date": extra[1] if extra else None,
         "trend": [
             {"month": t[0], "progress": t[1], "presale": t[2]} for t in trend
         ],
+        "syndication": {
+            "total_commitment": round(total_commit, 2),
+            "self_share": round(
+                sum(l[2] for l in lenders if l[4]) / total_commit * 100, 1),
+            "lenders": [
+                {
+                    "name": l[0], "tranche": l[1],
+                    "tranche_label": "선순위" if l[1] == "SENIOR" else "중순위",
+                    "commitment": round(l[2], 2), "drawn": round(l[3], 2),
+                    "drawn_rate": round(l[3] / l[2] * 100, 1) if l[2] else 0,
+                    "share": round(l[2] / total_commit * 100, 1),
+                    "is_self": bool(l[4]),
+                }
+                for l in lenders
+            ],
+        },
     }
 
 

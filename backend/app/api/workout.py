@@ -259,6 +259,19 @@ async def get_workout_case_detail(case_id: str, db: Session = Depends(get_db)):
             "is_recommended": bool(row[12])
         })
 
+    # 회수 마일스톤 — 전략별 절차의 진행 경과
+    milestones = db.execute(text("""
+        SELECT seq, step_name, planned_date, actual_date, status
+        FROM workout_milestone WHERE case_id = :case_id ORDER BY seq
+    """), {"case_id": case_id}).fetchall()
+    milestone_list = [
+        {
+            "seq": m[0], "step_name": m[1],
+            "planned_date": m[2], "actual_date": m[3], "status": m[4],
+        }
+        for m in milestones
+    ]
+
     # 채무조정 이력
     restructurings = db.execute(text("""
         SELECT restructure_id, restructure_date, original_principal, original_rate,
@@ -312,7 +325,8 @@ async def get_workout_case_detail(case_id: str, db: Session = Depends(get_db)):
             "closed_date": case[16]
         },
         "recovery_scenarios": scenario_list,
-        "debt_restructurings": restructuring_list
+        "debt_restructurings": restructuring_list,
+        "milestones": milestone_list
     }
 
 
