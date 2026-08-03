@@ -31,6 +31,7 @@ import {
 import { useTheme } from '../context/ThemeProvider';
 import OnboardingModal from './OnboardingModal';
 import { AlertMenu, SettingsMenu } from './HeaderMenus';
+import MockDataNotice from './MockDataNotice';
 
 interface NavItem {
   path: string;
@@ -111,6 +112,10 @@ export default function Layout() {
   // 접속·새로고침 때마다 소개 팝업을 띄운다.
   // (종전에는 localStorage 의 clms-onboarded 로 최초 1회만 표시했다.)
   const [showOnboarding, setShowOnboarding] = useState(true);
+  // 모의 데이터 고지 — 소개 팝업이 닫힌 직후 1회 표시하고 명시적 확인을 받는다.
+  // (ⓘ 로 소개를 다시 열었다 닫을 때는 반복하지 않는다)
+  const [showMockNotice, setShowMockNotice] = useState(false);
+  const [mockNoticeDone, setMockNoticeDone] = useState(false);
   // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 — 화면에 날짜를 박아두지 않는다.
   const [asOfLabel, setAsOfLabel] = useState('');
 
@@ -123,14 +128,26 @@ export default function Layout() {
 
   const closeOnboarding = () => {
     setShowOnboarding(false);
-    setIntroOpen(false);   // 팝업이 닫힌 뒤에야 대시보드 카운트업이 시작된다
     // 테마 선택은 계속 저장한다 — 팝업 표시 여부와는 무관하다.
     setOnboarded(true);
+    if (!mockNoticeDone) {
+      // 카운트업은 고지까지 닫힌 뒤 시작해야 하므로 introOpen 을 유지한다
+      setShowMockNotice(true);
+    } else {
+      setIntroOpen(false);
+    }
+  };
+
+  const confirmMockNotice = () => {
+    setShowMockNotice(false);
+    setMockNoticeDone(true);
+    setIntroOpen(false);   // 이제 대시보드 카운트업 시작
   };
 
   return (
     <div className="app-root flex h-screen bg-gray-50">
       {showOnboarding && <OnboardingModal onClose={closeOnboarding} />}
+      {showMockNotice && <MockDataNotice onConfirm={confirmMockNotice} />}
 
       {/* 사이드바 */}
       <aside className="app-sidebar w-64 bg-white border-r border-gray-200 flex flex-col">
