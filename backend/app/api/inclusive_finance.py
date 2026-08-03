@@ -23,10 +23,10 @@ router = APIRouter(prefix="/api/inclusive", tags=["Inclusive Finance"])
 # 중신용 등급 경계 — BBB+ 이하를 중신용으로 본다
 MID_CREDIT_GRADES = ("BBB+", "BBB", "BBB-", "BB+", "BB", "BB-", "B+", "B", "B-")
 
-# 인가 시 공언 목표 (PoC 가정치 — 실제 목표는 경영계획 수치로 대체)
+# 인가 시 공언 목표 (사용자 지정 목표치, 2026-08 조정)
 TARGETS = {
-    "mid_credit_share": 15.0,   # 중신용 여신 비중 목표 (%)
-    "soho_share": 10.0,         # 개인사업자 여신 비중 목표 (%)
+    "mid_credit_share": 20.0,   # 중신용 여신 비중 목표 (%)
+    "soho_share": 12.0,         # 개인사업자 여신 비중 목표 (%)
 }
 
 # 세그먼트 조건 SQL 조각 (facility f + customer c + 최신 등급 g 조인 전제)
