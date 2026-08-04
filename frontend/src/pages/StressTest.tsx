@@ -6,9 +6,9 @@ import {
   TrendingDown,
   BarChart3,
   Play,
-  Download
+  SlidersHorizontal
 } from 'lucide-react';
-import { Card, StatCard, Table, Badge, TrendChart, GroupedBarChart, COLORS } from '../components';
+import { Card, StatCard, Badge, GroupedBarChart, COLORS } from '../components';
 import { stressTestApi } from '../utils/api';
 import { formatAmount, formatPercent } from '../utils/format';
 
@@ -93,18 +93,31 @@ export default function StressTest() {
     'PD 증가': ind.pd_stress_impact * 100
   })) || [];
 
+  const isBaseline = selectedScenarioData
+    && Number(selectedScenarioData.pd_stress_factor) === 1
+    && Number(selectedScenarioData.lgd_stress_factor) === 1;
+
   return (
     <div className="space-y-6">
       {/* 페이지 헤더 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">스트레스 테스트</h1>
+          <h1 className="text-2xl font-bold text-gray-900 whitespace-nowrap">스트레스 테스트</h1>
           <p className="text-sm text-gray-500 mt-1">시나리오 기반 포트폴리오 충격 분석</p>
         </div>
+        <button
+          onClick={runStressTest}
+          disabled={!selectedScenario || resultLoading}
+          className="btn btn-primary"
+        >
+          <Play size={16} className="mr-2" />
+          선택 시나리오 재계산
+        </button>
+      </div>
 
       {/* 스트레스완충자본 — 테스트 결과가 자본 요구량으로 이어진다 */}
       {scb && (
-        <div className={`rounded-xl border p-4 flex items-center justify-between ${scb.meets_requirement ? 'border-gray-200 bg-white' : 'border-red-300 bg-red-50'}`}>
+        <div className={`rounded-xl border p-4 flex items-center justify-between gap-4 ${scb.meets_requirement ? 'border-gray-200 bg-white' : 'border-red-300 bg-red-50'}`}>
           <div className="flex items-center gap-6 text-sm">
             <div>
               <p className="text-xs text-gray-500">SEVERE 시나리오 BIS 하락폭</p>
@@ -126,85 +139,9 @@ export default function StressTest() {
               <p className={`text-lg font-bold tabular ${scb.headroom > 0 ? 'text-green-600' : 'text-red-600'}`}>{scb.headroom > 0 ? '+' : ''}{scb.headroom}%p</p>
             </div>
           </div>
-          <p className="text-[11px] text-gray-400 max-w-[200px] text-right">{scb.note}</p>
+          <p className="text-[11px] text-gray-400 max-w-[220px] text-right">{scb.note}</p>
         </div>
       )}
-
-      {/* 사용자 정의 시나리오 플레이그라운드 — 고정 5개 시나리오를 넘어 충격을 직접 조립 */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-800">사용자 정의 시나리오</h3>
-            <p className="text-xs text-gray-400 mt-0.5">충격을 직접 조립해 포트폴리오 전체 파급을 봅니다 (PoC 근사 산식)</p>
-          </div>
-          <button onClick={runCustom} disabled={customBusy}
-            className="btn-mint px-5 text-sm disabled:opacity-50">
-            {customBusy ? '계산 중...' : '시뮬레이션 실행'}
-          </button>
-        </div>
-
-        <div className="grid grid-cols-4 gap-6 mb-2">
-          {([
-            ['pd_mult', 'PD 배수', 1, 4, 0.1, 'x'],
-            ['lgd_mult', 'LGD 배수', 1, 2, 0.1, 'x'],
-            ['property_shock', '부동산 가격', -40, 0, 1, '%'],
-            ['rate_bp', '금리 충격', 0, 400, 25, 'bp'],
-          ] as const).map(([key, label, min, max, step, unit]) => (
-            <div key={key}>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="text-gray-500">{label}</span>
-                <span className="font-bold tabular text-gray-900">{(custom as any)[key]}{unit}</span>
-              </div>
-              <input type="range" min={min} max={max} step={step}
-                value={(custom as any)[key]}
-                onChange={e => setCustom(c => ({ ...c, [key]: parseFloat(e.target.value) }))}
-                className="w-full accent-[#00C7A9]" />
-            </div>
-          ))}
-        </div>
-
-        {customResult && (
-          <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100">
-            <div className={`rounded-lg p-3 ${customResult.bis.breach ? 'bg-red-50' : 'bg-gray-50'}`}>
-              <p className="text-xs text-gray-500">BIS 비율</p>
-              <p className="text-lg font-bold tabular">
-                {customResult.bis.base}% → <span className={customResult.bis.breach ? 'text-red-600' : ''}>{customResult.bis.stressed}%</span>
-              </p>
-              {customResult.bis.breach && <p className="text-[11px] text-red-600 font-semibold mt-0.5">규제최소 10.5% 하회</p>}
-            </div>
-            <div className="rounded-lg p-3 bg-gray-50">
-              <p className="text-xs text-gray-500">IFRS9 ECL</p>
-              <p className="text-lg font-bold tabular">
-                {(customResult.ecl.base/1e8).toFixed(0)} → {(customResult.ecl.stressed/1e8).toFixed(0)}억
-              </p>
-              <p className="text-[11px] text-gray-400 mt-0.5">+{(customResult.ecl.delta/1e8).toFixed(0)}억</p>
-            </div>
-            <div className="rounded-lg p-3 bg-gray-50">
-              <p className="text-xs text-gray-500">PF 워치리스트</p>
-              <p className="text-lg font-bold tabular">
-                {customResult.pf.base_watchlist} → <span className={customResult.pf.stressed_watchlist > customResult.pf.base_watchlist ? 'text-red-600' : ''}>{customResult.pf.stressed_watchlist}곳</span>
-              </p>
-              <p className="text-[11px] text-gray-400 mt-0.5">저자본 비중 {customResult.pf.low_equity_share}%</p>
-            </div>
-            <div className="rounded-lg p-3 bg-gray-50">
-              <p className="text-xs text-gray-500">이자보상배율 (포트폴리오)</p>
-              <p className="text-lg font-bold tabular">
-                {customResult.icr.base} → <span className={customResult.icr.stressed < 1.5 ? 'text-red-600' : ''}>{customResult.icr.stressed}</span>
-              </p>
-              {customResult.icr.stressed < 1.5 && <p className="text-[11px] text-red-600 mt-0.5">기준 1.5배 미만</p>}
-            </div>
-          </div>
-        )}
-      </div>
-        <button
-          onClick={runStressTest}
-          disabled={!selectedScenario || resultLoading}
-          className="btn btn-primary"
-        >
-          <Play size={16} className="mr-2" />
-          테스트 실행
-        </button>
-      </div>
 
       {/* 시나리오 선택 */}
       <div className="grid grid-cols-5 gap-4">
@@ -248,34 +185,40 @@ export default function StressTest() {
       {/* 결과 요약 */}
       {results && (
         <>
+          {isBaseline && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700">
+              기본(Baseline) 시나리오는 충격 계수가 ×1 이라 기준값과 동일합니다 —
+              다른 시나리오 카드를 선택하면 충격 효과가 표시됩니다.
+            </div>
+          )}
           <div className="grid grid-cols-4 gap-4">
             <StatCard
               title="스트레스 RWA"
               value={formatAmount(results.summary?.stressed_rwa || 0, 'billion')}
               subtitle={`기준: ${formatAmount(results.summary?.base_rwa || 0, 'billion')}`}
               icon={<BarChart3 size={24} />}
-              color="red"
+              color={isBaseline ? 'gray' : 'red'}
             />
             <StatCard
               title="RWA 증가"
               value={formatPercent(results.summary?.rwa_increase_rate || 0)}
               subtitle={formatAmount(results.summary?.rwa_increase || 0, 'billion') + ' 증가'}
               icon={<TrendingDown size={24} />}
-              color="red"
+              color={isBaseline ? 'gray' : 'red'}
             />
             <StatCard
               title="스트레스 EL"
               value={formatAmount(results.summary?.stressed_el || 0, 'billion')}
               subtitle={`기준: ${formatAmount(results.summary?.base_el || 0, 'billion')}`}
               icon={<AlertTriangle size={24} />}
-              color="yellow"
+              color={isBaseline ? 'gray' : 'yellow'}
             />
             <StatCard
               title="자본비율 영향"
               value={formatPercent(results.summary?.capital_ratio_impact || 0)}
               subtitle={`변경 후: ${formatPercent(results.summary?.stressed_bis_ratio || 0)}`}
               icon={<Activity size={24} />}
-              color={results.summary?.stressed_bis_ratio >= 10.5 ? 'green' : 'red'}
+              color={isBaseline ? 'gray' : results.summary?.stressed_bis_ratio >= 10.5 ? 'green' : 'red'}
             />
           </div>
 
@@ -298,13 +241,13 @@ export default function StressTest() {
                   <div className="grid grid-cols-3 gap-4 items-center">
                     <span className="text-sm text-gray-700">총 RWA</span>
                     <span className="text-right font-mono">{formatAmount(results.summary?.base_rwa || 0, 'billion')}</span>
-                    <span className="text-right font-mono text-red-600">{formatAmount(results.summary?.stressed_rwa || 0, 'billion')}</span>
+                    <span className={`text-right font-mono ${isBaseline ? 'text-gray-700' : 'text-red-600'}`}>{formatAmount(results.summary?.stressed_rwa || 0, 'billion')}</span>
                   </div>
 
                   <div className="grid grid-cols-3 gap-4 items-center">
                     <span className="text-sm text-gray-700">예상손실(EL)</span>
                     <span className="text-right font-mono">{formatAmount(results.summary?.base_el || 0, 'billion')}</span>
-                    <span className="text-right font-mono text-red-600">{formatAmount(results.summary?.stressed_el || 0, 'billion')}</span>
+                    <span className={`text-right font-mono ${isBaseline ? 'text-gray-700' : 'text-red-600'}`}>{formatAmount(results.summary?.stressed_el || 0, 'billion')}</span>
                   </div>
 
                   <div className="grid grid-cols-3 gap-4 items-center">
@@ -461,6 +404,78 @@ export default function StressTest() {
           )}
         </>
       )}
+
+      {/* 사용자 정의 시나리오 플레이그라운드 — 고정 5개 시나리오를 넘어 충격을 직접 조립 */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-1.5">
+              <SlidersHorizontal size={15} className="text-gray-400" />
+              사용자 정의 시나리오
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              위 고정 시나리오와 별개로, 충격을 직접 조립해 포트폴리오 전체 파급을 봅니다 (PoC 근사 산식)
+            </p>
+          </div>
+          <button onClick={runCustom} disabled={customBusy}
+            className="btn-mint px-5 text-sm disabled:opacity-50">
+            {customBusy ? '계산 중...' : '시뮬레이션 실행'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-4 gap-6 mb-2">
+          {([
+            ['pd_mult', 'PD 배수', 1, 4, 0.1, 'x'],
+            ['lgd_mult', 'LGD 배수', 1, 2, 0.1, 'x'],
+            ['property_shock', '부동산 가격', -40, 0, 1, '%'],
+            ['rate_bp', '금리 충격', 0, 400, 25, 'bp'],
+          ] as const).map(([key, label, min, max, step, unit]) => (
+            <div key={key}>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-gray-500">{label}</span>
+                <span className="font-bold tabular text-gray-900">{(custom as any)[key]}{unit}</span>
+              </div>
+              <input type="range" min={min} max={max} step={step}
+                value={(custom as any)[key]}
+                onChange={e => setCustom(c => ({ ...c, [key]: parseFloat(e.target.value) }))}
+                className="w-full accent-[#00C7A9]" />
+            </div>
+          ))}
+        </div>
+
+        {customResult && (
+          <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-100">
+            <div className={`rounded-lg p-3 ${customResult.bis.breach ? 'bg-red-50' : 'bg-gray-50'}`}>
+              <p className="text-xs text-gray-500">BIS 비율</p>
+              <p className="text-lg font-bold tabular">
+                {customResult.bis.base}% → <span className={customResult.bis.breach ? 'text-red-600' : ''}>{customResult.bis.stressed}%</span>
+              </p>
+              {customResult.bis.breach && <p className="text-[11px] text-red-600 font-semibold mt-0.5">규제최소 10.5% 하회</p>}
+            </div>
+            <div className="rounded-lg p-3 bg-gray-50">
+              <p className="text-xs text-gray-500">IFRS9 ECL</p>
+              <p className="text-lg font-bold tabular">
+                {(customResult.ecl.base/1e8).toFixed(0)} → {(customResult.ecl.stressed/1e8).toFixed(0)}억
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">+{(customResult.ecl.delta/1e8).toFixed(0)}억</p>
+            </div>
+            <div className="rounded-lg p-3 bg-gray-50">
+              <p className="text-xs text-gray-500">PF 워치리스트</p>
+              <p className="text-lg font-bold tabular">
+                {customResult.pf.base_watchlist} → <span className={customResult.pf.stressed_watchlist > customResult.pf.base_watchlist ? 'text-red-600' : ''}>{customResult.pf.stressed_watchlist}곳</span>
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">저자본 비중 {customResult.pf.low_equity_share}%</p>
+            </div>
+            <div className="rounded-lg p-3 bg-gray-50">
+              <p className="text-xs text-gray-500">이자보상배율 (포트폴리오)</p>
+              <p className="text-lg font-bold tabular">
+                {customResult.icr.base} → <span className={customResult.icr.stressed < 1.5 ? 'text-red-600' : ''}>{customResult.icr.stressed}</span>
+              </p>
+              {customResult.icr.stressed < 1.5 && <p className="text-[11px] text-red-600 mt-0.5">기준 1.5배 미만</p>}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
