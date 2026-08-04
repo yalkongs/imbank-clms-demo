@@ -20,6 +20,8 @@ from .api import asset_classification, ecl, delinquency
 from .api import automation
 # iM뱅크 전략 기능: 포용금융·PF 사업장
 from .api import inclusive_finance, pf, governance, export, search
+# 포트폴리오 맵 (기업 다차원 산점도 + what-if)
+from .api import portfolio_map
 
 
 @asynccontextmanager
@@ -108,6 +110,7 @@ app.include_router(pf.router)
 app.include_router(governance.router)
 app.include_router(export.router)
 app.include_router(search.router)
+app.include_router(portfolio_map.router)
 
 
 @app.get("/health")

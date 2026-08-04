@@ -7,6 +7,7 @@ const PortfolioHub = React.lazy(() => import('./pages/PortfolioHub'));
 const LimitsHub = React.lazy(() => import('./pages/LimitsHub'));
 const InclusiveFinance = React.lazy(() => import('./pages/InclusiveFinance'));
 const PFMonitoring = React.lazy(() => import('./pages/PFMonitoring'));
+const PortfolioMap = React.lazy(() => import('./pages/PortfolioMap'));
 const Governance = React.lazy(() => import('./pages/Governance'));
 const ApprovalInbox = React.lazy(() => import('./pages/ApprovalInbox'));
 import Dashboard from './pages/Dashboard';
@@ -64,6 +65,7 @@ function App() {
         <Route path="covenant" element={<Covenant />} />
         <Route path="inclusive-finance" element={<InclusiveFinance />} />
         <Route path="pf-monitoring" element={<PFMonitoring />} />
+        <Route path="portfolio-map" element={<PortfolioMap />} />
         <Route path="governance" element={<Governance />} />
         <Route path="approval-inbox" element={<ApprovalInbox />} />
         {/* Phase 2: 부실 관리 핵심 */}

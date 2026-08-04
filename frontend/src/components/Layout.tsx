@@ -73,6 +73,7 @@ export const navGroups: NavGroup[] = [
       { path: '/ews-advanced', label: 'EWS 조기경보', icon: <AlertTriangle size={20} /> },
       { path: '/collateral-monitoring', label: '담보 모니터링', icon: <Home size={20} /> },
       { path: '/asset-classification', label: '자산건전성 분류', icon: <ListChecks size={20} /> },
+      { path: '/portfolio-map', label: '포트폴리오 맵', icon: <Target size={20} /> },
       { path: '/pf-monitoring', label: 'PF 사업장', icon: <Landmark size={20} /> },
     ]
   },
