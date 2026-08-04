@@ -67,7 +67,16 @@ export default function StoryTour({ step, onStep, onExit }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
+  // 투어가 어떤 경로로 끝나든(마치기·X) 시작점인 대시보드로 되돌린다.
+  // 투어는 화면 6곳을 순회하므로, 끝난 자리에 그대로 두면 사용자가 길을 잃는다.
+  const exitTour = () => {
+    navigate('/');
+    onExit();
+  };
+
   if (!cur) return null;
+
+  const isLast = step === TOUR_STEPS.length - 1;
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[65] w-full max-w-xl px-4">
@@ -85,11 +94,17 @@ export default function StoryTour({ step, onStep, onExit }: Props) {
                 {cur.hint && <p className="text-xs text-blue-600 mt-1.5">💡 {cur.hint}</p>}
               </div>
             </div>
-            <button onClick={onExit} aria-label="투어 종료"
+            <button onClick={exitTour} aria-label="투어 종료"
                     className="p-1 text-gray-400 hover:text-gray-600 rounded flex-none">
               <X size={16} />
             </button>
           </div>
+
+          {isLast && (
+            <p className="text-xs text-gray-400 mt-3">
+              투어를 마치면 첫 화면(대시보드)으로 이동합니다.
+            </p>
+          )}
 
           <div className="flex items-center justify-between mt-4">
             <div className="flex gap-1">
@@ -106,13 +121,13 @@ export default function StoryTour({ step, onStep, onExit }: Props) {
               >
                 <ChevronLeft size={14} /> 이전
               </button>
-              {step < TOUR_STEPS.length - 1 ? (
+              {!isLast ? (
                 <button onClick={() => onStep(step + 1)}
                         className="flex items-center gap-1 px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                   다음 <ChevronRight size={14} />
                 </button>
               ) : (
-                <button onClick={onExit} className="btn-accent px-4 py-1.5 text-xs">
+                <button onClick={exitTour} className="btn-accent px-4 py-1.5 text-xs">
                   투어 마치기
                 </button>
               )}

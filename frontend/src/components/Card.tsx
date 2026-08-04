@@ -1,4 +1,68 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+
+/**
+ * 숫자 호버 애니메이션
+ * ---------------------
+ * 카드에 마우스를 올리면 값의 숫자 부분만 90%→100% 로 짧게(0.45s) 다시 세어
+ * "살아있는 숫자" 반응을 준다. 포맷된 문자열("862,237.7억원", "16.81%")에서
+ * 숫자를 추출해 소수 자릿수를 보존하고, prefers-reduced-motion 이면 건너뛴다.
+ */
+function parseNumeric(display: string | number) {
+  const s = String(display);
+  const m = s.match(/-?[\d,]+(?:\.\d+)?/);
+  if (!m || m.index === undefined) return null;
+  const raw = m[0];
+  const num = parseFloat(raw.replace(/,/g, ''));
+  if (!isFinite(num) || num === 0) return null;
+  const dot = raw.indexOf('.');
+  return {
+    prefix: s.slice(0, m.index),
+    num,
+    suffix: s.slice(m.index + raw.length),
+    decimals: dot >= 0 ? raw.length - dot - 1 : 0,
+  };
+}
+
+function useHoverNumber(value: string | number) {
+  const [overlay, setOverlay] = useState<string | null>(null);
+  const raf = useRef<number | null>(null);
+
+  // 값이 바뀌면(필터 전환 등) 진행 중인 애니메이션을 버린다
+  useEffect(() => {
+    if (raf.current) cancelAnimationFrame(raf.current);
+    raf.current = null;
+    setOverlay(null);
+  }, [value]);
+  useEffect(() => () => { if (raf.current) cancelAnimationFrame(raf.current); }, []);
+
+  const animate = useCallback(() => {
+    if (raf.current) return;   // 진행 중이면 무시
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const p = parseNumeric(value);
+    if (!p) return;
+    const start = performance.now();
+    const DUR = 450;
+    const tick = (t: number) => {
+      const k = Math.min((t - start) / DUR, 1);
+      const ease = 1 - Math.pow(1 - k, 3);
+      const cur = p.num * (0.9 + 0.1 * ease);
+      setOverlay(
+        p.prefix +
+        cur.toLocaleString('ko-KR', { minimumFractionDigits: p.decimals, maximumFractionDigits: p.decimals }) +
+        p.suffix
+      );
+      if (k < 1) {
+        raf.current = requestAnimationFrame(tick);
+      } else {
+        raf.current = null;
+        setOverlay(null);
+      }
+    };
+    raf.current = requestAnimationFrame(tick);
+  }, [value]);
+
+  return { text: overlay ?? String(value), animate };
+}
 
 interface CardProps {
   title?: string;
@@ -44,6 +108,7 @@ interface StatCardProps {
 }
 
 export function StatCard({ title, value, subtitle, change, icon, color = 'blue' }: StatCardProps) {
+  const { text, animate } = useHoverNumber(value);
   const colorClasses = {
     blue: 'bg-blue-50 text-blue-600',
     green: 'bg-green-50 text-green-600',
@@ -53,11 +118,11 @@ export function StatCard({ title, value, subtitle, change, icon, color = 'blue' 
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4" onMouseEnter={animate}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-gray-500 font-medium">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1 tabular">{text}</p>
           {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
           {change !== undefined && (
             <p className={`text-sm mt-1 ${change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -99,17 +164,18 @@ export function GaugeCard({
 }: GaugeCardProps) {
   const percentage = ((value - min) / (max - min)) * 100;
   const targetPercentage = target ? ((target - min) / (max - min)) * 100 : null;
+  const { text, animate } = useHoverNumber(`${value.toFixed(2)}${unit}`);
 
   let barColor = 'bg-green-500';
   if (critical && value <= critical) barColor = 'bg-red-500';
   else if (warning && value <= warning) barColor = 'bg-yellow-500';
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4" onMouseEnter={animate}>
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm text-gray-500 font-medium">{title}</p>
-        <p className="text-lg font-bold text-gray-900">
-          {value.toFixed(2)}{unit}
+        <p className="text-lg font-bold text-gray-900 tabular">
+          {text}
         </p>
       </div>
       <div className="relative h-3 bg-gray-200 rounded-full overflow-hidden">

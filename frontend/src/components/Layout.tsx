@@ -124,6 +124,13 @@ export default function Layout() {
   // 스토리 투어 - null 이면 비활성. 온보딩에서 '스토리 투어'로 닫으면 고지 확인 후 시작
   const [tourStep, setTourStep] = useState<number | null>(null);
   const [pendingTour, setPendingTour] = useState(false);
+  // 투어 종료 직후 잠깐 표시하는 안내 (대시보드로 이동했음을 알린다)
+  const [tourEndNotice, setTourEndNotice] = useState(false);
+  useEffect(() => {
+    if (!tourEndNotice) return;
+    const t = setTimeout(() => setTourEndNotice(false), 3500);
+    return () => clearTimeout(t);
+  }, [tourEndNotice]);
   // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 - 화면에 날짜를 박아두지 않는다.
   const [asOfLabel, setAsOfLabel] = useState('');
 
@@ -177,7 +184,13 @@ export default function Layout() {
       {showMockNotice && <MockDataNotice onConfirm={confirmMockNotice} />}
       <CommandPalette />
       {tourStep !== null && (
-        <StoryTour step={tourStep} onStep={setTourStep} onExit={() => setTourStep(null)} />
+        <StoryTour step={tourStep} onStep={setTourStep}
+          onExit={() => { setTourStep(null); setTourEndNotice(true); }} />
+      )}
+      {tourEndNotice && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[65] px-4 py-2.5 bg-gray-900/90 text-white text-sm rounded-full shadow-lg">
+          스토리 투어가 종료되어 대시보드로 이동했습니다
+        </div>
       )}
 
       {/* 사이드바 */}
