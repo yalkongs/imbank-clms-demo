@@ -134,6 +134,95 @@ def get_map_companies(db: Session = Depends(get_db)):
     }
 
 
+@router.get("/history")
+def get_map_history(db: Session = Depends(get_db)):
+    """타임 슬라이더·궤적용 월별 이력 (최근 12개월).
+
+    월별 데이터가 있는 지표만: 한도소진율·부도거리(DD)·뉴스감성 (각 12개월),
+    PD 는 등급 이력의 as-of 값을 월별로 펼친다 (carry-forward).
+    EWS 종합점수는 단일 시점만 존재해 시간축 미지원.
+    단위는 /companies 와 동일 (%, 점수 등).
+    """
+    months = [r[0] for r in db.execute(text(
+        "SELECT DISTINCT reference_month FROM ews_transaction_behavior ORDER BY 1"
+    )).fetchall()][-12:]
+    if not months:
+        return {"months": [], "series": {}}
+
+    fac_ids = {r[0] for r in db.execute(text(
+        "SELECT DISTINCT customer_id FROM facility WHERE status = 'ACTIVE'"
+    )).fetchall()}
+    idx = {m: i for i, m in enumerate(months)}
+    n = len(months)
+
+    series: dict = {cid: {"pd": [None] * n, "util": [None] * n,
+                          "dd": [None] * n, "sentiment": [None] * n}
+                    for cid in fac_ids}
+
+    def fill(sql: str, key: str, scale: float, digits: int):
+        for cid, m, v in db.execute(text(sql)).fetchall():
+            if cid in series and m in idx and v is not None:
+                series[cid][key][idx[m]] = round(v * scale, digits)
+
+    fill("SELECT customer_id, reference_month, limit_utilization FROM ews_transaction_behavior",
+         "util", 100, 1)
+    fill("SELECT customer_id, reference_month, distance_to_default FROM ews_market_signal",
+         "dd", 1, 2)
+    fill("SELECT customer_id, reference_month, avg_sentiment FROM ews_news_sentiment_monthly",
+         "sentiment", 1, 3)
+
+    # PD as-of: 등급 이력을 월말 기준 carry-forward 로 펼친다
+    ratings = db.execute(text("""
+        SELECT customer_id, rating_date, pd_value FROM credit_rating_result
+        ORDER BY customer_id, rating_date
+    """)).fetchall()
+    by_cust: dict = {}
+    for cid, rd, pd in ratings:
+        if cid in series:
+            by_cust.setdefault(cid, []).append((rd[:7], pd))
+    for cid, hist in by_cust.items():
+        j, cur = 0, None
+        for i, m in enumerate(months):
+            while j < len(hist) and hist[j][0] <= m:
+                cur = hist[j][1]
+                j += 1
+            series[cid]["pd"][i] = round(cur * 100, 4) if cur is not None else None
+
+    # 앞쪽 결측은 첫 관측값으로 backfill (그 달만 비어 점이 사라지는 것 방지)
+    for s in series.values():
+        for key in ("pd", "util", "sentiment"):
+            arr = s[key]
+            first = next((v for v in arr if v is not None), None)
+            if first is None:
+                continue
+            for i in range(n):
+                if arr[i] is None:
+                    arr[i] = first
+                else:
+                    break
+        # dd 는 비상장사 전체가 None - 그대로 둔다
+        if all(v is None for v in s["dd"]):
+            s["dd"] = None
+
+    return {"months": months, "series": series}
+
+
+@router.get("/capital-context")
+def get_capital_context(db: Session = Depends(get_db)):
+    """what-if 누적 파급의 BIS 근사에 쓰는 자본 현황"""
+    cap = db.execute(text("""
+        SELECT bis_ratio, total_capital, total_rwa
+        FROM capital_position ORDER BY base_date DESC LIMIT 1
+    """)).fetchone()
+    if not cap:
+        return {"bis_ratio": 0, "total_capital": 0, "total_rwa": 0}
+    return {
+        "bis_ratio": round((cap[0] or 0) * 100, 2),
+        "total_capital": cap[1] or 0,
+        "total_rwa": cap[2] or 0,
+    }
+
+
 @router.get("/what-if")
 def what_if(
     customer_id: str = Query(...),

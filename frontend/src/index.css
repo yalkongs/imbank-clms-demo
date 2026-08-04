@@ -401,3 +401,16 @@ body {
 .mini-flat {
   background: #f1f5f4;
 }
+
+/* 포트폴리오 맵 - 타임 슬라이더 포인트 이동 보간 + 고위험(NPL) 펄스 */
+.pm-dot { transition: cx 0.45s ease, cy 0.45s ease, fill-opacity 0.2s ease; }
+.pm-dot--nolerp { transition: fill-opacity 0.2s ease; }   /* what-if 드래그 중에는 포인터를 즉시 따라간다 */
+@keyframes pm-pulse {
+  0%, 100% { stroke-opacity: 0.85; stroke-width: 1.5; }
+  50%      { stroke-opacity: 0.08; stroke-width: 7; }
+}
+.pm-pulse { animation: pm-pulse 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .pm-dot, .pm-dot--nolerp { transition: none; }
+  .pm-pulse { animation: none; }
+}
