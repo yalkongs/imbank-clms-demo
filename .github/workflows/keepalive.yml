@@ -1,10 +1,17 @@
 # Render 무료 플랜 콜드스타트 완화
 # ==================================
 # 무료 인스턴스는 15분 유휴 시 잠들어 첫 접속이 30초 이상 걸린다 — 데모 첫인상을
-# 가장 확실하게 망치는 요인이다. 주간 시간대(KST 08~22시)에 10분 간격으로
-# /health 를 핑해 깨어 있게 한다.
+# 가장 확실하게 망치는 요인이다. 주간 시간대(KST 08~22시)에 /health 를 핑해
+# 깨어 있게 한다.
 #
-# 무료 플랜 월 750시간 한도 안에서 동작한다 (14시간/일 × 31일 = 434시간).
+# 왜 "1회 실행 = 20분간 연속 핑"인가: GitHub Actions cron 은 보장이 아니라
+# 최선 노력이며, 실제로는 실행이 수십 분 지연되거나 통째로 건너뛴다
+# (10분 간격 단발 핑 구조에서 활성 윈도우 중 잠드는 것이 실측됨).
+# 각 실행이 60초 간격으로 20분을 커버하면 cron 이 20~30분 밀려도
+# 15분 유휴 임계에 도달하지 않는다. 새 실행이 시작되면 concurrency 가
+# 이전 실행을 취소하므로(정상 동작) 실행 목록의 'cancelled' 는 오류가 아니다.
+#
+# 무료 플랜 월 750 인스턴스시간 한도 안에서 동작한다 (14시간/일 × 31일 = 434시간).
 # 배포 URL 이 바뀌면 아래 RENDER_URL 만 수정.
 
 name: keepalive
@@ -16,14 +23,21 @@ on:
     - cron: "*/10 0-13 * * *"
   workflow_dispatch: {}
 
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 25
     steps:
-      - name: Ping /health
-        continue-on-error: true
+      - name: Ping /health every 60s for 20 minutes
         run: |
           RENDER_URL="https://imbank-clms-demo.onrender.com"
-          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$RENDER_URL/health" || echo "000")
-          echo "health -> $code"
+          END=$(( SECONDS + 1200 ))
+          while [ $SECONDS -lt $END ]; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$RENDER_URL/health" || echo "000")
+            echo "$(date -u +%H:%M:%S) health -> $code"
+            sleep 60
+          done
