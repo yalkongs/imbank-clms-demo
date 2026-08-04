@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import axios from 'axios';
-import { RotateCcw, MousePointerClick, Move } from 'lucide-react';
+import { RotateCcw, MousePointerClick, Move, Info } from 'lucide-react';
 import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
 } from 'recharts';
-import { Card, RegionFilter } from '../components';
+import { Card, RegionFilter, FeatureModal } from '../components';
 import { formatAmount, formatPercent } from '../utils/format';
 
 /**
@@ -48,6 +48,29 @@ const METRICS: Record<MetricKey, {
 };
 
 type ColorMode = 'classification' | 'region' | 'size' | 'grade';
+
+/** (i) 버튼이 여는 유용성 설명 - 이 화면이 표·순위와 무엇이 다른지 */
+const MAP_FEATURE = {
+  title: '포트폴리오 맵은 무엇이 유용한가',
+  description:
+    '여신 보유 기업 전체를 지표 공간에 배치해, 표와 순위로는 보이지 않는 ' +
+    '포트폴리오의 "지형"을 봅니다. 어디에 쏠려 있는지, 누가 무리에서 벗어나 있는지, ' +
+    '누가 임계선 바로 앞에 서 있는지가 한 화면에 드러납니다.',
+  benefits: [
+    '이상치 발견 - 고위험인데 저수익(PD 높고 RAROC 낮음)처럼 우선 점검할 기업이 시각적으로 돌출됩니다',
+    '쏠림 진단 - 색(분류·지역·규모·등급대)과 크기(잔액)를 겹쳐 특정 구역의 익스포저 집중을 확인합니다',
+    '임계 관리 - RAROC 허들 15%, SICR 55점, 부채비율 200% 등 기준선에 근접한 기업을 미리 봅니다',
+    '영역 선택(브러시) - 문제 구역을 마우스로 묶으면 개사 수·잔액 합계·평균 PD·NPL 잔액이 즉시 집계됩니다',
+    'What-if 드래그 - PD·EWS·한도소진율 축에서 포인트를 끌면 EL·RAROC·건전성 분류·필요충당금 파급을 ' +
+    '동일 산식으로 재계산합니다. "이 기업의 PD가 두 배가 되면?"에 회의 중 바로 답할 수 있습니다',
+    '기업 프로필 - 클릭 한 번으로 6축 백분위 레이더(안전성·수익성·EWS·한도여유·재무구조·감성)를 확인합니다',
+  ],
+  methodology:
+    'What-if 는 자산건전성 분류·ECL 모듈과 **동일한 산식**(보수주의 분류, 감독규정 최저적립률, ' +
+    'EL = PD x LGD x EAD)을 재사용한 모의 계산이며, **실데이터는 변경되지 않습니다**.\n\n' +
+    '축 도메인은 1~99% 분위수로 잘라 극단 이상치가 본체 분포를 압착하지 않게 합니다. ' +
+    'PD 축의 세로 띠는 등급별 고정 PD(등급 체계의 구조)가 그대로 드러난 것입니다.',
+};
 
 const CLASS_COLORS: Record<string, string> = {
   NORMAL: '#00BFA5', PRECAUTIONARY: '#f59e0b', SUBSTANDARD: '#f97316',
@@ -140,6 +163,7 @@ export default function PortfolioMap() {
   const [colorMode, setColorMode] = useState<ColorMode>('classification');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [brushSel, setBrushSel] = useState<Company[] | null>(null);
   // what-if: 드래그로 덮어쓴 축 값 {pd?, ews_score?, util?}
   const [simOverride, setSimOverride] = useState<Record<string, number>>({});
@@ -294,10 +318,21 @@ export default function PortfolioMap() {
 
   return (
     <div className="space-y-6">
+      <FeatureModal isOpen={infoOpen} onClose={() => setInfoOpen(false)} feature={MAP_FEATURE} />
       {/* 헤더 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">포트폴리오 맵</h1>
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-2xl font-bold text-gray-900">포트폴리오 맵</h1>
+            <button
+              onClick={() => setInfoOpen(true)}
+              aria-label="포트폴리오 맵의 유용성 설명"
+              title="이 화면이 왜 유용한가"
+              className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+            >
+              <Info size={18} />
+            </button>
+          </div>
           <p className="text-sm text-gray-500 mt-1">
             여신 보유 {companies.length}개사 다차원 분석 - 크기는 여신잔액
           </p>
