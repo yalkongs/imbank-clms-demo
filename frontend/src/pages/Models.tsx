@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import SimpleMarkdown from '../components/SimpleMarkdown';
 import axios from 'axios';
 import {
   Brain,
@@ -1464,7 +1465,7 @@ function ModelSpecsModal({ specs, onClose }: { specs: any; onClose: () => void }
               </h3>
               <div className="bg-gray-50 rounded-lg p-4 prose prose-sm max-w-none">
                 <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
-                  {s.theoretical_background}
+                  <SimpleMarkdown text={s.theoretical_background} />
                 </pre>
               </div>
             </section>

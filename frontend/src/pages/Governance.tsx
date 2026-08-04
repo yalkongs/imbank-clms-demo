@@ -12,6 +12,47 @@ import axios from 'axios';
  * 감사 추적은 모든 의미 있는 쓰기 작업의 이력이다.
  */
 
+
+/** 감사 기록의 before/after JSON 을 사람이 읽는 형태로 변환한다.
+ *  원문 {"status": "APPROVED", ...} 노출은 감사 화면의 목적(증빙 가독성)에 어긋난다. */
+const AUDIT_FIELD_LABELS: Record<string, string> = {
+  status: '상태', approved_amount: '승인금액', approval_level: '전결',
+  inserted: '신규', updated: '갱신', stage: 'Stage', ecl_final: 'ECL',
+  instrument: '상품', notional: '명목금액',
+};
+const AUDIT_VALUE_LABELS: Record<string, string> = {
+  APPROVED: '승인', REJECTED: '반려', CONDITIONAL: '조건부승인',
+  STAFF: '담당자', TEAM_LEAD: '팀장', DEPT_HEAD: '부서장',
+  EXECUTIVE: '임원', COMMITTEE: '여신위원회',
+};
+
+function formatAuditValue(key: string, v: any): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'number' && ['approved_amount', 'ecl_final', 'notional'].includes(key)) {
+    return `${(v / 1e8).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}억`;
+  }
+  if (typeof v === 'number') return v.toLocaleString('ko-KR');
+  return AUDIT_VALUE_LABELS[String(v)] || String(v);
+}
+
+function AuditChange({ raw }: { raw: string | null }) {
+  if (!raw) return <span className="text-gray-300">—</span>;
+  let obj: Record<string, any>;
+  try { obj = JSON.parse(raw); } catch { return <span>{raw}</span>; }
+  const entries = Object.entries(obj).filter(([, v]) => v !== null && v !== undefined && v !== '');
+  if (entries.length === 0) return <span className="text-gray-300">—</span>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      {entries.map(([k, v]) => (
+        <span key={k} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-gray-100 rounded text-[11px]">
+          <span className="text-gray-400">{AUDIT_FIELD_LABELS[k] || k}</span>
+          <span className="font-medium text-gray-700">{formatAuditValue(k, v)}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export default function Governance() {
   const [report, setReport] = useState<any>(null);
   const [authority, setAuthority] = useState<any[]>([]);
@@ -223,7 +264,10 @@ export default function Governance() {
                         <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">{l.action_type}</span>
                       </td>
                       <td className="py-2 pr-4 text-xs">{l.target_entity}<p className="text-gray-400">{l.target_id}</p></td>
-                      <td className="py-2 text-xs text-gray-600 max-w-md break-all">{l.after}</td>
+                      <td className="py-2 text-xs text-gray-600 max-w-md">
+                        {l.before && <div className="mb-1 opacity-60"><span className="text-gray-400 mr-1">이전</span><AuditChange raw={l.before} /></div>}
+                        <AuditChange raw={l.after} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>

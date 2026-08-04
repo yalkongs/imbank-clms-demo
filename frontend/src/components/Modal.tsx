@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import SimpleMarkdown from './SimpleMarkdown';
 import { X, HelpCircle, Info } from 'lucide-react';
 
 interface ModalProps {
@@ -97,47 +98,6 @@ export function FeatureModal({ isOpen, onClose, feature }: FeatureModalProps) {
   if (!feature) return null;
 
   // Simple markdown-like parsing
-  const renderMethodology = (text: string) => {
-    const lines = text.split('\n');
-    return lines.map((line, i) => {
-      // Headers
-      if (line.startsWith('**') && line.endsWith('**')) {
-        return <h4 key={i} className="text-sm font-bold text-gray-900 mt-4 mb-2">{line.replace(/\*\*/g, '')}</h4>;
-      }
-      // Code blocks
-      if (line.startsWith('```')) {
-        return null;
-      }
-      // List items
-      if (line.startsWith('- ')) {
-        return <li key={i} className="text-sm text-gray-700 ml-4">{line.substring(2)}</li>;
-      }
-      if (line.match(/^\d+\./)) {
-        return <li key={i} className="text-sm text-gray-700 ml-4">{line.substring(line.indexOf('.') + 2)}</li>;
-      }
-      // Table rows
-      if (line.startsWith('|')) {
-        const cells = line.split('|').filter(c => c.trim());
-        if (cells.every(c => c.trim().match(/^-+$/))) return null;
-        return (
-          <div key={i} className="flex text-xs">
-            {cells.map((cell, j) => (
-              <span key={j} className="flex-1 px-2 py-1 border-b border-gray-200">{cell.trim()}</span>
-            ))}
-          </div>
-        );
-      }
-      // Code line
-      if (line.includes('=') && !line.includes(':')) {
-        return <code key={i} className="block text-xs bg-gray-100 px-2 py-1 rounded font-mono my-1">{line}</code>;
-      }
-      // Regular text
-      if (line.trim()) {
-        return <p key={i} className="text-sm text-gray-700 my-1">{line}</p>;
-      }
-      return null;
-    });
-  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={feature.title} size="lg">
@@ -163,7 +123,7 @@ export function FeatureModal({ isOpen, onClose, feature }: FeatureModalProps) {
           <div>
             <h4 className="text-sm font-semibold text-gray-900 mb-2">방법론</h4>
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              {renderMethodology(feature.methodology)}
+              <SimpleMarkdown text={feature.methodology} />
             </div>
           </div>
         )}
