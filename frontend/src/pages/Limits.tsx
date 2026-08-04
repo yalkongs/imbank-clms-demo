@@ -432,7 +432,7 @@ export default function Limits() {
         </div>
       </Card>
 
-      {/* 한도 예약 — 승인된 신청이 실행 전까지 선점한 한도. 심사와 한도관리의 연결 고리 */}
+      {/* 한도 예약 - 승인된 신청이 실행 전까지 선점한 한도. 심사와 한도관리의 연결 고리 */}
       {reservations.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <h3 className="text-sm font-semibold text-gray-800 mb-3">한도 예약 ({reservations.length}건)</h3>

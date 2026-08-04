@@ -499,7 +499,7 @@ def create_hedge_position(
     maturity_date: str = None,
     db: Session = Depends(get_db),
 ):
-    """헷지 포지션 등록 — ALM 이 조회 전용에 머물지 않도록 실행 기능을 연다.
+    """헷지 포지션 등록 - ALM 이 조회 전용에 머물지 않도록 실행 기능을 연다.
 
     PoC 단순화: MTM 0, 효과성 100% 로 초기 등록하고 감사 기록을 남긴다.
     """

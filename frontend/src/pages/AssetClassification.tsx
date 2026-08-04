@@ -156,7 +156,7 @@ export default function AssetClassification() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">자산건전성 분류</h1>
           <p className="text-sm text-gray-500 mt-1">
-            금감원 기준 5단계 분류 — DPD · PD · EWS 보수주의 원칙 적용
+            금감원 기준 5단계 분류 - DPD · PD · EWS 보수주의 원칙 적용
           </p>
         </div>
         <a href="/api/export/classification.csv" download
@@ -255,7 +255,7 @@ export default function AssetClassification() {
                   </ResponsiveContainer>
                 </div>
 
-                {/* 바차트 — 충당금 */}
+                {/* 바차트 - 충당금 */}
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">분류별 충당금 현황</h3>
                   <ResponsiveContainer width="100%" height={240}>

@@ -262,7 +262,7 @@ def _sample_channel_score(mu: float, sigma: float) -> float:
 
 
 def generate_composite_scores(conn):
-    """종합 EWS 점수 생성 — 차주 신용등급에 연동한다."""
+    """종합 EWS 점수 생성 - 차주 신용등급에 연동한다."""
     cursor = conn.cursor()
     # 최신 신용등급을 함께 읽어 등급대별로 점수 분포를 달리한다.
     cursor.execute("""

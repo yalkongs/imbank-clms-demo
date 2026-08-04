@@ -111,7 +111,7 @@ def get_scenario_result(scenario_id: str, db: Session = Depends(get_db)):
     base_lgd = float(portfolio[2]) if portfolio[2] else 0.40
     portfolio_rwa = float(portfolio[3]) if portfolio[3] else base_rwa * 0.8
 
-    # 스트레스 적용 — 상한은 calculations 모듈 단일 정의를 따른다
+    # 스트레스 적용 - 상한은 calculations 모듈 단일 정의를 따른다
     stressed_pd = calculate_stress_pd(base_pd, factors['pd'])
     stressed_lgd = calculate_stress_lgd(base_lgd, factors['lgd'])
     stressed_rwa = base_rwa * factors['rwa']
@@ -259,7 +259,7 @@ def compare_scenarios(db: Session = Depends(get_db)):
 
 @router.get("/stress-capital-buffer")
 def get_stress_capital_buffer(db: Session = Depends(get_db)):
-    """스트레스완충자본(SCB) 산출 — 스트레스테스트 결과를 자본 요구량으로 연결.
+    """스트레스완충자본(SCB) 산출 - 스트레스테스트 결과를 자본 요구량으로 연결.
 
     도입 취지: 위기상황분석 결과 자본비율 하락폭이 큰 은행일수록 평시에
     완충자본을 더 쌓게 한다. 산식(PoC): SCB = min(max(기준 BIS - SEVERE
@@ -295,14 +295,14 @@ def get_stress_capital_buffer(db: Session = Depends(get_db)):
         "required_ratio": required,
         "headroom": round(base_bis - required, 2),
         "meets_requirement": base_bis >= required,
-        "note": "SCB = min(max(기준 BIS − SEVERE 스트레스 BIS, 0), 2.5%p) — PoC 산식",
+        "note": "SCB = min(max(기준 BIS − SEVERE 스트레스 BIS, 0), 2.5%p) - PoC 산식",
     }
 
 @router.get("/custom")
 def run_custom_scenario(
     pd_mult: float = 1.0,        # PD 배수 (1.0~4.0)
     lgd_mult: float = 1.0,       # LGD 배수 (1.0~2.0)
-    property_shock: float = 0.0, # 부동산 가격 충격 (%) — 음수
+    property_shock: float = 0.0, # 부동산 가격 충격 (%) - 음수
     rate_bp: int = 0,            # 금리 충격 (bp)
     db: Session = Depends(get_db),
 ):
@@ -339,7 +339,7 @@ def run_custom_scenario(
     """)).fetchone()[0])
     stressed_ecl = round(base_ecl * pd_mult * lgd_mult, 2)
 
-    # PF — 부동산 충격 전이
+    # PF - 부동산 충격 전이
     pf_rows = db.execute(text("""
         SELECT project_type, progress_rate, presale_rate, equity_ratio, exposure
         FROM pf_project WHERE status != 'COMPLETED'
@@ -359,7 +359,7 @@ def run_custom_scenario(
         if eq2 < 10:
             stressed_low_equity_exp += exp
 
-    # 이자보상배율 근사 — 재무제표 집계
+    # 이자보상배율 근사 - 재무제표 집계
     fin = db.execute(text("""
         SELECT SUM(operating_profit), SUM(interest_expense)
         FROM financial_statement WHERE fiscal_year = (
@@ -385,5 +385,5 @@ def run_custom_scenario(
         "pf": {"base_watchlist": base_watch, "stressed_watchlist": stressed_watch,
                "low_equity_share": round(stressed_low_equity_exp / pf_total * 100, 1)},
         "icr": {"base": icr_base, "stressed": icr_stressed},
-        "note": "PoC 근사 산식 — 각 전이 계수는 화면에 명시된 가정을 따른다",
+        "note": "PoC 근사 산식 - 각 전이 계수는 화면에 명시된 가정을 따른다",
     }

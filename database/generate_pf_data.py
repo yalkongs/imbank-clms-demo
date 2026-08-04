@@ -95,7 +95,7 @@ def main():
         district = random.choice(DISTRICT[region])
         name = f"{district} {PROPERTY_LABEL[prop]} PF"
 
-        # 자기자본비율 — 2027 제도의 관리 축. 20% 이상은 소수, 대부분 5~15% 구간.
+        # 자기자본비율 - 2027 제도의 관리 축. 20% 이상은 소수, 대부분 5~15% 구간.
         equity_ratio = round(random.choices(
             [random.uniform(2, 5), random.uniform(5, 10),
              random.uniform(10, 15), random.uniform(15, 20), random.uniform(20, 28)],
@@ -133,7 +133,7 @@ def main():
             completion, status, AS_OF_STR,
         ))
 
-        # 대주단 구성 — iM뱅크는 모든 사업장에 참여(자행 익스포저가 exposure),
+        # 대주단 구성 - iM뱅크는 모든 사업장에 참여(자행 익스포저가 exposure),
         # 나머지는 신디케이션 참여기관. 자행 비중 25~60%.
         SYND = ["NH농협은행", "부산은행", "경남은행", "신한캐피탈", "한국투자증권",
                 "메리츠증권", "우리금융캐피탈", "IBK기업은행", "새마을금고중앙회"]
@@ -158,7 +158,7 @@ def main():
                 0,
             ))
 
-        # 12개월 추이 — 현재값에서 거꾸로 완만하게 감소
+        # 12개월 추이 - 현재값에서 거꾸로 완만하게 감소
         p_cur, s_cur = progress, presale
         series = []
         for m in reversed(months):

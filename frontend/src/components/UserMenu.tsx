@@ -3,7 +3,7 @@ import { Check } from 'lucide-react';
 import { useTheme, ROLES, Role } from '../context/ThemeProvider';
 
 /**
- * 헤더 사용자 메뉴 — 역할 전환기.
+ * 헤더 사용자 메뉴 - 역할 전환기.
  *
  * 아바타가 장식으로만 있던 것을 페르소나 전환기로 만든다. 역할에 따라
  * 결재함의 전결 레벨이 바뀌어, 같은 신청 건이 "내가 결재 가능한가"가 달라진다.

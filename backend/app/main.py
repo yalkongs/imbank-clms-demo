@@ -118,7 +118,7 @@ def health_check():
 
 @app.get("/api/system/as-of")
 def get_as_of_date():
-    """시스템 기준일 — 화면 상단 '기준' 배지와 각종 시점 표시에 쓴다.
+    """시스템 기준일 - 화면 상단 '기준' 배지와 각종 시점 표시에 쓴다.
     프론트에 날짜를 하드코딩하지 않도록 단일 소스에서 내려준다."""
     return {
         "as_of_date":  AS_OF_STR,

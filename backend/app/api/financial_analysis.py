@@ -126,7 +126,7 @@ def get_financial_ratios(
             'ratios': {},
             'altman_z': None,
             'risk_signal': 'GREY',
-            'note': '재무제표 미입력 — customer 기본 데이터 기반 추정'
+            'note': '재무제표 미입력 - customer 기본 데이터 기반 추정'
         })
 
     # 동업종 평균 (같은 산업, 같은 규모)
@@ -150,7 +150,7 @@ def get_financial_trend(
     customer_id: str,
     db: Session = Depends(get_db)
 ):
-    """재무지표 추세 분석 — 개선/악화 신호 감지"""
+    """재무지표 추세 분석 - 개선/악화 신호 감지"""
     stmts = db.execute(text("""
         SELECT fiscal_year, revenue, operating_profit, ebitda,
                interest_expense, total_assets, total_debt, equity
@@ -283,7 +283,7 @@ def get_financial_summary_for_application(
     application_id: str,
     db: Session = Depends(get_db)
 ):
-    """여신 심사 화면 연동용 — 신청건 고객의 재무 요약"""
+    """여신 심사 화면 연동용 - 신청건 고객의 재무 요약"""
     app = db.execute(text("""
         SELECT a.customer_id, a.requested_amount, a.requested_tenor,
                cr.pd_value, cr.final_grade

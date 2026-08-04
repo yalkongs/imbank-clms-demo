@@ -527,7 +527,7 @@ def compute_channel_scores(conn, customers):
             if mkt_row and mkt_row[0] is not None:
                 dd, cds, ipd = mkt_row
                 # DD(부도거리)가 클수록·CDS가 낮을수록 안전. 정상 수준(DD 3, CDS 100bp)에서
-                # 80점이 나오도록 기준선을 잡는다 — 종전 산식은 정상 기업도 40점대였다.
+                # 80점이 나오도록 기준선을 잡는다 - 종전 산식은 정상 기업도 40점대였다.
                 mkt_score = max(0, min(100,
                     50 + min(dd, 6.0) * 8 - min(cds, 600) * 0.03 - ipd * 120))
             else:

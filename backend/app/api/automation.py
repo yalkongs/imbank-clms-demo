@@ -92,7 +92,7 @@ def get_automation_dashboard(
 ):
     """
     자동화 액션 현황 대시보드
-    — 트리거별 건수, 처리 현황, 미처리 위급 알림
+    - 트리거별 건수, 처리 현황, 미처리 위급 알림
     """
     # 트리거별 요약
     by_trigger = db.execute(
@@ -241,7 +241,7 @@ def execute_action(
 ):
     """
     자동화 액션 실행
-    — 액션 유형별 실제 처리 수행 후 status EXECUTED로 변경
+    - 액션 유형별 실제 처리 수행 후 status EXECUTED로 변경
     """
     action = db.execute(
         text("""
@@ -292,7 +292,7 @@ def execute_action(
             result_summary = f"기존 Workout 케이스 있음 (스킵): {existing[0]}"
 
     elif atype == "NOTIFY_RM":
-        # RM 알림 — 실제 시스템에서는 메시지 발송; 여기선 로그만
+        # RM 알림 - 실제 시스템에서는 메시지 발송; 여기선 로그만
         result_summary = f"RM 알림 생성됨 (고객: {cid})"
 
     elif atype == "RECLASSIFY":
@@ -362,7 +362,7 @@ def scan_and_create_triggers(
     db: Session = Depends(get_db)
 ):
     """
-    트리거 스캔 — 현재 DB 상태를 기반으로 자동화 액션 자동 생성
+    트리거 스캔 - 현재 DB 상태를 기반으로 자동화 액션 자동 생성
     1. EWS CRITICAL 고객 스캔
     2. 약정 EVENT_OF_DEFAULT 스캔
     3. DPD 90일+ 여신 스캔
@@ -500,7 +500,7 @@ def get_default_probability(
 ):
     """
     고객별 부실전환 확률 산출
-    — EWS점수 + DPD + PD + DSCR 로지스틱 모델
+    - EWS점수 + DPD + PD + DSCR 로지스틱 모델
     """
     # EWS 점수
     ews_row = db.execute(
@@ -577,7 +577,7 @@ def get_automation_statistics(
     days: int = Query(30, description="최근 N일"),
     db: Session = Depends(get_db)
 ):
-    """자동화 효과 통계 — 처리율, 평균 처리 시간, 트리거 추이"""
+    """자동화 효과 통계 - 처리율, 평균 처리 시간, 트리거 추이"""
     from_date = f"date('now', '-{days} days')"
 
     totals = db.execute(

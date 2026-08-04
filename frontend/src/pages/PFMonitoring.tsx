@@ -12,7 +12,7 @@ import axios from 'axios';
  * 연동한다(자기자본 20% 수준 유도). 사업장 단위로 공정률·분양률·자기자본비율을
  * 감시하고, 제도 적용 시 자본·충당금 영향을 시뮬레이션한다.
  *
- * 공정률-분양률 괴리는 PF 부실의 대표 선행신호 — 골조는 올라가는데 분양이 안 되면
+ * 공정률-분양률 괴리는 PF 부실의 대표 선행신호 - 골조는 올라가는데 분양이 안 되면
  * 준공 시점에 상환재원이 없다.
  */
 
@@ -196,13 +196,13 @@ export default function PFMonitoring() {
                       {formatPercent(p.equity_ratio)}
                     </td>
                     <td className="py-2.5 pr-4 text-right tabular">
-                      {p.project_type === 'BRIDGE' ? '—' : formatPercent(p.progress_rate)}
+                      {p.project_type === 'BRIDGE' ? '-' : formatPercent(p.progress_rate)}
                     </td>
                     <td className="py-2.5 pr-4 text-right tabular">
-                      {p.project_type === 'BRIDGE' ? '—' : formatPercent(p.presale_rate)}
+                      {p.project_type === 'BRIDGE' ? '-' : formatPercent(p.presale_rate)}
                     </td>
                     <td className={`py-2.5 pr-4 text-right tabular ${p.gap_alert ? 'text-red-600 font-bold' : ''}`}>
-                      {p.project_type === 'BRIDGE' ? '—' : `${p.gap}%p`}
+                      {p.project_type === 'BRIDGE' ? '-' : `${p.gap}%p`}
                     </td>
                     <td className="py-2.5">
                       {p.status === 'WATCHLIST' ? (
@@ -302,7 +302,7 @@ export default function PFMonitoring() {
                 <div><p className="text-xs text-gray-500">자기자본비율</p>
                   <p className={`font-bold tabular ${detail.equity_ratio < 10 ? 'text-red-600' : ''}`}>{formatPercent(detail.equity_ratio)} <span className="text-xs text-gray-400">({detail.equity_band})</span></p></div>
                 <div><p className="text-xs text-gray-500">LTV</p><p className="font-bold tabular">{formatPercent(detail.ltv)}</p></div>
-                <div><p className="text-xs text-gray-500">준공 예정</p><p className="font-bold tabular">{detail.completion_date || '—'}</p></div>
+                <div><p className="text-xs text-gray-500">준공 예정</p><p className="font-bold tabular">{detail.completion_date || '-'}</p></div>
               </div>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div className="p-3 bg-gray-50 rounded-lg"><p className="text-xs text-gray-500">시행사</p><p className="font-medium">{detail.developer}</p></div>
@@ -327,7 +327,7 @@ export default function PFMonitoring() {
               {/* 대주단 */}
               <div>
                 <p className="text-sm font-semibold text-gray-800 mb-2">
-                  대주단 구성 — 총 약정 {formatAmount(detail.syndication?.total_commitment || 0, 'billion')}
+                  대주단 구성 - 총 약정 {formatAmount(detail.syndication?.total_commitment || 0, 'billion')}
                   <span className="text-xs text-gray-400 ml-2">자행 비중 {formatPercent(detail.syndication?.self_share || 0)}</span>
                 </p>
                 <table className="w-full text-sm">

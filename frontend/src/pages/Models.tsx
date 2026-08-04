@@ -175,7 +175,7 @@ export default function Models() {
           <p className="text-sm text-gray-500 mt-1">신용평가모델 성능 모니터링 및 검증 관리</p>
         </div>
 
-      {/* EWS 백테스트 실측 — 외부 검증 데이터셋(부도 라벨) 기반. 이 화면에서 유일하게
+      {/* EWS 백테스트 실측 - 외부 검증 데이터셋(부도 라벨) 기반. 이 화면에서 유일하게
           실측 라벨에 근거한 성능 수치다. */}
       {ewsVal?.available && (
         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -1187,7 +1187,7 @@ function LgdTab({ data, collateral, industry, recovery }: {
   // summary 필드: count, mean_error_pct, rmse_pct, mae_pct, conservative_rate(%)
   const s = data;
 
-  // 담보 유형별 차트 데이터 — backend: by_collateral, 값은 이미 %
+  // 담보 유형별 차트 데이터 - backend: by_collateral, 값은 이미 %
   const collateralChartData = (collateral?.by_collateral || []).map((c: any) => ({
     name: c.collateral_type || '-',
     estimated: +(c.avg_estimated_lgd || 0),
@@ -1196,7 +1196,7 @@ function LgdTab({ data, collateral, industry, recovery }: {
     count: c.count
   }));
 
-  // 업종별 차트 데이터 — backend: by_industry, 값은 이미 %
+  // 업종별 차트 데이터 - backend: by_industry, 값은 이미 %
   const industryChartData = (industry?.by_industry || []).slice(0, 8).map((i: any) => ({
     name: i.industry || '-',
     estimated: +(i.avg_estimated_lgd || 0),
@@ -1205,7 +1205,7 @@ function LgdTab({ data, collateral, industry, recovery }: {
     count: i.count
   }));
 
-  // 회수 전략별 차트 데이터 — backend: by_strategy
+  // 회수 전략별 차트 데이터 - backend: by_strategy
   const recoveryChartData = (recovery?.by_strategy || []).map((r: any) => ({
     name: r.strategy_ko || r.strategy || '-',
     avgDays: r.avg_days_to_resolution || 0,

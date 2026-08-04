@@ -5,7 +5,7 @@
 연동되는 구조로 바뀐다(자기자본 20% 수준 유도). 사업장 단위의 공정률·분양률·
 자기자본비율을 상시 감시하고, 제도 시나리오별 자본·충당금 영향을 시뮬레이션한다.
 
-공정률-분양률 괴리는 PF 부실의 대표 선행신호다 — 골조는 올라가는데 분양이 안 되면
+공정률-분양률 괴리는 PF 부실의 대표 선행신호다 - 골조는 올라가는데 분양이 안 되면
 준공 시점에 상환재원이 없다.
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -21,7 +21,7 @@ REGION_LABELS = {"CAPITAL": "수도권", "DAEGU_GB": "대구경북", "BUSAN_GN":
 PROPERTY_LABELS = {"APT": "아파트", "OFFICETEL": "오피스텔", "LOGISTICS": "물류센터",
                    "COMMERCIAL": "상업시설", "KNOWLEDGE": "지식산업센터"}
 
-# 2027 제도 시나리오 — 사업장 자기자본비율 구간별 위험가중치·충당금률.
+# 2027 제도 시나리오 - 사업장 자기자본비율 구간별 위험가중치·충당금률.
 # 확정 규정이 아니라 개편 방향(자기자본 20% 유도, 저자본 사업장에 페널티)을
 # 반영한 PoC 가정치다. 화면에도 '시나리오 가정' 을 명시한다.
 REGULATION_BANDS = [
@@ -47,7 +47,7 @@ def _band_for(equity_ratio: float) -> dict:
 
 @router.get("/dashboard")
 def get_pf_dashboard(db: Session = Depends(get_db)):
-    """PF 포트폴리오 요약 — 익스포저, 유형·지역 분포, 위험 사업장"""
+    """PF 포트폴리오 요약 - 익스포저, 유형·지역 분포, 위험 사업장"""
     rows = db.execute(text("""
         SELECT project_type, region, status, exposure, equity_ratio,
                progress_rate, presale_rate
@@ -93,7 +93,7 @@ def list_pf_projects(
     status: str = Query(None),
     db: Session = Depends(get_db),
 ):
-    """사업장 목록 (공정-분양 괴리 내림차순 — 위험한 것부터)"""
+    """사업장 목록 (공정-분양 괴리 내림차순 - 위험한 것부터)"""
     cond, params = "status != 'COMPLETED'", {}
     if region:
         cond += " AND region = :region"
@@ -146,7 +146,7 @@ def get_pf_project(project_id: str, db: Session = Depends(get_db)):
         FROM pf_progress WHERE project_id = :pid ORDER BY reference_month
     """), {"pid": project_id}).fetchall()
 
-    # 대주단 구성 — 자행 우선, 약정액 내림차순
+    # 대주단 구성 - 자행 우선, 약정액 내림차순
     lenders = db.execute(text("""
         SELECT lender_name, tranche, commitment, drawn, is_self
         FROM pf_participation WHERE project_id = :pid
@@ -197,7 +197,7 @@ def get_pf_project(project_id: str, db: Session = Depends(get_db)):
 
 @router.get("/regulation-simulation")
 def simulate_regulation(db: Session = Depends(get_db)):
-    """2027 제도 시나리오 — 자기자본비율 구간별 RWA·충당금 영향.
+    """2027 제도 시나리오 - 자기자본비율 구간별 RWA·충당금 영향.
 
     현행(일률 RW 100%) 대비 개편안(구간별 RW·충당금) 적용 시 증감을 사업장
     포트폴리오 전체에 대해 계산한다. 저자본 사업장이 많을수록 부담이 커진다.
@@ -263,7 +263,7 @@ def get_pf_alerts(db: Session = Depends(get_db)):
             "progress_rate": r[4], "presale_rate": r[5],
             "gap": round((r[4] or 0) - (r[5] or 0), 1),
             "equity_ratio": r[6],
-            "message": "공정 대비 분양 부진 — 준공 시 상환재원 점검 필요",
+            "message": "공정 대비 분양 부진 - 준공 시 상환재원 점검 필요",
         }
         for r in rows
     ]

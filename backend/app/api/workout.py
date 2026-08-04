@@ -259,7 +259,7 @@ async def get_workout_case_detail(case_id: str, db: Session = Depends(get_db)):
             "is_recommended": bool(row[12])
         })
 
-    # 회수 마일스톤 — 전략별 절차의 진행 경과
+    # 회수 마일스톤 - 전략별 절차의 진행 경과
     milestones = db.execute(text("""
         SELECT seq, step_name, planned_date, actual_date, status
         FROM workout_milestone WHERE case_id = :case_id ORDER BY seq
@@ -503,7 +503,7 @@ async def get_workout_dashboard(
 @router.get("/ecl-summary")
 def get_workout_ecl_summary(db: Session = Depends(get_db)):
     """
-    Workout 페이지 — ECL 탭 요약
+    Workout 페이지 - ECL 탭 요약
     Stage 3 여신 위주, 충당금 vs ECL 비교
     """
     rows = db.execute(
@@ -572,7 +572,7 @@ def auto_transfer_npl_to_workout(
 ):
     """
     DPD 90일+ 연체 → Workout 케이스 자동 생성
-    — 이미 Workout 케이스가 있는 고객은 스킵
+    - 이미 Workout 케이스가 있는 고객은 스킵
     """
     import uuid as _uuid
 

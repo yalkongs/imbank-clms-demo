@@ -117,14 +117,14 @@ export default function Layout() {
   // 접속·새로고침 때마다 소개 팝업을 띄운다.
   // (종전에는 localStorage 의 clms-onboarded 로 최초 1회만 표시했다.)
   const [showOnboarding, setShowOnboarding] = useState(true);
-  // 모의 데이터 고지 — 소개 팝업이 닫힌 직후 1회 표시하고 명시적 확인을 받는다.
+  // 모의 데이터 고지 - 소개 팝업이 닫힌 직후 1회 표시하고 명시적 확인을 받는다.
   // (ⓘ 로 소개를 다시 열었다 닫을 때는 반복하지 않는다)
   const [showMockNotice, setShowMockNotice] = useState(false);
   const [mockNoticeDone, setMockNoticeDone] = useState(false);
-  // 스토리 투어 — null 이면 비활성. 온보딩에서 '스토리 투어'로 닫으면 고지 확인 후 시작
+  // 스토리 투어 - null 이면 비활성. 온보딩에서 '스토리 투어'로 닫으면 고지 확인 후 시작
   const [tourStep, setTourStep] = useState<number | null>(null);
   const [pendingTour, setPendingTour] = useState(false);
-  // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 — 화면에 날짜를 박아두지 않는다.
+  // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 - 화면에 날짜를 박아두지 않는다.
   const [asOfLabel, setAsOfLabel] = useState('');
 
   const navigate = useNavigate();
@@ -149,7 +149,7 @@ export default function Layout() {
 
   const closeOnboarding = (startTour?: boolean) => {
     setShowOnboarding(false);
-    // 테마 선택은 계속 저장한다 — 팝업 표시 여부와는 무관하다.
+    // 테마 선택은 계속 저장한다 - 팝업 표시 여부와는 무관하다.
     setOnboarded(true);
     if (startTour) setPendingTour(true);
     if (!mockNoticeDone) {
@@ -182,17 +182,14 @@ export default function Layout() {
 
       {/* 사이드바 */}
       <aside className="app-sidebar w-64 bg-white border-r border-gray-200 flex flex-col">
-        {/* 로고 영역 — 공식 가로형 국문 시그니처 (iM Financial Design System) */}
+        {/* 로고 영역 - 공식 가로형 국문 시그니처 (iM Financial Design System).
+            시스템명은 상단 헤더에 있으므로 로고만 둔다. */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
           <img
             src="/brand/imbank-logo-h-kr.jpg"
             alt="iM뱅크"
-            className="h-7 w-auto mr-3"
+            className="h-7 w-auto"
           />
-          <div className="pl-3 border-l border-gray-200">
-            <p className="text-xs font-semibold text-gray-600 leading-tight">CLMS</p>
-            <p className="text-[10px] text-gray-400 leading-tight">여신생애주기관리</p>
-          </div>
         </div>
 
         {/* 네비게이션 */}
@@ -267,13 +264,13 @@ export default function Layout() {
               <Search size={20} />
             </button>
 
-            {/* 알림 — EWS 경보 연동 */}
+            {/* 알림 - EWS 경보 연동 */}
             <AlertMenu />
 
-            {/* 설정 — 화면 테마·기준일 */}
+            {/* 설정 - 화면 테마·기준일 */}
             <SettingsMenu asOfLabel={asOfLabel} />
 
-            {/* 사용자 — 역할 전환 */}
+            {/* 사용자 - 역할 전환 */}
             <UserMenu />
           </div>
         </header>

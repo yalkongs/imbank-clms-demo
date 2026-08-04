@@ -249,7 +249,7 @@ export default function Delinquency() {
 
       {/* 탭 */}
 
-      {/* 워크아웃 이관 임박 (DPD 75~89) — 90일 도달 시 자동 이관되므로 마지막 관리 기회 */}
+      {/* 워크아웃 이관 임박 (DPD 75~89) - 90일 도달 시 자동 이관되므로 마지막 관리 기회 */}
       {transferCandidates.length > 0 && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
           <div className="flex items-center justify-between mb-3">

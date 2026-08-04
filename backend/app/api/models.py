@@ -575,7 +575,7 @@ def get_model_specifications(model_id: str, db: Session = Depends(get_db)):
 
 @router.get("/ews-validation")
 def get_ews_validation(db: Session = Depends(get_db)):
-    """EWS 모델 백테스트 실측 지표 — 외부 검증 데이터셋(부도 라벨 3,951건) 기반.
+    """EWS 모델 백테스트 실측 지표 - 외부 검증 데이터셋(부도 라벨 3,951건) 기반.
 
     ews_corporate_v24 프로젝트의 리드타임 백테스트 산출물을 이관한 것으로,
     이 화면의 성능 수치 중 유일하게 실측 라벨에 근거한다.
@@ -600,7 +600,7 @@ def get_ews_validation(db: Session = Depends(get_db)):
 
     if not overall:
         return {"available": False,
-                "note": "검증 데이터 미이관 — database/import_ews_validation.py 실행 필요"}
+                "note": "검증 데이터 미이관 - database/import_ews_validation.py 실행 필요"}
 
     max_imp = max((f[2] for f in features), default=1) or 1
     return {
@@ -1082,7 +1082,7 @@ def get_model_type_specifications(model_type: str) -> dict:
 def get_lgd_backtest(db: Session = Depends(get_db)):
     """
     LGD 백테스트 전체 결과
-    — 추정 LGD vs 실측 LGD (workout_case 기반) 비교
+    - 추정 LGD vs 실측 LGD (workout_case 기반) 비교
 
     실측 LGD = 1 - (actual_recovery_rate)
     추정 LGD = risk_parameter.lgd
@@ -1250,7 +1250,7 @@ def get_lgd_backtest_by_industry(db: Session = Depends(get_db)):
 def get_recovery_analytics(db: Session = Depends(get_db)):
     """
     회수 전략별 성과 통계
-    — 전략유형별 평균 회수율, 회수 기간, LGD 비교
+    - 전략유형별 평균 회수율, 회수 기간, LGD 비교
     """
     rows = db.execute(
         text("""
@@ -1312,7 +1312,7 @@ def get_recovery_analytics(db: Session = Depends(get_db)):
 def get_recovery_timeline(db: Session = Depends(get_db)):
     """
     회수 기간 분포
-    — case open → close 기간별 분포 및 전략별 평균 회수 기간
+    - case open → close 기간별 분포 및 전략별 평균 회수 기간
     """
     rows = db.execute(
         text("""

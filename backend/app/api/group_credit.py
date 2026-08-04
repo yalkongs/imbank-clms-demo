@@ -1,7 +1,7 @@
 """
 그룹여신 통합심사 API
 =====================
-borrower_group 테이블 활성화 — 계열사 합산 익스포저, 보증 관계, 그룹 한도 관리
+borrower_group 테이블 활성화 - 계열사 합산 익스포저, 보증 관계, 그룹 한도 관리
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -220,7 +220,7 @@ def get_group_concentration(
     region: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """그룹별 익스포저 집중도 — TOP 10"""
+    """그룹별 익스포저 집중도 - TOP 10"""
     region_cond = " AND c.region = :region" if region else ""
 
     rows = db.execute(text(f"""
@@ -351,7 +351,7 @@ def simulate_group_limit(
     group_id = app[2]
 
     if not group_id:
-        # 그룹 미설정 — borrower_group_member 조회
+        # 그룹 미설정 - borrower_group_member 조회
         membership = db.execute(text("""
             SELECT group_id FROM borrower_group_member
             WHERE customer_id = :cid LIMIT 1
@@ -362,7 +362,7 @@ def simulate_group_limit(
         return {
             "application_id": application_id,
             "group_id": None,
-            "message": "차주가 그룹에 속하지 않음 — 그룹 한도 체크 불필요",
+            "message": "차주가 그룹에 속하지 않음 - 그룹 한도 체크 불필요",
         }
 
     result = check_group_limit.__wrapped__(group_id, requested, db) \

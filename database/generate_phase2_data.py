@@ -87,18 +87,18 @@ def worst_class(*classes) -> str:
 
 
 # ------------------------------------------------------------------ #
-# 연체 발생 모수 — 금융감독원 「국내은행 원화대출 연체율 현황」 기준
+# 연체 발생 모수 - 금융감독원 「국내은행 원화대출 연체율 현황」 기준
 # ------------------------------------------------------------------ #
 # 기업대출 연체율(1개월 이상) 0.84%, 중소기업 1.00%, 대기업 0.27%.
 # 본 데모는 중소기업 비중이 높은 지방은행 포트폴리오를 가정해 1.5% 수준으로 잡는다
-# (실제보다 다소 보수적 — 부실관리 화면에 표본이 남아야 하므로).
+# (실제보다 다소 보수적 - 부실관리 화면에 표본이 남아야 하므로).
 #
 # 종전에는 여신의 12%를 연체로 만들고 연체일수를 1~90일 균등분포로 뽑아
 # 1개월 이상 연체율이 11.3%까지 올라갔다. 실제의 13배다.
 DELINQUENCY_RATE_1M = 0.015    # 1개월 이상 연체 비중
 DELINQUENCY_RATE_SHORT = 0.02  # 1개월 미만 단기 연체 비중 (건전성상 정상)
 
-# 연체 구간 분포 — 연체는 단기에 몰리고 장기로 갈수록 급감한다(롤레이트 체감).
+# 연체 구간 분포 - 연체는 단기에 몰리고 장기로 갈수록 급감한다(롤레이트 체감).
 # (하한일, 상한일, 가중치)
 DPD_BUCKETS = [
     (DPD_PRECAUTIONARY, DPD_SUBSTANDARD - 1, 0.55),   # 30~89일   요주의
@@ -165,7 +165,7 @@ def generate_classification_and_ecl(conn: sqlite3.Connection):
         lgd       = float(fac[6]) if fac[6] else 0.45
         ews_base  = float(fac[7]) if fac[7] else random.uniform(50, 90)
 
-        # 여신별 기본 DPD — 감독원 연체율 통계에 맞춘 발생률과 구간 분포
+        # 여신별 기본 DPD - 감독원 연체율 통계에 맞춘 발생률과 구간 분포
         roll = random.random()
         if roll < DELINQUENCY_RATE_1M:
             is_delinquent = True                      # 1개월 이상 연체
@@ -312,7 +312,7 @@ def generate_classification_and_ecl(conn: sqlite3.Connection):
 def generate_delinquency(conn: sqlite3.Connection):
     cur = conn.cursor()
 
-    # 연체 대상 여신 — 표본 수를 목표 연체율로 정한다.
+    # 연체 대상 여신 - 표본 수를 목표 연체율로 정한다.
     # 종전에는 '분류가 NORMAL 이 아닌' 여신 200건을 그대로 연체로 만들었다.
     # 그 집합에는 EWS·PD 때문에 요주의가 된 정상이행 여신이 대부분이라
     # 1개월 이상 연체율이 12%를 넘었다(실제 기업대출 0.84%).

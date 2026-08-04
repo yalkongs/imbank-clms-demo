@@ -8,7 +8,7 @@ import { formatPercent } from '../../utils/format';
 interface Props { region: string }
 
 /**
- * 공급망 탭 — 마스터·디테일 구조.
+ * 공급망 탭 - 마스터·디테일 구조.
  *
  * 기존에는 기업 목록이 화면 최하단에 있고 '상세'를 누르면 상세 카드가 목록
  * *위쪽*(뷰포트 밖)에 삽입돼, 클릭해도 아무 반응이 없는 것처럼 보였다.
@@ -148,7 +148,7 @@ export default function EWSSupplyChain({ region }: Props) {
           </div>
           {filtered.length > 100 && (
             <p className="text-[11px] text-gray-400 mt-2 text-center">
-              상위 100개만 표시 — 검색으로 범위를 좁혀보세요
+              상위 100개만 표시 - 검색으로 범위를 좁혀보세요
             </p>
           )}
         </Card>

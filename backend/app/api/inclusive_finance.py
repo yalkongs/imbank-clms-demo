@@ -2,14 +2,14 @@
 포용금융 이행 현황 API
 ======================
 iM뱅크는 2024.5 시중은행 전환 인가 시 "중신용 중소기업·개인사업자 여신 확대"를
-공언했다. 이 모듈은 그 이행 실적을 관리한다 — 핵심은 공급(얼마나 늘렸나)과
+공언했다. 이 모듈은 그 이행 실적을 관리한다 - 핵심은 공급(얼마나 늘렸나)과
 건전성(늘린 것의 품질)을 한 화면에서 보는 것이다. 기업 연체율이 1%대인 상황에서
 중신용 공급만 밀어붙이면 부실로 돌아오므로, 두 지표는 반드시 같이 봐야 한다.
 
 세그먼트 정의
   · 중신용 기업  : 최신 신용등급 BBB+ 이하 (4등급 이하 상당)
   · 개인사업자   : customer.size_category = 'SOHO'
-  (두 세그먼트는 겹칠 수 있다 — SOHO 이면서 중신용인 차주는 양쪽에 집계)
+  (두 세그먼트는 겹칠 수 있다 - SOHO 이면서 중신용인 차주는 양쪽에 집계)
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -20,7 +20,7 @@ from ..core.config import AS_OF_MONTH, as_of_months
 
 router = APIRouter(prefix="/api/inclusive", tags=["Inclusive Finance"])
 
-# 중신용 등급 경계 — BBB+ 이하를 중신용으로 본다
+# 중신용 등급 경계 - BBB+ 이하를 중신용으로 본다
 MID_CREDIT_GRADES = ("BBB+", "BBB", "BBB-", "BB+", "BB", "BB-", "B+", "B", "B-")
 
 # 인가 시 공언 목표 (사용자 지정 목표치, 2026-08 조정)

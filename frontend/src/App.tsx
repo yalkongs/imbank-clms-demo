@@ -43,7 +43,7 @@ function App() {
         <Route index element={<Dashboard />} />
         <Route path="applications" element={<Applications />} />
         <Route path="capital" element={<CapitalHub />} />
-        {/* 구 경로 유지 — 통합된 탭으로 보낸다 */}
+        {/* 구 경로 유지 - 통합된 탭으로 보낸다 */}
         <Route path="capital-optimizer" element={<Navigate to="/capital?tab=optimizer" replace />} />
         <Route path="portfolio" element={<PortfolioHub />} />
         <Route path="limits" element={<LimitsHub />} />

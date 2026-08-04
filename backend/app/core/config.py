@@ -25,7 +25,7 @@ settings = Settings()
 
 # 자주 쓰는 파생 값
 AS_OF_DATE = settings.AS_OF_DATE
-AS_OF_MONTH = AS_OF_DATE.strftime("%Y-%m")          # 'YYYY-MM' — EWS 기준월
+AS_OF_MONTH = AS_OF_DATE.strftime("%Y-%m")          # 'YYYY-MM' - EWS 기준월
 AS_OF_STR = AS_OF_DATE.strftime("%Y-%m-%d")
 
 

@@ -238,7 +238,7 @@ export default function EWSIntegratedDashboard({ region }: Props) {
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4 border">
-                <h4 className="font-semibold text-gray-900 mb-2">3.3 시장신호 점수 (Market Signal Score) — 상장기업 한정</h4>
+                <h4 className="font-semibold text-gray-900 mb-2">3.3 시장신호 점수 (Market Signal Score) - 상장기업 한정</h4>
                 <p>
                   Merton(1974) 구조모형에 기반한 Distance-to-Default(DD), CDS 스프레드, 내재부도확률(Implied PD)을 종합한다.
                   DD는 기업 자산가치가 부채 수준 이하로 하락하기까지의 표준편차 수를 의미하며, DD가 낮을수록 부도 위험이 높다.
@@ -296,7 +296,7 @@ export default function EWSIntegratedDashboard({ region }: Props) {
               </div>
 
               <div className="bg-gray-50 rounded-lg p-4 border">
-                <h4 className="font-semibold text-gray-900 mb-2">3.6 재무 점수 (Financial Score) — 기존 체계 유지</h4>
+                <h4 className="font-semibold text-gray-900 mb-2">3.6 재무 점수 (Financial Score) - 기존 체계 유지</h4>
                 <p>
                   기존 CLMS의 재무비율 분석 체계를 유지한다. 부채비율, 유동비율, 이자보상배율, 매출액영업이익률,
                   총자산회전율 등 5대 재무지표를 산업별 벤치마크 대비 Z-Score로 변환 후 가중합산한다.
@@ -373,28 +373,28 @@ export default function EWSIntegratedDashboard({ region }: Props) {
                   <tr>
                     <td className="border px-3 py-2 text-center"><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">NORMAL</span></td>
                     <td className="border px-3 py-2 text-center font-mono">75 ~ 100</td>
-                    <td className="border px-3 py-2">정상 — 주요 위험징후 없음</td>
+                    <td className="border px-3 py-2">정상 - 주요 위험징후 없음</td>
                     <td className="border px-3 py-2">월 1회</td>
                     <td className="border px-3 py-2">정기 모니터링</td>
                   </tr>
                   <tr className="bg-gray-50">
                     <td className="border px-3 py-2 text-center"><span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-medium">WATCH</span></td>
                     <td className="border px-3 py-2 text-center font-mono">55 ~ 74</td>
-                    <td className="border px-3 py-2">주의 — 일부 채널 이상신호 감지</td>
+                    <td className="border px-3 py-2">주의 - 일부 채널 이상신호 감지</td>
                     <td className="border px-3 py-2">격주</td>
                     <td className="border px-3 py-2">담당자 알림, 원인 분석</td>
                   </tr>
                   <tr>
                     <td className="border px-3 py-2 text-center"><span className="px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">WARNING</span></td>
                     <td className="border px-3 py-2 text-center font-mono">35 ~ 54</td>
-                    <td className="border px-3 py-2">경고 — 복수 채널 악화, 부도 가능성 상승</td>
+                    <td className="border px-3 py-2">경고 - 복수 채널 악화, 부도 가능성 상승</td>
                     <td className="border px-3 py-2">주 1회</td>
                     <td className="border px-3 py-2">여신심사 강화, 담보 재평가</td>
                   </tr>
                   <tr className="bg-gray-50">
                     <td className="border px-3 py-2 text-center"><span className="px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">CRITICAL</span></td>
                     <td className="border px-3 py-2 text-center font-mono">0 ~ 34</td>
-                    <td className="border px-3 py-2">위험 — 다수 채널 심각, 즉시 대응 필요</td>
+                    <td className="border px-3 py-2">위험 - 다수 채널 심각, 즉시 대응 필요</td>
                     <td className="border px-3 py-2">일간</td>
                     <td className="border px-3 py-2">긴급 여신위원회, 한도 동결/축소 검토</td>
                   </tr>

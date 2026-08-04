@@ -95,7 +95,7 @@ def calculate_expected_loss(pd: float, lgd: float, ead: float) -> float:
 
 
 def calculate_economic_capital(rwa: float, capital_ratio: float = 0.105) -> float:
-    """경제적 자본(EC) 계산 — BIS 최소 8% + 자본보전완충 2.5% = 10.5%"""
+    """경제적 자본(EC) 계산 - BIS 최소 8% + 자본보전완충 2.5% = 10.5%"""
     return rwa * capital_ratio
 
 
@@ -568,7 +568,7 @@ def calculate_group_pd(member_pds: list, member_exposures: list) -> float:
 # Phase 2 추가: 자산건전성 분류 / IFRS9 ECL / 연체 관리
 # ============================================================
 
-# 대손충당금 최저적립률 — 은행업감독규정 제29조 (기업여신 기준)
+# 대손충당금 최저적립률 - 은행업감독규정 제29조 (기업여신 기준)
 # 감독목적 최저적립 기준이며, 회계상 충당금은 IFRS 9 ECL로 산출한다.
 # 최저적립액 > ECL 이면 그 차액을 대손준비금으로 적립한다 (calculate_loan_loss_reserve 참조).
 PROVISION_RATES = {
@@ -587,7 +587,7 @@ DPD_PRECAUTIONARY = 30    # 1개월
 DPD_SUBSTANDARD   = 90    # 3개월
 DPD_LOSS          = 365   # 12개월
 
-# EWS 종합점수 임계값 — 문서의 EWS 등급 경계(NORMAL 75 / WATCH 55 / WARNING 35)를
+# EWS 종합점수 임계값 - 문서의 EWS 등급 경계(NORMAL 75 / WATCH 55 / WARNING 35)를
 # 그대로 쓰되, 용도에 따라 다른 지점을 잡는다. 하나의 상수로 통일해 시드 생성과
 # 런타임 재분류가 어긋나지 않도록 한다.
 #
@@ -651,7 +651,7 @@ def classify_asset_by_ews(ews_score: float) -> str:
     '회수예상가액'을 기준으로 나뉘므로(시행세칙 별표3) EWS 점수만으로는
     산정할 수 없다. 따라서 EWS는 최대 요주의까지만 영향을 준다.
 
-    임계값은 EWS_THRESHOLD_PRECAUTIONARY(35, CRITICAL 경계) — 상수 정의부의
+    임계값은 EWS_THRESHOLD_PRECAUTIONARY(35, CRITICAL 경계) - 상수 정의부의
     근거 주석 참조. 단일 상수로 통일해 월말 재분류 전후로 같은 고객의 등급이
     달라지지 않도록 한다.
     """
@@ -672,7 +672,7 @@ def classify_asset(dpd: int, pd: float, ews_score: float = None,
       · 회수예상가액 해당 부분      → 고정
       · 회수예상가액 초과 부분      → 12개월 미만 회수의문 / 12개월 이상 추정손실
     exposure 와 recoverable_value 를 함께 주면 이 분할을 적용하고,
-    생략하면 DPD 단독 판정(단일 등급)으로 동작한다 — 기존 호출부 호환.
+    생략하면 DPD 단독 판정(단일 등급)으로 동작한다 - 기존 호출부 호환.
 
     Returns:
         {classification, dpd_based_class, pd_based_class, ews_based_class,
@@ -724,7 +724,7 @@ def classify_asset(dpd: int, pd: float, ews_score: float = None,
             })
 
         required = round(sum(b['provision'] for b in breakdown), 2)
-        # 대표 등급은 가장 불리한 부분 — PD/EWS 판정보다 불리하면 그것으로 갱신
+        # 대표 등급은 가장 불리한 부분 - PD/EWS 판정보다 불리하면 그것으로 갱신
         worst = max((b['classification'] for b in breakdown),
                     key=_class_rank, default=final_class)
         if _class_rank(worst) > _class_rank(final_class):
@@ -742,7 +742,7 @@ def classify_asset(dpd: int, pd: float, ews_score: float = None,
 
 def calculate_loan_loss_reserve(regulatory_minimum: float, ifrs9_ecl: float) -> dict:
     """
-    대손준비금 산출 — 은행업감독규정 제29조
+    대손준비금 산출 - 은행업감독규정 제29조
 
     IFRS 9 도입 후 회계상 충당금은 ECL로 적립하고, 그 금액이 감독규정
     최저적립액에 미달하면 차액을 이익잉여금 내 대손준비금으로 적립한다.
@@ -766,21 +766,21 @@ def determine_sicr(pd_original: float, pd_current: float,
                    impairment_evidence: str = None) -> dict:
     """
     SICR (Significant Increase in Credit Risk) 판별
-    — IFRS 9 Stage 1 → Stage 2 이동 트리거
+    - IFRS 9 Stage 1 → Stage 2 이동 트리거
 
-    SICR 조건 (OR) — 기준서 1109호 5.5.11의 30일 연체 추정 포함:
+    SICR 조건 (OR) - 기준서 1109호 5.5.11의 30일 연체 추정 포함:
       1. PD 2배 이상 상승
       2. 등급 2 notch 이상 하락
       3. EWS 점수 WATCH 미만 (< 55점, EWS_THRESHOLD_SICR)
       4. DPD ≥ 30일
 
     Stage 3(신용손상)은 기준서 1109호 부록A의 '신용이 손상된 금융자산'
-    정의를 따른다 — 채무불이행, 차입자의 유의적 재무적 어려움, 채권 양보,
+    정의를 따른다 - 채무불이행, 차입자의 유의적 재무적 어려움, 채권 양보,
     파산 가능성 등 객관적 손상 증거. 연체 90일 초과는 B5.5.37의 반증가능한
     채무불이행 추정으로 손상 요건이 된다.
 
     PD 수치 단독(예: PD ≥ 20%)은 기준서상 손상 요건이 아니므로 Stage 3
-    판정에서 제외한다 — 자산건전성 '회수의문' 경계와 혼동한 결과였고,
+    판정에서 제외한다 - 자산건전성 '회수의문' 경계와 혼동한 결과였고,
     그대로 두면 정상 이행 중인 저신용 여신까지 손상 처리되어 충당금이
     과대 계상된다. 손상 증거는 credit_impaired 로 명시적으로 전달한다.
 
@@ -804,7 +804,7 @@ def determine_sicr(pd_original: float, pd_current: float,
 
     sicr = len(reasons) > 0
 
-    # Stage 3 — 객관적 손상 증거가 있을 때만
+    # Stage 3 - 객관적 손상 증거가 있을 때만
     impairment_reason = None
     if dpd >= DPD_SUBSTANDARD:
         impairment_reason = 'DPD_90_DEFAULT'      # B5.5.37 채무불이행 추정

@@ -183,7 +183,7 @@ export function SettingsMenu({ asOfLabel }: { asOfLabel?: string }) {
 
           <div className="px-4 py-3 border-t border-gray-100">
             <p className="text-xs font-semibold text-gray-400 mb-1">시스템 기준일</p>
-            <p className="text-sm text-gray-700">{asOfLabel || '—'}</p>
+            <p className="text-sm text-gray-700">{asOfLabel || '-'}</p>
             <p className="text-[11px] text-gray-400 mt-1">
               모든 지표는 이 시점을 기준으로 산출됩니다
             </p>

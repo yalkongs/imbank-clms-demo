@@ -54,7 +54,7 @@ export default function OnboardingModal({ onClose }: { onClose: (startTour?: boo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
       <div className="modal-in w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl">
-        {/* 헤더 — 공식 로고는 흰 배경 시그니처이므로 흰 바탕에 두고,
+        {/* 헤더 - 공식 로고는 흰 배경 시그니처이므로 흰 바탕에 두고,
             브랜드 그라디언트(민트→라임)는 그 아래 띠로 쓴다. */}
         <div className="relative rounded-t-2xl overflow-hidden">
           <button
@@ -78,7 +78,7 @@ export default function OnboardingModal({ onClose }: { onClose: (startTour?: boo
               </div>
             </div>
             <p className="mt-4 text-sm text-gray-600 leading-relaxed">
-              심사 · 실행 · 모니터링 · 회수까지 — 기업여신의 리스크를 하나의 화면에서.
+              심사 · 실행 · 모니터링 · 회수까지 - 기업여신의 리스크를 하나의 화면에서.
               Basel · IFRS9 기반의 리스크 계산 엔진과 5채널 조기경보(EWS)를 갖춘 PoC 시스템입니다.
             </p>
           </div>
@@ -126,7 +126,7 @@ export default function OnboardingModal({ onClose }: { onClose: (startTour?: boo
           </div>
         </div>
 
-        {/* 구축 규모 — '무엇을 하는 시스템인가' 만으로는 PoC 완성도가 전달되지 않는다.
+        {/* 구축 규모 - '무엇을 하는 시스템인가' 만으로는 PoC 완성도가 전달되지 않는다.
             실제로 얼마나 만들어졌는지 숫자로 보여준다. */}
         <div className="px-6 pb-5">
           <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
@@ -145,7 +145,7 @@ export default function OnboardingModal({ onClose }: { onClose: (startTour?: boo
               ))}
             </div>
             <p className="text-[11px] text-gray-500 mt-2.5 leading-relaxed">
-              Basel IRB · IFRS 9 · 금융감독규정 기준 산식 내장 —
+              Basel IRB · IFRS 9 · 금융감독규정 기준 산식 내장 -
               고객 1,010개 · 자산건전성 분류 이력 14,400건
             </p>
           </div>
@@ -155,7 +155,7 @@ export default function OnboardingModal({ onClose }: { onClose: (startTour?: boo
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
           <span className="text-xs text-gray-400">v1.0.0 · PoC · © 2026 yalkongs</span>
           <div className="flex items-center gap-2">
-            {/* 스토리 투어 — 한 기업의 생애주기 악화 경로(경보→위반→강등→연체→회수)를
+            {/* 스토리 투어 - 한 기업의 생애주기 악화 경로(경보→위반→강등→연체→회수)를
                 화면 순서대로 안내한다 */}
             <button
               onClick={() => onClose(true)}

@@ -1194,7 +1194,7 @@ def trigger_automation_from_ews(
 ):
     """
     EWS 종합점수 CRITICAL 고객에 대해 automation_action 자동 생성
-    — /api/automation/trigger/scan과 동일 로직을 EWS 관점에서 노출
+    - /api/automation/trigger/scan과 동일 로직을 EWS 관점에서 노출
     """
     # CRITICAL 고객 조회
     rows = db.execute(

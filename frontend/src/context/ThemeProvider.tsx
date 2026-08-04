@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 
 export type Theme = 'classic' | 'mesh';
 
-/** 시연용 역할 페르소나 — 결재함의 전결 레벨과 헤더 표시가 바뀐다 */
+/** 시연용 역할 페르소나 - 결재함의 전결 레벨과 헤더 표시가 바뀐다 */
 export type Role = 'REVIEWER' | 'DEPT_HEAD' | 'EXECUTIVE';
 
 export const ROLES: Record<Role, { name: string; title: string; level: string }> = {

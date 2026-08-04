@@ -9,7 +9,7 @@ import axios from 'axios';
  * 포용금융 이행 현황
  *
  * iM뱅크는 시중은행 전환 인가(2024.5) 시 중신용 중소기업·개인사업자 여신 확대를
- * 공언했다. 이 화면의 목적은 그 이행 실적과 그 여신의 건전성을 한 화면에서 보는 것 —
+ * 공언했다. 이 화면의 목적은 그 이행 실적과 그 여신의 건전성을 한 화면에서 보는 것 -
  * 공급만 보면 부실을 놓치고, 건전성만 보면 인가 조건 미이행을 놓친다.
  */
 
@@ -90,7 +90,7 @@ export default function InclusiveFinance() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">포용금융 이행 현황</h1>
           <p className="text-sm text-gray-500 mt-1">
-            시중은행 전환 인가 시 공언한 중신용·개인사업자 여신 확대 — 공급 실적과 건전성을 함께 관리
+            시중은행 전환 인가 시 공언한 중신용·개인사업자 여신 확대 - 공급 실적과 건전성을 함께 관리
           </p>
         </div>
         <a href="/api/export/inclusive.csv" download
@@ -153,7 +153,7 @@ export default function InclusiveFinance() {
           />
         </Card>
 
-        {/* 지역별 분포 — 어디서 공급되고 어디가 부실한가 */}
+        {/* 지역별 분포 - 어디서 공급되고 어디가 부실한가 */}
         <Card title="지역별 포용금융 현황">
           <div className="space-y-3">
             {(breakdown?.by_region || []).map((r: any) => (

@@ -6,11 +6,11 @@ import { useTheme, ROLES } from '../context/ThemeProvider';
 import axios from 'axios';
 
 /**
- * 결재함 — 전결권 체계의 실행 화면.
+ * 결재함 - 전결권 체계의 실행 화면.
  *
  * 심사 진행 중인 신청을 필요 전결 레벨과 함께 보여주고, 현재 역할(헤더에서 전환)의
  * 권한으로 결재 가능한 건만 승인 버튼이 활성화된다. 권한을 넘는 건을 승인하려 하면
- * 서버가 403 으로 차단한다(전결권 검증) — 그 흐름을 그대로 체험시킨다.
+ * 서버가 403 으로 차단한다(전결권 검증) - 그 흐름을 그대로 체험시킨다.
  */
 export default function ApprovalInbox() {
   const { role } = useTheme();
@@ -41,7 +41,7 @@ export default function ApprovalInbox() {
           approver_name: `${me.name}(${me.title})`,
         },
       });
-      setMessage({ kind: 'ok', text: `${id} ${decision === 'APPROVE' ? '승인' : '반려'} 완료 — 감사 추적에 기록되었습니다` });
+      setMessage({ kind: 'ok', text: `${id} ${decision === 'APPROVE' ? '승인' : '반려'} 완료 - 감사 추적에 기록되었습니다` });
       load();
     } catch (e: any) {
       setMessage({ kind: 'err', text: e?.response?.data?.detail || '처리 실패' });
@@ -64,7 +64,7 @@ export default function ApprovalInbox() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">결재함</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {me.name} {me.title} — 전결 한도{' '}
+            {me.name} {me.title} - 전결 한도{' '}
             {data?.my_limit ? formatAmount(data.my_limit, 'billion') : '무제한'} ·
             결재 가능 {formatNumber(data?.actionable || 0)}건 / 전체 {formatNumber(data?.items?.length || 0)}건
           </p>
@@ -101,7 +101,7 @@ export default function ApprovalInbox() {
                   <p className="text-xs text-gray-400">{it.application_date} · {it.current_stage}</p>
                 </td>
                 <td className="py-2.5 pr-4">{it.customer_name}</td>
-                <td className="py-2.5 pr-4">{it.credit_grade || '—'}</td>
+                <td className="py-2.5 pr-4">{it.credit_grade || '-'}</td>
                 <td className="py-2.5 pr-4 text-right tabular font-medium">
                   {formatAmount(it.requested_amount, 'billion')}
                 </td>

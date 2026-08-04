@@ -15,7 +15,7 @@ const EVENT_LABELS: Record<string, string> = {
 };
 
 /**
- * 공적정보 탭 — 마스터·디테일 구조 (공급망 탭과 동일한 패턴).
+ * 공적정보 탭 - 마스터·디테일 구조 (공급망 탭과 동일한 패턴).
  * 기업 목록이 최하단에 있고 '상세' 클릭 시 이력 카드가 뷰포트 밖 위쪽에
  * 삽입되던 구조를, 좌측 목록 → 우측 즉시 상세 표시로 재배치.
  */
@@ -149,7 +149,7 @@ export default function EWSPublicRegistry({ region }: Props) {
           </div>
           {filtered.length > 100 && (
             <p className="text-[11px] text-gray-400 mt-2 text-center">
-              상위 100개만 표시 — 검색으로 범위를 좁혀보세요
+              상위 100개만 표시 - 검색으로 범위를 좁혀보세요
             </p>
           )}
         </Card>

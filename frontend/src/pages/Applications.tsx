@@ -1261,7 +1261,7 @@ export default function Applications() {
 
                           {!financialData.summary?.has_financial_data && (
                             <div className="bg-yellow-50 rounded-lg p-4 text-sm text-yellow-800">
-                              재무제표 미입력 — 재무분석 탭에서 데이터를 입력하면 정밀 분석이 가능합니다.
+                              재무제표 미입력 - 재무분석 탭에서 데이터를 입력하면 정밀 분석이 가능합니다.
                             </div>
                           )}
                         </div>

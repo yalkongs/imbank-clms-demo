@@ -7,7 +7,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 interface Props { region: string }
 
 /**
- * 뉴스/감성 탭 — 마스터·디테일 구조 (공급망 탭과 동일한 패턴).
+ * 뉴스/감성 탭 - 마스터·디테일 구조 (공급망 탭과 동일한 패턴).
  * 뉴스 피드가 최하단에 있고 '상세보기' 클릭 시 분석 카드가 뷰포트 밖 위쪽에
  * 삽입되던 구조를, 좌측 피드 → 우측 즉시 기업 분석 표시로 재배치.
  */

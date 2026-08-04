@@ -115,7 +115,7 @@ export default function StressTest() {
         </button>
       </div>
 
-      {/* 스트레스완충자본 — 테스트 결과가 자본 요구량으로 이어진다 */}
+      {/* 스트레스완충자본 - 테스트 결과가 자본 요구량으로 이어진다 */}
       {scb && (
         <div className={`rounded-xl border p-4 flex items-center justify-between gap-4 ${scb.meets_requirement ? 'border-gray-200 bg-white' : 'border-red-300 bg-red-50'}`}>
           <div className="flex items-center gap-6 text-sm">
@@ -187,7 +187,7 @@ export default function StressTest() {
         <>
           {isBaseline && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-700">
-              기본(Baseline) 시나리오는 충격 계수가 ×1 이라 기준값과 동일합니다 —
+              기본(Baseline) 시나리오는 충격 계수가 ×1 이라 기준값과 동일합니다 -
               다른 시나리오 카드를 선택하면 충격 효과가 표시됩니다.
             </div>
           )}
@@ -405,7 +405,7 @@ export default function StressTest() {
         </>
       )}
 
-      {/* 사용자 정의 시나리오 플레이그라운드 — 고정 5개 시나리오를 넘어 충격을 직접 조립 */}
+      {/* 사용자 정의 시나리오 플레이그라운드 - 고정 5개 시나리오를 넘어 충격을 직접 조립 */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <div>

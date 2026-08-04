@@ -19,7 +19,7 @@ from ..core.config import AS_OF_STR
 
 router = APIRouter(prefix="/api/export", tags=["Export"])
 
-# 내보내기 정의 — name: (파일명, 헤더, 쿼리)
+# 내보내기 정의 - name: (파일명, 헤더, 쿼리)
 EXPORTS = {
     "facilities": (
         "여신목록",
@@ -97,7 +97,7 @@ def export_csv(name: str, db: Session = Depends(get_db)):
 
     filename = f"{label}_{AS_OF_STR}.csv"
     return Response(
-        content="﻿" + buf.getvalue(),          # BOM — Excel 한글 인코딩
+        content="﻿" + buf.getvalue(),          # BOM - Excel 한글 인코딩
         media_type="text/csv; charset=utf-8",
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"

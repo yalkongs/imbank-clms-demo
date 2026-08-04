@@ -59,7 +59,7 @@ def main():
         LIMIT 60
     """).fetchall()
 
-    # COVENANT EOD 고객 (최근 코베넌트 위반) — covenant.result = 'EOD' or breach
+    # COVENANT EOD 고객 (최근 코베넌트 위반) - covenant.result = 'EOD' or breach
     covenant_eod = cur.execute("""
         SELECT f.customer_id, cc.check_id,
                f.facility_id,
@@ -85,7 +85,7 @@ def main():
         LIMIT 60
     """).fetchall()
 
-    # risk_parameter 조회 (pd, lgd) — application_id 기준
+    # risk_parameter 조회 (pd, lgd) - application_id 기준
     # dscr은 financial_ratio에서 최신값 조회
     rp_map = {}
     rp_rows = cur.execute("""

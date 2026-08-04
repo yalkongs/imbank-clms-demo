@@ -104,7 +104,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* 브랜드 히어로 — 가이드가 민트→라임 그라디언트를 hero treatment 로 규정한다.
+      {/* 브랜드 히어로 - 가이드가 민트→라임 그라디언트를 hero treatment 로 규정한다.
           첫 화면에서 규모·기준일·건전성을 한 줄로 먼저 보여준다. */}
       <div className="im-gradient rounded-2xl px-6 py-5 text-imbank-ink">
         <div className="flex items-end justify-between flex-wrap gap-4">

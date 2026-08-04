@@ -92,7 +92,7 @@ class ReportPDF(FPDF):
         self.ln(2)
 
     def kv_grid(self, items, cols=3):
-        """(label, value) 목록을 격자로 — 요약 지표용"""
+        """(label, value) 목록을 격자로 - 요약 지표용"""
         w = 190 / cols
         for i in range(0, len(items), cols):
             if self.get_y() > 252:      # 라벨-값 쌍이 페이지 경계에서 갈라지지 않게
@@ -163,7 +163,7 @@ def build_report_pdf(data: dict) -> bytes:
     pdf.section_title(c["title"])
     rows = [
         [r["grade"], f"{r['count']:,}", _eok(r["exposure"]), f"{r['share']:.2f}%",
-         ("+" if r["change"] > 0 else "") + _eok(r["change"], 1) if r["change"] else "—",
+         ("+" if r["change"] > 0 else "") + _eok(r["change"], 1) if r["change"] else "-",
          _eok(r["required_provision"], 1)]
         for r in c["rows"]
     ]
@@ -283,7 +283,7 @@ def build_report_pdf(data: dict) -> bytes:
     # ── 8. 워크아웃
     w = s["workout"]
     pdf.section_title(w["title"])
-    strat = " · ".join(f"{x['name']} {x['count']}" for x in w["by_strategy"]) or "—"
+    strat = " · ".join(f"{x['name']} {x['count']}" for x in w["by_strategy"]) or "-"
     pdf.kv_grid([
         ("진행 중 케이스", f"{w['active_cases']} 건"),
         ("관리 익스포저", f"{_eok(w['active_exposure'])} 억원"),

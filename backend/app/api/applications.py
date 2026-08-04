@@ -28,7 +28,7 @@ REVIEW_STAGES = {
     "COMPLETED": {"name": "완료", "order": 8}
 }
 
-# 승인 권한 기준 — DB(approval_authority)가 정본.
+# 승인 권한 기준 - DB(approval_authority)가 정본.
 # 종전에는 여기 하드코딩돼 있어 전결 규정을 바꾸려면 배포가 필요했고,
 # approve API 는 권한 검증 없이 파라미터로 받은 레벨을 그대로 기록했다.
 _AUTHORITY_FALLBACK = {
@@ -298,7 +298,7 @@ def get_approval_inbox(
     level: str = "TEAM_LEAD",
     db: Session = Depends(get_db),
 ):
-    """결재함 — 심사 진행 중이며 지정 전결 레벨의 결재가 필요한 신청 목록.
+    """결재함 - 심사 진행 중이며 지정 전결 레벨의 결재가 필요한 신청 목록.
 
     필요 전결 레벨은 신청 금액으로 산출한다(전결 규정 DB 기준). 조회자의
     레벨과 비교해 '내가 결재 가능한 건'과 '상위 결재 필요 건'을 구분한다.
@@ -879,7 +879,7 @@ def approve_application(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    # 전결권 검증 — 승인 금액이 승인자 권한 한도를 넘으면 거부한다.
+    # 전결권 검증 - 승인 금액이 승인자 권한 한도를 넘으면 거부한다.
     # 종전에는 파라미터로 받은 레벨을 검증 없이 그대로 기록했다.
     if decision in ("APPROVE", "CONDITIONAL"):
         authority = load_approval_authority(db)
@@ -893,7 +893,7 @@ def approve_application(
                 status_code=403,
                 detail=(f"전결권 초과: {authority[level]['name']} 한도 "
                         f"{authority[level]['limit']/1e8:,.0f}억 < 승인금액 "
-                        f"{effective_amount/1e8:,.0f}억 — {required['name']} 이상 결재 필요"),
+                        f"{effective_amount/1e8:,.0f}억 - {required['name']} 이상 결재 필요"),
             )
         approval_level = level
 
@@ -926,7 +926,7 @@ def approve_application(
         "comments": comments
     })
 
-    # 승인과 동시에 업종 한도를 예약한다 — 심사와 한도관리의 연결 고리.
+    # 승인과 동시에 업종 한도를 예약한다 - 심사와 한도관리의 연결 고리.
     # (limit_reservation 은 그간 어떤 흐름에서도 쓰이지 않던 빈 테이블이었다)
     if decision in ("APPROVE", "CONDITIONAL"):
         try:

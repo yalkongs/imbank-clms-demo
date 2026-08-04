@@ -48,7 +48,7 @@ def get_portfolio_classification(
 ):
     """
     포트폴리오 건전성 현황
-    — 5단계 분류별 잔액, 건수, 충당금 필요액 요약
+    - 5단계 분류별 잔액, 건수, 충당금 필요액 요약
     """
     if base_date:
         date_filter = "WHERE ac.base_date = :bd"
@@ -267,7 +267,7 @@ def run_classification(
 ):
     """
     월말 일괄 자산건전성 분류 실행
-    — 모든 ACTIVE 여신에 대해 DPD/PD/EWS 기반 분류 산출 후 저장
+    - 모든 ACTIVE 여신에 대해 DPD/PD/EWS 기반 분류 산출 후 저장
     """
     bd = base_date or AS_OF_DATE.strftime('%Y-%m-%d')
 
@@ -287,7 +287,7 @@ def run_classification(
         """)
     ).fetchall()
 
-    # 담보 회수예상가액 (인정가액 합계) — 3개월 이상 연체 건의 분할분류에 쓴다.
+    # 담보 회수예상가액 (인정가액 합계) - 3개월 이상 연체 건의 분할분류에 쓴다.
     # 시행세칙 별표3: 회수예상가액 해당분은 고정, 초과분은 회수의문/추정손실.
     recoverable_map = {
         r[0]: float(r[1] or 0)
@@ -420,7 +420,7 @@ def get_migration_matrix(
 ):
     """
     분류 이동 행렬 (Migration Matrix)
-    — from_date → to_date 기간 중 분류 변동 현황
+    - from_date → to_date 기간 중 분류 변동 현황
     """
     # 기간 미지정 시 최근 2개 기준일 자동 선택
     dates = db.execute(
@@ -479,7 +479,7 @@ def get_migration_matrix(
 def get_provision_gap_analysis(
     db: Session = Depends(get_db)
 ):
-    """충당금 부족액 분석 — 분류별 TOP 20 부족 여신"""
+    """충당금 부족액 분석 - 분류별 TOP 20 부족 여신"""
     rows = db.execute(
         text("""
             SELECT

@@ -484,7 +484,7 @@ export default function Workout() {
                   )}
                 </div>
 
-                {/* 회수 마일스톤 타임라인 — 전략별 절차의 진행 경과 */}
+                {/* 회수 마일스톤 타임라인 - 전략별 절차의 진행 경과 */}
                 {selectedCase?.milestones?.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-lg font-bold text-gray-900 mb-3">회수 절차 진행 경과</h3>

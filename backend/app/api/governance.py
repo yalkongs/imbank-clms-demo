@@ -1,9 +1,9 @@
 """
-거버넌스 API — 감사 추적 · 전결 규정 · 업무보고서
+거버넌스 API - 감사 추적 · 전결 규정 · 업무보고서
 ==================================================
 내부통제 실효성을 화면으로 증빙한다.
   · 감사 추적   : 모든 의미 있는 쓰기(승인·분류실행·ECL 재산출)의 이력
-  · 전결 규정   : approval_authority — 승인 API 가 실제로 검증에 쓰는 정본
+  · 전결 규정   : approval_authority - 승인 API 가 실제로 검증에 쓰는 정본
   · 업무보고서  : 감독당국 업무보고서 서식에 준하는 종합 집계 (11개 부문)
                   + PDF 다운로드 (서버 생성, Pretendard 임베드)
 """
@@ -26,7 +26,7 @@ SIZE_LABELS = {"LARGE": "대기업", "MEDIUM": "중견기업", "SMALL": "중소�
 STRATEGY_LABELS = {"NORMALIZATION": "정상화", "RESTRUCTURE": "재구조화", "SALE": "매각",
                    "LEGAL_RECOVERY": "법적회수", "WRITE_OFF": "상각"}
 
-# 포용금융 판정 — inclusive_finance.py 와 동일 기준을 쓴다
+# 포용금융 판정 - inclusive_finance.py 와 동일 기준을 쓴다
 MID_CREDIT_GRADES = ("BBB+", "BBB", "BBB-", "BB+", "BB", "BB-", "B+", "B", "B-")
 _GRADE_LIST = ",".join(f"'{g}'" for g in MID_CREDIT_GRADES)
 LATEST_GRADE_JOIN = """
@@ -74,7 +74,7 @@ def get_audit_logs(
 
 @router.get("/approval-authority")
 def get_approval_authority(db: Session = Depends(get_db)):
-    """전결 규정 조회 — 승인 API 검증에 쓰는 정본"""
+    """전결 규정 조회 - 승인 API 검증에 쓰는 정본"""
     rows = db.execute(text("""
         SELECT authority_level, authority_name, amount_limit, effective_from
         FROM approval_authority WHERE status = 'ACTIVE' ORDER BY display_order
@@ -91,7 +91,7 @@ def get_approval_authority(db: Session = Depends(get_db)):
 
 
 def _classification_section(db: Session) -> dict:
-    """1. 자산건전성 — 시설별 최신 분류 + 직전 스냅샷 대비 증감"""
+    """1. 자산건전성 - 시설별 최신 분류 + 직전 스냅샷 대비 증감"""
     cls_rows = db.execute(text("""
         SELECT ac.classification, COUNT(*), SUM(ac.exposure_at_class),
                SUM(ac.required_provision)
@@ -102,7 +102,7 @@ def _classification_section(db: Session) -> dict:
         GROUP BY ac.classification
     """)).fetchall()
 
-    # 직전 스냅샷 (전 분류 기준일) — 증감 비교용
+    # 직전 스냅샷 (전 분류 기준일) - 증감 비교용
     dates = db.execute(text(
         "SELECT DISTINCT base_date FROM asset_classification ORDER BY base_date DESC LIMIT 2"
     )).fetchall()
@@ -144,7 +144,7 @@ def _classification_section(db: Session) -> dict:
 
 @router.get("/report")
 def get_business_report(db: Session = Depends(get_db)):
-    """업무보고서 집계 — 감독당국 업무보고서 서식에 준하는 11개 부문.
+    """업무보고서 집계 - 감독당국 업무보고서 서식에 준하는 11개 부문.
 
     각 수치는 해당 업무 모듈과 같은 산식을 쓴다 (동일 쿼리 재사용).
     금액 단위: 원 (표시 단계에서 억원 환산).
@@ -431,7 +431,7 @@ def get_business_report(db: Session = Depends(get_db)):
 
 @router.get("/report/pdf")
 def get_business_report_pdf(db: Session = Depends(get_db)):
-    """업무보고서 PDF 다운로드 — /report 와 동일 집계를 서식 문서로 렌더."""
+    """업무보고서 PDF 다운로드 - /report 와 동일 집계를 서식 문서로 렌더."""
     from ..services.report_pdf import build_report_pdf
 
     data = get_business_report(db)

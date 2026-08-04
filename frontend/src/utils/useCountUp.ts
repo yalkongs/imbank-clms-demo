@@ -45,7 +45,7 @@ export function useCountUp(target: number, key: string, enabled: boolean = true)
     const start = performance.now();
     const tick = (now: number) => {
       const p = Math.min((now - start) / DURATION, 1);
-      // ease-out cubic — 빠르게 올라가다 부드럽게 멈춘다
+      // ease-out cubic - 빠르게 올라가다 부드럽게 멈춘다
       const eased = 1 - Math.pow(1 - p, 3);
       setValue(target * eased);
       if (p < 1) frame.current = requestAnimationFrame(tick);

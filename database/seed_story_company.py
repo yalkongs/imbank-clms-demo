@@ -27,7 +27,7 @@ def main():
     name = cur.execute("SELECT customer_name FROM customer WHERE customer_id=?",
                        (STORY_CUSTOMER,)).fetchone()
     if not name:
-        print(f"스토리 고객 {STORY_CUSTOMER} 없음 — 건너뜀")
+        print(f"스토리 고객 {STORY_CUSTOMER} 없음 - 건너뜀")
         return
     name = name[0]
 
@@ -39,17 +39,17 @@ def main():
         WHERE customer_id = ?
     """, (STORY_CUSTOMER,))
 
-    # 2) EWS 경보 (거래행태 채널, HIGH) — 알림 메뉴·대시보드에 노출된다
+    # 2) EWS 경보 (거래행태 채널, HIGH) - 알림 메뉴·대시보드에 노출된다
     cur.execute("DELETE FROM ews_alert WHERE alert_id = 'EWS_STORY01'")
     cur.execute("""
         INSERT INTO ews_alert
         (alert_id, customer_id, alert_date, alert_type, alert_subtype, severity,
          indicator_value, threshold_value, description, status)
         VALUES ('EWS_STORY01', ?, ?, 'BEHAVIOR', 'LIMIT_UTILIZATION', 'HIGH',
-                0.94, 0.85, '한도소진율 94% — 유동성 압박 신호', 'OPEN')
+                0.94, 0.85, '한도소진율 94% - 유동성 압박 신호', 'OPEN')
     """, (STORY_CUSTOMER, days_before(210).strftime("%Y-%m-%d")))
 
-    # 3) 코베넌트 위반 — 이 고객 여신의 코베넌트에 BREACH 점검 기록
+    # 3) 코베넌트 위반 - 이 고객 여신의 코베넌트에 BREACH 점검 기록
     fac = cur.execute("""
         SELECT facility_id FROM facility WHERE customer_id = ? LIMIT 1
     """, (STORY_CUSTOMER,)).fetchone()

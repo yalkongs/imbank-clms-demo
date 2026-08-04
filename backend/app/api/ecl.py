@@ -44,7 +44,7 @@ def get_portfolio_ecl_summary(
 ):
     """
     포트폴리오 ECL 요약
-    — Stage별 잔액, ECL 금액, 커버리지 비율
+    - Stage별 잔액, ECL 금액, 커버리지 비율
     """
     if calc_date:
         date_filter = "WHERE e.calc_date = :cd"
@@ -224,7 +224,7 @@ def get_stage_migration(
 def get_provision_adequacy(
     db: Session = Depends(get_db)
 ):
-    """충당금 적정성 분석 — ECL vs 현재 충당금 비교"""
+    """충당금 적정성 분석 - ECL vs 현재 충당금 비교"""
     rows = db.execute(
         text("""
             SELECT
@@ -277,7 +277,7 @@ def calculate_ecl_for_facility(
 ):
     """
     개별 여신 ECL 재산출
-    — PD/LGD 최신값 + SICR 판별 → Stage 결정 → ECL 산출 → 저장
+    - PD/LGD 최신값 + SICR 판별 → Stage 결정 → ECL 산출 → 저장
     """
     cd = calc_date or AS_OF_DATE.strftime('%Y-%m-%d')
 
@@ -345,7 +345,7 @@ def calculate_ecl_for_facility(
     except ValueError:
         grade_drop_notches = 0
 
-    # 신용손상 증거 (기준서 1109호 부록A) — 워크아웃 진행 건은 채권 양보·
+    # 신용손상 증거 (기준서 1109호 부록A) - 워크아웃 진행 건은 채권 양보·
     # 법적회수·상각 등 객관적 손상 사유에 해당한다. 정상화 종결(RECOVERED)은 제외.
     wo_row = db.execute(
         text("""

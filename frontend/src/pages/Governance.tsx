@@ -5,7 +5,7 @@ import { formatAmount, formatPercent, formatNumber } from '../utils/format';
 import axios from 'axios';
 
 /**
- * 보고·감사 — 업무보고서 · 전결 규정 · 감사 추적
+ * 보고·감사 - 업무보고서 · 전결 규정 · 감사 추적
  *
  * 내부통제의 실효성을 화면으로 증빙한다. 업무보고서는 감독당국 보고 서식에
  * 준하는 집계이고, 전결 규정은 승인 API 가 실제 검증에 쓰는 정본이며,
@@ -36,11 +36,11 @@ function formatAuditValue(key: string, v: any): string {
 }
 
 function AuditChange({ raw }: { raw: string | null }) {
-  if (!raw) return <span className="text-gray-300">—</span>;
+  if (!raw) return <span className="text-gray-300">-</span>;
   let obj: Record<string, any>;
   try { obj = JSON.parse(raw); } catch { return <span>{raw}</span>; }
   const entries = Object.entries(obj).filter(([, v]) => v !== null && v !== undefined && v !== '');
-  if (entries.length === 0) return <span className="text-gray-300">—</span>;
+  if (entries.length === 0) return <span className="text-gray-300">-</span>;
   return (
     <span className="flex flex-wrap gap-1">
       {entries.map(([k, v]) => (
@@ -91,7 +91,7 @@ export default function Governance() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">보고·감사</h1>
           <p className="text-sm text-gray-500 mt-1">
-            업무보고서 · 전결 규정 · 감사 추적 — 내부통제 증빙
+            업무보고서 · 전결 규정 · 감사 추적 - 내부통제 증빙
           </p>
         </div>
         {tab === 'report' && (
@@ -187,7 +187,7 @@ export default function Governance() {
                       <td className={`py-2 text-right tabular text-xs ${
                         !r.change ? 'text-gray-300' : worse ? 'text-red-600' : 'text-green-600'
                       }`}>
-                        {r.change ? `${r.change > 0 ? '+' : ''}${formatAmount(r.change, 'billion')}` : '—'}
+                        {r.change ? `${r.change > 0 ? '+' : ''}${formatAmount(r.change, 'billion')}` : '-'}
                       </td>
                       <td className="py-2 text-right tabular">{formatAmount(r.required_provision, 'billion')}</td>
                     </tr>
@@ -468,7 +468,7 @@ export default function Governance() {
         <Card title={`감사 추적 (총 ${formatNumber(audit?.total || 0)}건 · 최근 50건)`}>
           {(audit?.logs || []).length === 0 ? (
             <p className="py-8 text-sm text-gray-400 text-center">
-              아직 기록이 없습니다 — 승인·분류실행·ECL 재산출 등 쓰기 작업이 수행되면 기록됩니다.
+              아직 기록이 없습니다 - 승인·분류실행·ECL 재산출 등 쓰기 작업이 수행되면 기록됩니다.
             </p>
           ) : (
             <div className="overflow-x-auto">

@@ -34,7 +34,7 @@ def get_delinquency_dashboard(
 ):
     """
     연체 현황 대시보드
-    — DPD 버킷별 잔액·건수, 연체율, 최근 7일 신규 연체
+    - DPD 버킷별 잔액·건수, 연체율, 최근 7일 신규 연체
     """
     # 전체 여신 잔액
     total_outstanding = db.execute(
@@ -280,7 +280,7 @@ def get_facility_delinquency_history(
 
 @router.get("/transfer-candidates")
 def get_transfer_candidates(db: Session = Depends(get_db)):
-    """워크아웃 이관 임박 여신 (DPD 75~89) — 90일 도달 시 자동 이관 대상.
+    """워크아웃 이관 임박 여신 (DPD 75~89) - 90일 도달 시 자동 이관 대상.
 
     이관 전 마지막 관리 기회를 놓치지 않도록 별도 목록으로 노출한다.
     이관 실행은 기존 POST /api/workout/auto-transfer-npl 을 쓴다.
@@ -318,7 +318,7 @@ def get_roll_rate(
 ):
     """
     Roll Rate 분석
-    — DPD 버킷별 다음 기간 이동률 (전이 행렬)
+    - DPD 버킷별 다음 기간 이동률 (전이 행렬)
     """
     rows = db.execute(
         text("""
@@ -361,7 +361,7 @@ def get_roll_rate(
 
 @router.get("/vintage-by-region")
 def get_vintage_by_region(db: Session = Depends(get_db)):
-    """지역별 신규취급 빈티지 곡선 — 시중은행 전환 후 수도권 확장 리스크 감시.
+    """지역별 신규취급 빈티지 곡선 - 시중은행 전환 후 수도권 확장 리스크 감시.
 
     연고지(대구경북)는 관계형 금융 정보가 있어 조기 부실이 낮고, 신규 진출한
     수도권은 초기 부실률이 높게 시작해 심사 데이터가 쌓이며 개선되는지를 본다.
@@ -504,7 +504,7 @@ def get_collection_performance(
     months: int = Query(12, description="분석 기간(개월)"),
     db: Session = Depends(get_db)
 ):
-    """추심 성과 — 약속이행률, 회수율, 활동 유형별 효과"""
+    """추심 성과 - 약속이행률, 회수율, 활동 유형별 효과"""
     start_date = (AS_OF_DATE - timedelta(days=months * 30)).strftime('%Y-%m-%d')
 
     # 활동 유형별 집계
