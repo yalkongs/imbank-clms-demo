@@ -27,6 +27,7 @@ export default function EWSSupplyChain({ region }: Props) {
 
   const loadData = async () => {
     setLoading(true);
+    setCustomerData(null);
     try {
       const r = region || undefined;
       const [dashRes, custRes] = await Promise.all([

@@ -1,21 +1,30 @@
 import React, { useEffect, useState } from 'react';
-import { TrendingUp, BarChart3, AlertTriangle, Activity } from 'lucide-react';
+import { TrendingUp, BarChart3, AlertTriangle, Activity, Search, MousePointerClick } from 'lucide-react';
 import { Card, StatCard } from '../../components';
 import { ewsAdvancedApi } from '../../utils/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface Props { region: string }
 
+/**
+ * 시장신호 탭 — 마스터·디테일 구조 (공급망 탭과 동일한 패턴).
+ * 경보 목록이 최하단에 있고 '조회' 시 상세가 뷰포트 밖 위쪽에 삽입되던
+ * 구조를, 좌측 경보 목록 → 우측 즉시 상세 표시로 재배치.
+ */
 export default function EWSMarketSignals({ region }: Props) {
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<any>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
+  const [selectedAlert, setSelectedAlert] = useState<any>(null);
   const [customerData, setCustomerData] = useState<any>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => { loadData(); }, [region]);
 
   const loadData = async () => {
     setLoading(true);
+    setSelectedAlert(null);
+    setCustomerData(null);
     try {
       const r = region || undefined;
       const [dashRes, alertRes] = await Promise.all([
@@ -31,14 +40,21 @@ export default function EWSMarketSignals({ region }: Props) {
     } finally { setLoading(false); }
   };
 
-  const loadCustomer = async (cid: string) => {
+  const loadCustomer = async (a: any) => {
+    setSelectedAlert(a);
     try {
-      const res = await ewsAdvancedApi.getMarketCustomer(cid);
+      const res = await ewsAdvancedApi.getMarketCustomer(a.customer_id);
       setCustomerData(res.data);
     } catch (e) { console.error(e); }
   };
 
+  const closeDetail = () => { setSelectedAlert(null); setCustomerData(null); };
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" /></div>;
+
+  const filtered = alerts.filter((a: any) => !searchTerm ||
+    a.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (a.industry_name || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className="space-y-6">
@@ -59,112 +75,132 @@ export default function EWSMarketSignals({ region }: Props) {
           icon={<AlertTriangle size={22} />} color="red" />
       </div>
 
-      {/* 차트 */}
-      <div className="grid grid-cols-2 gap-6">
-        <Card title="DD / CDS 스프레드 추이">
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={dashboard?.trend || []} margin={{ left: -10, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line yAxisId="left" type="monotone" dataKey="avg_dd" name="DD (좌)" stroke="#00BFA5" strokeWidth={2} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="avg_cds" name="CDS bp (우)" stroke="#ef4444" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-
-        <Card title="내재 PD / 주가변동률 추이">
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={dashboard?.trend || []} margin={{ left: -10, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line yAxisId="left" type="monotone" dataKey="avg_implied_pd" name="내재PD (좌)" stroke="#7c3aed" strokeWidth={2} dot={false} />
-              <Line yAxisId="right" type="monotone" dataKey="avg_stock_change" name="주가변동% (우)" stroke="#10b981" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-      </div>
-
-      {/* 고객 상세 */}
-      {customerData && (
-        <Card title={`시장 데이터: ${customerData.customer_name}`}
-          headerAction={<button onClick={() => setCustomerData(null)} className="text-sm text-gray-500 hover:text-gray-700">닫기</button>}>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={customerData.data || []} margin={{ left: -10, right: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-              <Tooltip />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Line yAxisId="left" type="monotone" dataKey="distance_to_default" name="DD" stroke="#00BFA5" />
-              <Line yAxisId="right" type="monotone" dataKey="cds_spread" name="CDS" stroke="#ef4444" />
-              <Line yAxisId="left" type="monotone" dataKey="stock_price_change" name="주가%" stroke="#10b981" />
-            </LineChart>
-          </ResponsiveContainer>
-        </Card>
-      )}
-
-      {/* 시장 경보 테이블 */}
-      <Card title="시장 경보 목록">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="px-3 py-2 text-left">기업명</th>
-                <th className="px-3 py-2 text-left">업종</th>
-                <th className="px-3 py-2 text-center">주가변동%</th>
-                <th className="px-3 py-2 text-center">CDS(bp)</th>
-                <th className="px-3 py-2 text-center">DD</th>
-                <th className="px-3 py-2 text-center">내재PD</th>
-                <th className="px-3 py-2 text-left">경보사유</th>
-                <th className="px-3 py-2 text-center">상세</th>
-              </tr>
-            </thead>
-            <tbody>
-              {alerts.map((a: any) => (
-                <tr key={a.customer_id} className="border-b hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium">{a.customer_name}</td>
-                  <td className="px-3 py-2 text-gray-600">{a.industry_name}</td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={a.stock_price_change < -10 ? 'text-red-600 font-semibold' : ''}>
-                      {a.stock_price_change?.toFixed(1)}%
+      {/* 마스터(좌: 경보 목록) · 디테일(우: 기업 시장 데이터) */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+        <Card title={`시장 경보 기업 (${filtered.length})`} className="lg:col-span-1">
+          <div className="mb-3 relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="기업명, 업종 검색..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full border rounded px-3 py-2 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <p className="text-[11px] text-gray-400 mb-2">기업을 선택하면 우측에 상세가 표시됩니다</p>
+          <div className="max-h-[560px] overflow-y-auto divide-y divide-gray-100 -mx-1">
+            {filtered.map((a: any) => {
+              const selected = selectedAlert?.customer_id === a.customer_id;
+              return (
+                <button
+                  key={a.customer_id}
+                  onClick={() => loadCustomer(a)}
+                  className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
+                    selected ? 'bg-blue-50 ring-1 ring-blue-200' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-sm font-medium truncate ${selected ? 'text-blue-800' : 'text-gray-900'}`}>
+                      {a.customer_name}
                     </span>
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={a.cds_spread > 200 ? 'text-red-600 font-semibold' : ''}>{a.cds_spread?.toFixed(0)}</span>
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <span className={a.distance_to_default < 2 ? 'text-red-600 font-semibold' : ''}>{a.distance_to_default?.toFixed(2)}</span>
-                  </td>
-                  <td className="px-3 py-2 text-center">{((a.implied_pd || 0) * 100).toFixed(2)}%</td>
-                  <td className="px-3 py-2">
-                    <div className="flex flex-wrap gap-1">
+                    <span className={`flex-none text-xs font-semibold tabular ${
+                      a.distance_to_default < 2 ? 'text-red-600' : 'text-gray-500'
+                    }`}>
+                      DD {a.distance_to_default?.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {a.industry_name} · CDS {a.cds_spread?.toFixed(0)}bp · 주가 {a.stock_price_change?.toFixed(1)}%
+                  </div>
+                  {(a.alert_reasons || []).length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
                       {(a.alert_reasons || []).map((r: string, i: number) => (
-                        <span key={i} className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs">{r}</span>
+                        <span key={i} className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[11px]">{r}</span>
                       ))}
                     </div>
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <button onClick={() => loadCustomer(a.customer_id)}
-                      className="text-blue-600 hover:underline text-xs">조회</button>
-                  </td>
-                </tr>
-              ))}
-              {alerts.length === 0 && (
-                <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">시장 경보가 없습니다.</td></tr>
+                  )}
+                </button>
+              );
+            })}
+            {filtered.length === 0 && (
+              <p className="text-sm text-gray-400 text-center py-8">시장 경보가 없습니다</p>
+            )}
+          </div>
+        </Card>
+
+        {/* 상세 (선택 전에는 전체 추이) */}
+        <div className="lg:col-span-2 space-y-6">
+          {customerData ? (
+            <Card title={`시장 데이터: ${customerData.customer_name}`}
+              headerAction={<button onClick={closeDetail} className="text-sm text-gray-500 hover:text-gray-700">닫기</button>}>
+              {selectedAlert && (
+                <div className="grid grid-cols-4 gap-3 mb-4">
+                  {[
+                    { l: '주가변동', v: `${selectedAlert.stock_price_change?.toFixed(1)}%`, bad: selectedAlert.stock_price_change < -10 },
+                    { l: 'CDS 스프레드', v: `${selectedAlert.cds_spread?.toFixed(0)}bp`, bad: selectedAlert.cds_spread > 200 },
+                    { l: '부도거리(DD)', v: selectedAlert.distance_to_default?.toFixed(2), bad: selectedAlert.distance_to_default < 2 },
+                    { l: '내재 PD', v: `${((selectedAlert.implied_pd || 0) * 100).toFixed(2)}%`, bad: false },
+                  ].map(m => (
+                    <div key={m.l} className="rounded-lg bg-gray-50 border border-gray-100 px-3 py-2">
+                      <p className="text-[11px] text-gray-400">{m.l}</p>
+                      <p className={`text-sm font-bold tabular ${m.bad ? 'text-red-600' : 'text-gray-900'}`}>{m.v}</p>
+                    </div>
+                  ))}
+                </div>
               )}
-            </tbody>
-          </table>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={customerData.data || []} margin={{ left: -10, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line yAxisId="left" type="monotone" dataKey="distance_to_default" name="DD" stroke="#00BFA5" />
+                  <Line yAxisId="right" type="monotone" dataKey="cds_spread" name="CDS" stroke="#ef4444" />
+                  <Line yAxisId="left" type="monotone" dataKey="stock_price_change" name="주가%" stroke="#10b981" />
+                </LineChart>
+              </ResponsiveContainer>
+            </Card>
+          ) : (
+            <>
+              <Card title="DD / CDS 스프레드 추이">
+                <ResponsiveContainer width="100%" height={230}>
+                  <LineChart data={dashboard?.trend || []} margin={{ left: -10, right: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Line yAxisId="left" type="monotone" dataKey="avg_dd" name="DD (좌)" stroke="#00BFA5" strokeWidth={2} dot={false} />
+                    <Line yAxisId="right" type="monotone" dataKey="avg_cds" name="CDS bp (우)" stroke="#ef4444" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </Card>
+              <Card title="내재 PD / 주가변동률 추이">
+                <ResponsiveContainer width="100%" height={230}>
+                  <LineChart data={dashboard?.trend || []} margin={{ left: -10, right: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                    <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Line yAxisId="left" type="monotone" dataKey="avg_implied_pd" name="내재PD (좌)" stroke="#7c3aed" strokeWidth={2} dot={false} />
+                    <Line yAxisId="right" type="monotone" dataKey="avg_stock_change" name="주가변동% (우)" stroke="#10b981" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+                <div className="mt-3 flex items-center justify-center gap-2 text-sm text-gray-400 border-t border-gray-100 pt-3">
+                  <MousePointerClick size={15} />
+                  좌측 경보 목록에서 기업을 선택하면 기업별 시장 데이터가 여기에 표시됩니다
+                </div>
+              </Card>
+            </>
+          )}
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
