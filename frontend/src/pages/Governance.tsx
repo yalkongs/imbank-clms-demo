@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Printer, ShieldCheck, ScrollText, Stamp } from 'lucide-react';
+import { Printer, ShieldCheck, ScrollText, Stamp, FileDown } from 'lucide-react';
 import { Card } from '../components';
 import { formatAmount, formatPercent, formatNumber } from '../utils/format';
 import axios from 'axios';
@@ -95,12 +95,20 @@ export default function Governance() {
           </p>
         </div>
         {tab === 'report' && (
-          <button
-            onClick={() => window.print()}
-            className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            <Printer size={16} /> 인쇄
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href="/api/governance/report/pdf"
+              className="btn-accent flex items-center gap-2 px-4 py-2 text-sm"
+            >
+              <FileDown size={16} /> PDF 저장
+            </a>
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              <Printer size={16} /> 인쇄
+            </button>
+          </div>
         )}
       </div>
 
@@ -129,9 +137,29 @@ export default function Governance() {
       {tab === 'report' && report && (
         <div className="space-y-6 print:text-black">
           <div className="text-center py-4 border-b-2 border-gray-800">
+            <p className="text-xs text-gray-400 text-left">문서번호 {report.doc_no}</p>
             <h2 className="text-xl font-bold">{report.report_title}</h2>
             <p className="text-sm text-gray-500 mt-1">{report.period} · 기준일 {report.base_date}</p>
           </div>
+
+          {/* 총괄 */}
+          <Card title="총괄">
+            <div className="grid grid-cols-3 lg:grid-cols-6 gap-4 text-center">
+              {[
+                ['총여신 잔액', formatAmount(s.summary?.total_outstanding || 0, 'billion')],
+                ['여신 / 차주', `${formatNumber(s.summary?.facility_count || 0)}건 / ${formatNumber(s.summary?.borrower_count || 0)}개사`],
+                ['당년 신규취급', `${formatAmount(s.summary?.new_amount || 0, 'billion')} (${s.summary?.new_count || 0}건)`],
+                ['NPL 비율', formatPercent(s.summary?.npl_ratio || 0)],
+                ['연체율(30일+)', formatPercent(s.summary?.delinquency_rate || 0, 3)],
+                ['BIS 비율', formatPercent(s.summary?.bis_ratio || 0)],
+              ].map(([l, v]) => (
+                <div key={l as string}>
+                  <p className="text-base font-bold tabular leading-tight">{v}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{l}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
 
           {/* 1. 자산건전성 */}
           <Card title={s.classification?.title}>
@@ -142,50 +170,100 @@ export default function Governance() {
                   <th className="py-2 text-right">건수</th>
                   <th className="py-2 text-right">잔액</th>
                   <th className="py-2 text-right">비중</th>
+                  <th className="py-2 text-right">증감</th>
                   <th className="py-2 text-right">필요충당금</th>
                 </tr>
               </thead>
               <tbody>
-                {s.classification?.rows?.map((r: any) => (
-                  <tr key={r.grade} className="border-b border-gray-50">
-                    <td className="py-2 font-medium">{r.grade}</td>
-                    <td className="py-2 text-right tabular">{formatNumber(r.count)}</td>
-                    <td className="py-2 text-right tabular">{formatAmount(r.exposure, 'billion')}</td>
-                    <td className="py-2 text-right tabular">{formatPercent(r.share)}</td>
-                    <td className="py-2 text-right tabular">{formatAmount(r.required_provision, 'billion')}</td>
-                  </tr>
-                ))}
+                {s.classification?.rows?.map((r: any) => {
+                  const adverse = r.grade !== '정상';
+                  const worse = adverse ? r.change > 0 : r.change < 0;
+                  return (
+                    <tr key={r.grade} className="border-b border-gray-50">
+                      <td className="py-2 font-medium">{r.grade}</td>
+                      <td className="py-2 text-right tabular">{formatNumber(r.count)}</td>
+                      <td className="py-2 text-right tabular">{formatAmount(r.exposure, 'billion')}</td>
+                      <td className="py-2 text-right tabular">{formatPercent(r.share)}</td>
+                      <td className={`py-2 text-right tabular text-xs ${
+                        !r.change ? 'text-gray-300' : worse ? 'text-red-600' : 'text-green-600'
+                      }`}>
+                        {r.change ? `${r.change > 0 ? '+' : ''}${formatAmount(r.change, 'billion')}` : '—'}
+                      </td>
+                      <td className="py-2 text-right tabular">{formatAmount(r.required_provision, 'billion')}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
             <p className="text-sm mt-3 font-medium">
-              고정이하여신비율(NPL) <span className="tabular">{formatPercent(s.classification?.npl_ratio || 0)}</span>
+              고정이하여신 {formatAmount(s.classification?.npl_exposure || 0, 'billion')} ·
+              NPL 비율 <span className="tabular">{formatPercent(s.classification?.npl_ratio || 0)}</span>
+              {s.classification?.prev_date && (
+                <span className="text-xs text-gray-400 font-normal"> (증감은 직전 분류 {s.classification.prev_date} 대비)</span>
+              )}
             </p>
           </Card>
 
           <div className="grid grid-cols-2 gap-6">
             {/* 2. 연체 */}
             <Card title={s.delinquency?.title}>
-              <dl className="space-y-2 text-sm">
-                <div className="flex justify-between"><dt className="text-gray-500">1개월 이상 연체</dt>
-                  <dd className="tabular font-medium">{formatAmount(s.delinquency?.delinquent_1m || 0, 'billion')}</dd></div>
-                <div className="flex justify-between"><dt className="text-gray-500">3개월 이상 연체</dt>
-                  <dd className="tabular font-medium">{formatAmount(s.delinquency?.delinquent_3m || 0, 'billion')}</dd></div>
-                <div className="flex justify-between"><dt className="text-gray-500">연체율</dt>
-                  <dd className="tabular font-bold">{formatPercent(s.delinquency?.delinquency_rate || 0)}</dd></div>
-              </dl>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                    <th className="py-1.5">연체 구간(DPD)</th>
+                    <th className="py-1.5 text-right">건수</th>
+                    <th className="py-1.5 text-right">잔액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {s.delinquency?.buckets?.map((b: any) => (
+                    <tr key={b.label} className="border-b border-gray-50">
+                      <td className="py-1.5">{b.label}</td>
+                      <td className="py-1.5 text-right tabular">{b.count}</td>
+                      <td className="py-1.5 text-right tabular">{formatAmount(b.amount, 'billion')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-gray-500 mt-3">
+                연체율 30일+ <b className="tabular">{formatPercent(s.delinquency?.delinquency_rate || 0, 3)}</b> ·
+                90일+ <b className="tabular">{formatPercent(s.delinquency?.delinquency_rate_3m || 0, 3)}</b><br />
+                워크아웃 이관임박(DPD 75~89) {s.delinquency?.transfer_imminent_count}건 {formatAmount(s.delinquency?.transfer_imminent_amount || 0, 'billion')}
+              </p>
             </Card>
 
             {/* 3. 충당금 */}
             <Card title={s.provision?.title}>
-              <dl className="space-y-2 text-sm">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                    <th className="py-1.5">구분</th>
+                    <th className="py-1.5 text-right">건수</th>
+                    <th className="py-1.5 text-right">EAD</th>
+                    <th className="py-1.5 text-right">ECL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {s.provision?.stages?.map((st: any) => (
+                    <tr key={st.stage} className="border-b border-gray-50">
+                      <td className="py-1.5">Stage {st.stage}{st.stage === 3 ? ' (신용손상)' : ''}</td>
+                      <td className="py-1.5 text-right tabular">{formatNumber(st.count)}</td>
+                      <td className="py-1.5 text-right tabular">{formatAmount(st.ead, 'billion')}</td>
+                      <td className="py-1.5 text-right tabular">{formatAmount(st.ecl, 'billion')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <dl className="space-y-1.5 text-sm mt-3 pt-3 border-t border-gray-100">
                 <div className="flex justify-between"><dt className="text-gray-500">감독규정 최저적립액</dt>
                   <dd className="tabular font-medium">{formatAmount(s.provision?.regulatory_minimum || 0, 'billion')}</dd></div>
                 <div className="flex justify-between"><dt className="text-gray-500">IFRS9 ECL</dt>
                   <dd className="tabular font-medium">{formatAmount(s.provision?.ifrs9_ecl || 0, 'billion')}</dd></div>
                 <div className="flex justify-between"><dt className="text-gray-500">대손준비금 적립 대상</dt>
                   <dd className="tabular font-bold">{formatAmount(s.provision?.loan_loss_reserve || 0, 'billion')}</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">NPL 커버리지</dt>
+                  <dd className="tabular font-medium">{formatPercent(s.provision?.coverage_ratio || 0, 1)}</dd></div>
               </dl>
-              <p className="text-xs text-gray-400 mt-3">{s.provision?.note}</p>
             </Card>
           </div>
 
@@ -193,14 +271,21 @@ export default function Governance() {
           <Card title={s.capital?.title}>
             <div className="grid grid-cols-4 gap-4 text-center">
               {[
-                ['BIS 비율', s.capital?.bis_ratio],
-                ['Tier1 비율', s.capital?.tier1_ratio],
-                ['CET1 비율', s.capital?.cet1_ratio],
-                ['레버리지 비율', s.capital?.leverage_ratio],
-              ].map(([l, v]) => (
+                ['BIS 비율', s.capital?.bis_ratio, s.capital?.bis_change],
+                ['Tier1 비율', s.capital?.tier1_ratio, null],
+                ['CET1 비율', s.capital?.cet1_ratio, null],
+                ['레버리지 비율', s.capital?.leverage_ratio, null],
+              ].map(([l, v, chg]) => (
                 <div key={l as string}>
                   <p className="text-2xl font-bold tabular">{formatPercent((v as number) || 0)}</p>
-                  <p className="text-xs text-gray-500 mt-1">{l}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {l}
+                    {chg !== null && chg !== undefined && (
+                      <span className={(chg as number) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                        {' '}({(chg as number) >= 0 ? '+' : ''}{(chg as number).toFixed(2)}%p)
+                      </span>
+                    )}
+                  </p>
                 </div>
               ))}
             </div>
@@ -208,6 +293,148 @@ export default function Governance() {
               총자본 {formatAmount(s.capital?.total_capital || 0, 'billion')} · 총RWA {formatAmount(s.capital?.total_rwa || 0, 'billion')}
             </p>
           </Card>
+
+          {/* 5. 포트폴리오 */}
+          <Card title={s.portfolio?.title}>
+            <p className="text-xs font-semibold text-gray-500 mb-2">업종별 (상위 8개)</p>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                  <th className="py-1.5">업종</th>
+                  <th className="py-1.5 text-right">건수</th>
+                  <th className="py-1.5 text-right">잔액</th>
+                  <th className="py-1.5 text-right">비중</th>
+                  <th className="py-1.5 text-right">NPL비율</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.portfolio?.by_industry?.map((r: any) => (
+                  <tr key={r.name} className="border-b border-gray-50">
+                    <td className="py-1.5">{r.name}</td>
+                    <td className="py-1.5 text-right tabular">{formatNumber(r.count)}</td>
+                    <td className="py-1.5 text-right tabular">{formatAmount(r.exposure, 'billion')}</td>
+                    <td className="py-1.5 text-right tabular">{formatPercent(r.share, 1)}</td>
+                    <td className={`py-1.5 text-right tabular ${r.npl_ratio > 1 ? 'text-red-600' : ''}`}>{formatPercent(r.npl_ratio)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="grid grid-cols-2 gap-6 mt-4">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-2">지역별</p>
+                {s.portfolio?.by_region?.map((r: any) => (
+                  <div key={r.name} className="flex justify-between text-sm py-1 border-b border-gray-50">
+                    <span>{r.name}</span>
+                    <span className="tabular text-gray-600">
+                      {formatAmount(r.exposure, 'billion')} ({formatPercent(r.share, 1)}) · 연체 {formatPercent(r.delinquency_rate, 3)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-2">기업규모별</p>
+                {s.portfolio?.by_size?.map((r: any) => (
+                  <div key={r.name} className="flex justify-between text-sm py-1 border-b border-gray-50">
+                    <span>{r.name}</span>
+                    <span className="tabular text-gray-600">
+                      {formatNumber(r.count)}건 · {formatAmount(r.exposure, 'billion')} ({formatPercent(r.share, 1)})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-2 gap-6">
+            {/* 6. PF */}
+            <Card title={s.pf?.title}>
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex justify-between"><dt className="text-gray-500">사업장 수</dt>
+                  <dd className="tabular font-medium">{s.pf?.project_count}개 (브릿지 {s.pf?.bridge_count})</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">총 익스포저</dt>
+                  <dd className="tabular font-medium">{formatAmount(s.pf?.exposure || 0, 'billion')}</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">워치리스트</dt>
+                  <dd className={`tabular font-bold ${s.pf?.watchlist_count ? 'text-red-600' : ''}`}>{s.pf?.watchlist_count}개</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">공정-분양 괴리 경보(≥30%p)</dt>
+                  <dd className={`tabular font-bold ${s.pf?.gap_alert_count ? 'text-red-600' : ''}`}>{s.pf?.gap_alert_count}개</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">평균 사업장 자기자본비율</dt>
+                  <dd className="tabular font-medium">{formatPercent(s.pf?.avg_equity_ratio || 0, 1)}</dd></div>
+              </dl>
+            </Card>
+
+            {/* 7. 포용금융 */}
+            <Card title={s.inclusive?.title}>
+              {[
+                ['중신용 기업 (BBB+ 이하)', s.inclusive?.mid_credit],
+                ['개인사업자 (SOHO)', s.inclusive?.soho],
+              ].map(([label, seg]: any) => (
+                <div key={label} className="mb-3 last:mb-0">
+                  <div className="flex justify-between text-sm mb-1">
+                    <span className="font-medium">{label}</span>
+                    <span className="tabular text-gray-600">
+                      {formatPercent(seg?.share || 0, 1)} / 목표 {formatPercent(seg?.target || 0, 0)}
+                    </span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500 rounded-full"
+                      style={{ width: `${Math.min((seg?.share || 0) / (seg?.target || 1) * 100, 100)}%` }} />
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {formatNumber(seg?.count || 0)}건 · {formatAmount(seg?.exposure || 0, 'billion')} · 연체율 {formatPercent(seg?.delinquency_rate || 0, 3)}
+                  </p>
+                </div>
+              ))}
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-3 gap-6">
+            {/* 8. 워크아웃 */}
+            <Card title={s.workout?.title}>
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex justify-between"><dt className="text-gray-500">진행 중 케이스</dt>
+                  <dd className="tabular font-medium">{s.workout?.active_cases}건</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">관리 익스포저</dt>
+                  <dd className="tabular font-medium">{formatAmount(s.workout?.active_exposure || 0, 'billion')}</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">예상 회수액</dt>
+                  <dd className="tabular font-medium">
+                    {formatAmount(s.workout?.expected_recovery || 0, 'billion')} ({formatPercent(s.workout?.expected_recovery_rate || 0, 1)})
+                  </dd></div>
+              </dl>
+              <div className="flex flex-wrap gap-1 mt-3">
+                {s.workout?.by_strategy?.map((x: any) => (
+                  <span key={x.name} className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                    {x.name} {x.count}
+                  </span>
+                ))}
+              </div>
+            </Card>
+
+            {/* 9. EWS */}
+            <Card title={s.ews?.title}>
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex justify-between"><dt className="text-gray-500">미해결 경보</dt>
+                  <dd className="tabular font-bold">{s.ews?.open_alerts}건</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">고위험(HIGH/CRITICAL)</dt>
+                  <dd className={`tabular font-bold ${s.ews?.high_alerts ? 'text-red-600' : ''}`}>{s.ews?.high_alerts}건</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">누적 경보</dt>
+                  <dd className="tabular font-medium">{s.ews?.total_alerts}건</dd></div>
+              </dl>
+            </Card>
+
+            {/* 10. 내부통제 */}
+            <Card title={s.internal_control?.title}>
+              <dl className="space-y-1.5 text-sm">
+                <div className="flex justify-between"><dt className="text-gray-500">코베넌트 위반(미해소)</dt>
+                  <dd className="tabular font-medium">{s.internal_control?.covenant_breaches}건 (중대 {s.internal_control?.covenant_major})</dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">여신 신청 처리</dt>
+                  <dd className="tabular font-medium text-right">
+                    승인 {formatNumber(s.internal_control?.applications_approved || 0)} · 심사중 {s.internal_control?.applications_reviewing} · 부결 {s.internal_control?.applications_rejected}
+                  </dd></div>
+                <div className="flex justify-between"><dt className="text-gray-500">감사 기록</dt>
+                  <dd className="tabular font-medium">{formatNumber(s.internal_control?.audit_log_count || 0)}건</dd></div>
+              </dl>
+            </Card>
+          </div>
         </div>
       )}
 

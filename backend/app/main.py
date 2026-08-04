@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="iM뱅크 CLMS",
     description="""
-    기업여신심사시스템 (Corporate Loan Management System)
+    종합 기업여신 관리시스템 (Corporate Loan Management System)
 
     ## 주요 기능
     - **경영진 대시보드**: 자본비율, 포트폴리오 현황, EWS 알림

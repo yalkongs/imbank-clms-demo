@@ -241,7 +241,7 @@ export default function Layout() {
         {/* 헤더 */}
         <header className="app-header relative z-40 h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
           <div className="flex items-center space-x-4">
-            <h2 className="text-xl font-semibold text-gray-900">기업여신심사시스템</h2>
+            <h2 className="text-xl font-semibold text-gray-900">종합 기업여신 관리시스템</h2>
             <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
               {asOfLabel}
             </span>
