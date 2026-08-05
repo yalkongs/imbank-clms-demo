@@ -2,8 +2,13 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from pathlib import Path
+import os
 
-DATABASE_PATH = Path(__file__).parent.parent.parent.parent / "database" / "imbank_demo.db"
+# CLMS_DB_PATH 환경변수로 오버라이드 가능 (테스트 DB 격리용)
+DATABASE_PATH = Path(
+    os.getenv("CLMS_DB_PATH")
+    or Path(__file__).parent.parent.parent.parent / "database" / "imbank_demo.db"
+)
 DATABASE_URL = f"sqlite:///{DATABASE_PATH}"
 
 engine = create_engine(

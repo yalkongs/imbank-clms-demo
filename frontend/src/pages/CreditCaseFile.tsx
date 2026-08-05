@@ -84,7 +84,7 @@ export default function CreditCaseFile() {
             <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-semibold">{app.application_id}</span>
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            의사결정 증거 패키지 - 판단의 전 과정을 재현합니다 (기준일 {data.as_of})
+            의사결정 증거 패키지 - 자료·모델 산출은 신청일 이전(as-of) 자료로 재구성, 사후관리는 현재 기준 (기준일 {data.as_of})
           </p>
         </div>
       </div>

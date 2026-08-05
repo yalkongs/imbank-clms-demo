@@ -90,21 +90,40 @@ def get_case_file(application_id: str, db: Session = Depends(get_db)):
     # 자료 근거 - 무엇을(출처), 언제 기준(기준일)으로 썼는가
     fs = db.execute(text("""
         SELECT fiscal_year, stmt_type, source, audited, revenue, total_assets, total_debt, equity
-        FROM financial_statement WHERE customer_id = :cid
+        FROM financial_statement
+        WHERE customer_id = :cid AND fiscal_year < CAST(substr(:ad, 1, 4) AS INTEGER)
         ORDER BY fiscal_year DESC LIMIT 1
-    """), {"cid": cust_id}).fetchone()
+    """), {"cid": cust_id, "ad": (app_row[1] or AS_OF_STR)[:10]}).fetchone()
+    if fs is None:
+        fs = db.execute(text("""
+            SELECT fiscal_year, stmt_type, source, audited, revenue, total_assets, total_debt, equity
+            FROM financial_statement WHERE customer_id = :cid
+            ORDER BY fiscal_year DESC LIMIT 1
+        """), {"cid": cust_id}).fetchone()
     fr = db.execute(text("""
         SELECT fiscal_year, debt_ratio, ier, dscr, calc_date
         FROM financial_ratio WHERE customer_id = :cid ORDER BY fiscal_year DESC LIMIT 1
     """), {"cid": cust_id}).fetchone()
 
     # 모델 산출 - 버전 포함
+    # as-of 원칙: 신청일 이전에 존재하던 최신 등급만 '판단 근거'다.
+    # (사후 산출 등급이 여신철에 섞이면 재현이 아니라 결과론이 된다)
+    app_date = (app_row[1] or AS_OF_STR)[:10]
     rating = db.execute(text("""
         SELECT rating_date, model_id, model_version, raw_score, final_grade, pd_value,
                override_grade, override_reason, override_by
-        FROM credit_rating_result WHERE customer_id = :cid
+        FROM credit_rating_result
+        WHERE customer_id = :cid AND rating_date <= :ad
         ORDER BY rating_date DESC LIMIT 1
-    """), {"cid": cust_id}).fetchone()
+    """), {"cid": cust_id, "ad": app_date}).fetchone()
+    rating_after = None
+    if rating is None:
+        rating_after = db.execute(text("""
+            SELECT rating_date, model_id, model_version, raw_score, final_grade, pd_value,
+                   override_grade, override_reason, override_by
+            FROM credit_rating_result WHERE customer_id = :cid
+            ORDER BY rating_date DESC LIMIT 1
+        """), {"cid": cust_id}).fetchone()
     rp = db.execute(text("""
         SELECT calc_date, ttc_pd, pit_pd, lgd, ead, rwa, expected_loss, economic_capital
         FROM risk_parameter WHERE application_id = :aid LIMIT 1
@@ -174,7 +193,7 @@ def get_case_file(application_id: str, db: Session = Depends(get_db)):
         },
         "data_basis": {
             "financial_statement": fs and {
-                "fiscal_year": fs[0], "type": fs[1], "source": fs[2] or "DART",
+                "fiscal_year": fs[0], "type": fs[1], "source": fs[2] or "미확인",
                 "audited": bool(fs[3]), "revenue": fs[4], "total_assets": fs[5],
                 "total_debt": fs[6], "equity": fs[7],
             },
@@ -183,14 +202,19 @@ def get_case_file(application_id: str, db: Session = Depends(get_db)):
                 "dscr": fr[3], "calc_date": fr[4],
             },
         },
+        "as_of_basis": {
+            "principle": "자료 근거·모델 산출은 신청일 이전(as-of) 자료로 재구성, "
+                         "사후관리 섹션만 현재 기준",
+            "application_date": app_date,
+            "rating_after_decision": bool(rating is None and rating_after),
+        },
         "model_outputs": {
-            "rating": rating and {
-                "rating_date": rating[0], "model_id": rating[1], "model_version": rating[2],
-                "raw_score": rating[3], "final_grade": rating[4], "pd": rating[5],
-                "override": rating[6] and {
-                    "grade": rating[6], "reason": rating[7], "by": rating[8],
-                },
-            },
+            "rating": (lambda r: r and {
+                "rating_date": r[0], "model_id": r[1], "model_version": r[2],
+                "raw_score": r[3], "final_grade": r[4], "pd": r[5],
+                "as_of_application": rating is not None,
+                "override": r[6] and {"grade": r[6], "reason": r[7], "by": r[8]},
+            })(rating or rating_after),
             "risk_parameter": rp and {
                 "calc_date": rp[0], "ttc_pd": rp[1], "pit_pd": rp[2], "lgd": rp[3],
                 "ead": rp[4], "rwa": rp[5], "expected_loss": rp[6], "economic_capital": rp[7],

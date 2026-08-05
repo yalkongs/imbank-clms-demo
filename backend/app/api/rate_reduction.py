@@ -110,7 +110,11 @@ def list_requests(db: Session = Depends(get_db)):
 
 @router.post("/requests/{request_id}/decide")
 def decide(request_id: str, payload: dict = Body(...), db: Session = Depends(get_db)):
-    """수용/부분수용/거절 결정 + 통지 기록. 사유 필수 (설명의무)."""
+    """수용/부분수용/거절 결정 + 통지 기록. 사유 필수 (설명의무).
+
+    PoC 한계: 통지는 별도 발송 채널 없이 결정과 동시에 기록된다
+    (실제 구현 시 RECEIVED→SUPPLEMENT→REVIEWING→DECIDED→NOTIFIED 상태기계와
+    발송·수신확인 이력이 필요 - 제3자 리뷰 권고 반영 예정)."""
     decision = payload.get("decision")
     reason = (payload.get("reason") or "").strip()
     new_rate = payload.get("new_rate")
@@ -131,9 +135,19 @@ def decide(request_id: str, payload: dict = Body(...), db: Session = Depends(get
     if decision == "REJECTED":
         decided_rate = old_rate
     else:
-        if new_rate is None or float(new_rate) >= old_rate:
+        import math
+        try:
+            decided_rate = float(new_rate)
+        except (TypeError, ValueError):
+            raise HTTPException(422, "new_rate 가 유효한 숫자가 아닙니다")
+        if not math.isfinite(decided_rate):
+            raise HTTPException(422, "new_rate 가 유한한 값이 아닙니다")
+        if decided_rate <= 0:
+            raise HTTPException(422, "금리는 0보다 커야 합니다 (음수·0 금리 불가)")
+        if decided_rate >= old_rate:
             raise HTTPException(422, "수용 시 new_rate 는 기존 금리보다 낮아야 합니다")
-        decided_rate = float(new_rate)
+        if decided_rate < old_rate * 0.5:
+            raise HTTPException(422, "기존 금리의 50% 미만 인하는 재산정 오류 가능성 - 별도 승인 필요")
 
     db.execute(text("""
         UPDATE rate_reduction_request

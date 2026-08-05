@@ -73,12 +73,20 @@ def complete_action(action_id: str, payload: dict = Body(...), db: Session = Dep
     if len(taken) < 5:
         raise HTTPException(422, "조치 내용을 5자 이상 기록해야 합니다")
     row = db.execute(text(
-        "SELECT status, step, customer_id FROM ews_action WHERE action_id = :id"
+        "SELECT status, step, customer_id, alert_id, step_no FROM ews_action WHERE action_id = :id"
     ), {"id": action_id}).fetchone()
     if not row:
         raise HTTPException(404, "조치 항목을 찾을 수 없습니다")
     if row[0] == "DONE":
         raise HTTPException(409, "이미 완료된 조치입니다")
+    # Playbook 은 순서가 의무다 - 선행단계가 끝나기 전에 후행단계를 닫을 수 없다
+    blocker = db.execute(text("""
+        SELECT step_no, step FROM ews_action
+        WHERE alert_id = :aid AND step_no < :no AND status != 'DONE'
+        ORDER BY step_no LIMIT 1
+    """), {"aid": row[3], "no": row[4]}).fetchone()
+    if blocker:
+        raise HTTPException(422, f"선행 단계 미완료: {blocker[0]}단계 '{blocker[1]}' 을 먼저 완료해야 합니다")
 
     db.execute(text("""
         UPDATE ews_action SET status = 'DONE', action_taken = :taken, completed_at = :at

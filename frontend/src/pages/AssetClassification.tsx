@@ -437,11 +437,11 @@ export default function AssetClassification() {
                     {[
                       ['대상 시설', recon.total],
                       ['정합 (정상·Stage1)', recon.consistent],
-                      ['불일치 (설명 부여)', recon.mismatch_count],
-                      ['개별 검토 필요', recon.needs_review_count],
+                      ['자연스러운 차이 (설명 부여)', recon.natural_diff_count ?? recon.mismatch_count],
+                      ['검토 필요', recon.needs_review_count],
                     ].map(([l, v]) => (
                       <div key={l as string} className="bg-gray-50 rounded-lg py-3">
-                        <p className={`text-xl font-bold tabular ${l === '개별 검토 필요' && (v as number) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{v as number}</p>
+                        <p className={`text-xl font-bold tabular ${l === '검토 필요' && (v as number) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{v as number}</p>
                         <p className="text-[11px] text-gray-500 mt-0.5">{l}</p>
                       </div>
                     ))}

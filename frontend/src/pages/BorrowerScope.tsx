@@ -35,7 +35,7 @@ export default function BorrowerScope() {
         <b>동일차주 신용공여 한도</b> - 은행법 §35: 자기자본({formatAmount(capital, 'billion')})의
         25% = <b>{formatAmount(data.regulatory_limit.amount, 'billion')}</b> ·
         내부 집중한도 20% = {formatAmount(data.internal_limit.amount, 'billion')} (조기경보) ·
-        신용공여 = 대출잔액 + 미사용약정 + 그룹 내 지급보증
+        신용공여 = 대출잔액 + 미사용약정 (규제 근사치·시연용 - 감독규정 별표2 신용환산율 미적용)
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
@@ -133,8 +133,8 @@ export default function BorrowerScope() {
                   <b className="tabular text-xs">{formatAmount(detail.aggregation.loans, 'billion')}</b></div>
                 <div className="flex justify-between"><span className="text-gray-500 text-xs">미사용약정</span>
                   <b className="tabular text-xs">{formatAmount(detail.aggregation.undrawn, 'billion')}</b></div>
-                <div className="flex justify-between"><span className="text-gray-500 text-xs">지급보증</span>
-                  <b className="tabular text-xs">{formatAmount(detail.aggregation.guarantees, 'billion')}</b></div>
+                <div className="flex justify-between"><span className="text-gray-500 text-xs">계열사 보증 (참고·합산 제외)</span>
+                  <b className="tabular text-xs text-gray-400">{formatAmount(detail.aggregation.intra_group_guarantees, 'billion')}</b></div>
                 <div className="flex justify-between"><span className="text-gray-500 text-xs">신용공여 합계</span>
                   <b className="tabular text-xs text-blue-700">{formatAmount(detail.aggregation.total_credit, 'billion')}</b></div>
               </div>

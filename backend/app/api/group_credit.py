@@ -473,11 +473,13 @@ def regulatory_scope_overview(db: Session = Depends(get_db)):
 
     groups = []
     for gid, name, members, loans, undrawn in rows:
-        total = loans + undrawn + guar.get(gid, 0)
+        # 계열사 간 보증(group_guarantee)은 은행의 지급보증 익스포저가 아니라
+        # 위험공유 판단 자료다 - 신용공여 합산에서 제외하고 참고로만 표시
+        total = loans + undrawn
         groups.append({
             "group_id": gid, "group_name": name, "members": members,
             "loans": round(loans, 2), "undrawn": round(undrawn, 2),
-            "guarantees": round(guar.get(gid, 0), 2),
+            "intra_group_guarantees": round(guar.get(gid, 0), 2),   # 참고 (합산 제외)
             "total_credit": round(total, 2),
             "vs_capital_pct": round(total / capital * 100, 2) if capital else 0,
             "regulatory_breach": total > reg_limit,
@@ -488,9 +490,12 @@ def regulatory_scope_overview(db: Session = Depends(get_db)):
         "as_of": cap[1] if cap else None,
         "capital": capital,
         "regulatory_limit": {"ratio": REGULATORY_LIMIT_RATIO * 100, "amount": reg_limit,
-                             "basis": "은행법 §35 (동일차주 25%)"},
+                             "basis": "은행법 §35 동일차주 25% (규제 근사치 - 시연용)"},
         "internal_limit": {"ratio": INTERNAL_LIMIT_RATIO * 100, "amount": int_limit,
-                           "basis": "내부 집중한도 (조기경보)"},
+                           "basis": "내부 집중한도 (법정 동일인 20% 한도와는 별개의 내부 기준)"},
+        "disclaimer": "신용공여 산정은 감독규정 별표2(난내·난외, 신용환산율, 제외항목)를 "
+                      "적용하지 않은 근사치다. 법정 3개 한도(동일차주 25%·동일인 20%·"
+                      "거액신용공여 총액) 중 25% 한도만 근사 구현되어 있다.",
         "groups": groups,
     }
 
@@ -527,7 +532,7 @@ def regulatory_scope_detail(group_id: str, db: Session = Depends(get_db)):
         FROM group_guarantee gg
         LEFT JOIN customer gc ON gc.customer_id = gg.guarantor_id
         LEFT JOIN customer bc ON bc.customer_id = gg.beneficiary_id
-        WHERE gg.group_id = :g
+        WHERE gg.group_id = :g AND (gg.status = 'ACTIVE' OR gg.status IS NULL)
     """), {"g": group_id}).fetchall()
 
     BASIS = {
@@ -546,8 +551,8 @@ def regulatory_scope_detail(group_id: str, db: Session = Depends(get_db)):
             "loans": round(l, 2), "undrawn": round(u, 2),
             "effective_from": first_contract,
         })
-    guar_total = sum(g[5] or 0 for g in guarantees)
-    total = loans + undrawn + guar_total
+    guar_total = sum(g[5] or 0 for g in guarantees)   # 위험전이 참고치 (합산 제외)
+    total = loans + undrawn
 
     return {
         "group": {"group_id": grp[0], "group_name": grp[1], "type": grp[2]},
@@ -559,11 +564,12 @@ def regulatory_scope_detail(group_id: str, db: Session = Depends(get_db)):
         ],
         "aggregation": {
             "loans": round(loans, 2), "undrawn": round(undrawn, 2),
-            "guarantees": round(guar_total, 2), "total_credit": round(total, 2),
+            "intra_group_guarantees": round(guar_total, 2), "total_credit": round(total, 2),
             "capital": capital,
             "vs_capital_pct": round(total / capital * 100, 2) if capital else 0,
             "regulatory_limit_pct": REGULATORY_LIMIT_RATIO * 100,
             "internal_limit_pct": INTERNAL_LIMIT_RATIO * 100,
-            "note": "신용공여 = 대출잔액 + 미사용약정 + 그룹 내 지급보증 (은행법 §35 기준 근사)",
+            "note": "신용공여 = 대출잔액 + 미사용약정 (규제 근사치 - 감독규정 별표2 신용환산율 미적용). "
+                    "계열사 간 보증은 익스포저가 아니라 동일차주 구성·위험전이 판단 자료로만 표시.",
         },
     }

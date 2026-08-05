@@ -3,7 +3,7 @@
 **Credit Lifecycle Management System**
 
 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템입니다.
-Basel II/III IRB 방식의 신용리스크 계량화 체계를 기반으로, 26개 화면·215개 API·86개 DB 테이블로 구성됩니다.
+Basel II/III IRB 방식의 신용리스크 계량화 체계를 기반으로, 27개 화면·227개 API·89개 DB 테이블로 구성됩니다.
 
 ![Version](https://img.shields.io/badge/version-1.2.0-blue)
 ![Python](https://img.shields.io/badge/python-3.11+-green)

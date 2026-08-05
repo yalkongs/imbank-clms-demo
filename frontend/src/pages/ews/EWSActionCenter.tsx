@@ -51,8 +51,8 @@ export default function EWSActionCenter() {
           icon={<Clock size={22} />} color="yellow" />
         <StatCard title="기한 초과" value={summary?.overdue || 0}
           subtitle="즉시 처리 필요" icon={<Clock size={22} />} color="red" />
-        <StatCard title="자동 상향보고" value={summary?.escalated || 0}
-          subtitle="부서장 보고됨" icon={<ArrowUpRight size={22} />} color="red" />
+        <StatCard title="상향보고 대상" value={summary?.escalated || 0}
+          subtitle="기한초과로 보고 대상 표시" icon={<ArrowUpRight size={22} />} color="red" />
       </div>
 
       <div className="space-y-4">

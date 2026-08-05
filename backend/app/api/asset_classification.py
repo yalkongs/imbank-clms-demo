@@ -659,8 +659,9 @@ def get_reconciliation(db: Session = Depends(get_db)):
         ],
         "total": len(rows),
         "consistent": consistent,
-        "mismatch_count": len(mismatches),
+        "natural_diff_count": sum(1 for m in mismatches if not m["needs_review"]),
         "needs_review_count": sum(1 for m in mismatches if m["needs_review"]),
+        "mismatch_count": len(mismatches),   # 하위호환
         "mismatches": mismatches[:60],
         "note": "세 체계(감독분류·IFRS9 Stage·EWS)는 목적이 달라 단일 등급으로 통합하지 않고 "
                 "병렬 대사한다. 불일치 중 규정상 자연스러운 조합은 설명 코드로, "

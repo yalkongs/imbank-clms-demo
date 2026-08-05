@@ -94,3 +94,80 @@ def test_read_only_guard():
         for mod in list(sys.modules):
             if mod == "app.main":
                 del sys.modules[mod]
+
+
+# ── 신규 여신통제 기능의 핵심 동작 (경로 파라미터·POST 포함) ──────────
+
+def test_case_file_as_of_rating():
+    """여신철: 승인 건 표본에서 등급이 신청일 이전(as-of)인지 확인"""
+    from app.core.database import SessionLocal
+    from sqlalchemy import text
+    db = SessionLocal()
+    apps = db.execute(text("""
+        SELECT ah.application_id FROM approval_history ah
+        GROUP BY ah.application_id LIMIT 5
+    """)).fetchall()
+    assert apps, "결재 이력 표본 없음"
+    for (aid,) in apps:
+        body = client.get(f"/api/credit-case/{aid}").json()
+        rating = body["model_outputs"]["rating"]
+        if rating and rating.get("as_of_application"):
+            assert rating["rating_date"][:10] <= body["as_of_basis"]["application_date"], \
+                f"{aid}: 사후 등급이 as-of 근거로 표시됨"
+
+
+def test_ews_action_sequence_guard():
+    """EWS: 선행단계 미완료 상태에서 후행단계 완료 시도 → 422"""
+    from app.core.database import SessionLocal
+    from sqlalchemy import text
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT a3.action_id FROM ews_action a3
+        WHERE a3.status != 'DONE'
+          AND EXISTS (SELECT 1 FROM ews_action p
+                      WHERE p.alert_id = a3.alert_id AND p.step_no < a3.step_no
+                        AND p.status != 'DONE')
+        LIMIT 1
+    """)).fetchone()
+    if not row:
+        pytest.skip("후행 대기 단계 표본 없음")
+    r = client.post(f"/api/ews-actions/{row[0]}/complete",
+                    json={"action_taken": "순서 위반 시도 테스트"})
+    assert r.status_code == 422, f"선행단계 가드 미작동: {r.status_code}"
+
+
+def test_rate_reduction_rejects_invalid_rates():
+    """금리인하: 음수·NaN·기존 초과 금리는 422"""
+    from app.core.database import SessionLocal
+    from sqlalchemy import text
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT request_id, old_rate FROM rate_reduction_request
+        WHERE status IN ('RECEIVED','REVIEWING') LIMIT 1
+    """)).fetchone()
+    if not row:
+        pytest.skip("처리 중 요청 표본 없음")
+    rid, old = row
+    for bad in (-0.01, 0, old * 1.5, "NaN"):
+        r = client.post(f"/api/rate-reduction/requests/{rid}/decide",
+                        json={"decision": "ACCEPTED", "new_rate": bad,
+                              "reason": "유효성 테스트 사유입니다"})
+        assert r.status_code == 422, f"{bad} 통과됨 ({r.status_code})"
+
+
+def test_reconciliation_separates_natural_diff():
+    """대사표: '자연스러운 차이'와 '검토 필요' 분리 응답"""
+    body = client.get("/api/classification/reconciliation").json()
+    assert "natural_diff_count" in body and "needs_review_count" in body
+    assert body["natural_diff_count"] + body["needs_review_count"] == body["mismatch_count"]
+
+
+def test_borrower_scope_excludes_intra_group_guarantees():
+    """동일차주: 계열사 보증은 신용공여 합산에서 제외 (목록·상세 일치)"""
+    ov = client.get("/api/group-credit/regulatory-scope").json()
+    g = ov["groups"][0]
+    detail = client.get(f"/api/group-credit/regulatory-scope/{g['group_id']}").json()
+    agg = detail["aggregation"]
+    assert abs(agg["total_credit"] - (agg["loans"] + agg["undrawn"])) < 1, \
+        "보증이 신용공여에 합산됨"
+    assert abs(g["total_credit"] - agg["total_credit"]) < 1, "목록·상세 합산 불일치"
