@@ -201,6 +201,8 @@ export default function PortfolioMap() {
   const [histLoading, setHistLoading] = useState(false);
   const [monthIdx, setMonthIdx] = useState<number | null>(null);   // null = 현재
   const [playing, setPlaying] = useState(false);
+  // 이력 로드 전에 조작한 슬라이더 값 - 로드 완료 시 적용 (첫 드래그 무시 방지)
+  const pendingIdx = useRef<number | null>(null);
   // ⑧ 누적 파급
   const [cart, setCart] = useState<CartItem[]>([]);
   const [capCtx, setCapCtx] = useState<{ bis_ratio: number; total_capital: number; total_rwa: number } | null>(null);
@@ -239,6 +241,15 @@ export default function PortfolioMap() {
   }, [history, histLoading]);
 
   useEffect(() => { if (selectedId) ensureHistory(); }, [selectedId, ensureHistory]);
+
+  // 이력 도착 시 대기 중인 슬라이더 위치 적용
+  useEffect(() => {
+    if (history && pendingIdx.current !== null) {
+      const v = pendingIdx.current;
+      pendingIdx.current = null;
+      setMonthIdx(v >= history.months.length ? null : v);
+    }
+  }, [history]);
 
   // ⑥ 재생
   useEffect(() => {
@@ -714,7 +725,8 @@ export default function PortfolioMap() {
                 ensureHistory();
                 const v = +e.target.value;
                 setPlaying(false);
-                setMonthIdx(!history || v >= history.months.length ? null : v);
+                if (!history) pendingIdx.current = v;
+                else setMonthIdx(v >= history.months.length ? null : v);
                 resetSim();
               }}
               className="flex-1 accent-[#00C7A9]"
