@@ -76,6 +76,11 @@ const RECOMMENDATION_COLORS: Record<string, string> = {
 function formatAmount(value: number, unit: 'won' | 'billion' | 'million' = 'billion'): string {
   if (!value && value !== 0) return '-';
   if (unit === 'billion') {
+    // 1조 이상은 조 단위 (utils/format.formatAmount 와 동일 규칙)
+    if (Math.abs(value) >= 1_000_000_000_000) {
+      const cho = value / 1_000_000_000_000;
+      return `${cho.toLocaleString(undefined, { maximumFractionDigits: Math.abs(cho) >= 10 ? 1 : 2 })}조`;
+    }
     return `${(value / 100000000).toLocaleString(undefined, { maximumFractionDigits: 0 })}억`;
   }
   if (unit === 'million') {

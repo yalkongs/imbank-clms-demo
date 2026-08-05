@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from ..core.database import get_db
+from ..core.ttl_cache import ttl_get, ttl_set
 from ..services.calculations import classify_asset, PROVISION_RATES
 
 router = APIRouter(prefix="/api/portfolio-map", tags=["PortfolioMap"])
@@ -127,11 +128,14 @@ def _row_to_company(r) -> dict:
 @router.get("/companies")
 def get_map_companies(db: Session = Depends(get_db)):
     """여신 보유 기업 전체의 지표 벡터 (산점도 데이터)"""
+    cached = ttl_get("map:companies")
+    if cached is not None:
+        return cached
     rows = db.execute(text(_BASE_SQL)).fetchall()
-    return {
+    return ttl_set("map:companies", {
         "count": len(rows),
         "companies": [_row_to_company(r) for r in rows],
-    }
+    })
 
 
 @router.get("/history")
@@ -143,6 +147,9 @@ def get_map_history(db: Session = Depends(get_db)):
     EWS 종합점수는 단일 시점만 존재해 시간축 미지원.
     단위는 /companies 와 동일 (%, 점수 등).
     """
+    cached = ttl_get("map:history")
+    if cached is not None:
+        return cached
     months = [r[0] for r in db.execute(text(
         "SELECT DISTINCT reference_month FROM ews_transaction_behavior ORDER BY 1"
     )).fetchall()][-12:]
@@ -204,7 +211,7 @@ def get_map_history(db: Session = Depends(get_db)):
         if all(v is None for v in s["dd"]):
             s["dd"] = None
 
-    return {"months": months, "series": series}
+    return ttl_set("map:history", {"months": months, "series": series})
 
 
 @router.get("/capital-context")

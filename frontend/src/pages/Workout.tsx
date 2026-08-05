@@ -237,19 +237,19 @@ export default function Workout() {
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-xs text-gray-500">총 익스포저</p>
                     <p className="text-xl font-bold text-gray-900 mt-1">
-                      {(eclData.total_exposure / 100000000).toFixed(1)}억
+                      {formatAmount(eclData.total_exposure, 'billion')}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-xs text-gray-500">기존 충당금</p>
                     <p className="text-xl font-bold text-gray-900 mt-1">
-                      {(eclData.total_provision / 100000000).toFixed(1)}억
+                      {formatAmount(eclData.total_provision, 'billion')}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
                     <p className="text-xs text-gray-500">ECL 필요 금액</p>
                     <p className="text-xl font-bold text-blue-700 mt-1">
-                      {(eclData.total_ecl / 100000000).toFixed(1)}억
+                      {formatAmount(eclData.total_ecl, 'billion')}
                     </p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-4">
@@ -289,13 +289,13 @@ export default function Workout() {
                           ) : '-'}
                         </td>
                         <td className="px-3 py-2 text-right text-gray-700">
-                          {(c.total_exposure / 100000000).toFixed(1)}억
+                          {formatAmount(c.total_exposure, 'billion')}
                         </td>
                         <td className="px-3 py-2 text-right text-gray-700">
-                          {(c.existing_provision / 100000000).toFixed(1)}억
+                          {formatAmount(c.existing_provision, 'billion')}
                         </td>
                         <td className="px-3 py-2 text-right text-blue-700 font-medium">
-                          {(c.ecl_required / 100000000).toFixed(1)}억
+                          {formatAmount(c.ecl_required, 'billion')}
                         </td>
                         <td className={`px-3 py-2 text-right font-medium ${c.provision_gap > 0 ? 'text-red-600' : 'text-green-600'}`}>
                           {c.provision_gap > 0 ? '+' : ''}{(c.provision_gap / 100000000).toFixed(1)}억

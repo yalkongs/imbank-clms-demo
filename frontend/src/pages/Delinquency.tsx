@@ -49,7 +49,9 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   LEGAL_NOTICE: <FileText size={14} />,
 };
 
-const fmtAmt = (v: number) => `${(v / 100000000).toFixed(1)}억`;
+import { formatAmount } from '../utils/format';
+
+const fmtAmt = (v: number) => formatAmount(v, 'billion');
 
 interface DashboardData {
   total_outstanding: number;

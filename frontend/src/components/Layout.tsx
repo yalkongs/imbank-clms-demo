@@ -34,6 +34,7 @@ import OnboardingModal from './OnboardingModal';
 import { AlertMenu, SettingsMenu } from './HeaderMenus';
 import MockDataNotice from './MockDataNotice';
 import UserMenu from './UserMenu';
+import TopProgressBar from './TopProgressBar';
 import CommandPalette from './CommandPalette';
 import StoryTour from './StoryTour';
 
@@ -183,6 +184,7 @@ export default function Layout() {
     <div className="app-root flex h-screen bg-gray-50">
       {showOnboarding && <OnboardingModal onClose={closeOnboarding} />}
       {showMockNotice && <MockDataNotice onConfirm={confirmMockNotice} />}
+      <TopProgressBar />
       <CommandPalette />
       {tourStep !== null && (
         <StoryTour step={tourStep} onStep={setTourStep}

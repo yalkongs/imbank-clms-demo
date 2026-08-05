@@ -66,7 +66,9 @@ interface MigrationRow {
   [key: string]: any;
 }
 
-const fmtAmt = (v: number) => `${(v / 100000000).toFixed(1)}억`;
+import { formatAmount } from '../utils/format';
+
+const fmtAmt = (v: number) => formatAmount(v, 'billion');
 const fmtPct = (v: number) => `${v.toFixed(2)}%`;
 
 export default function AssetClassification() {
@@ -262,7 +264,7 @@ export default function AssetClassification() {
                     <BarChart data={portfolio.by_classification}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="label_ko" tick={{ fontSize: 11 }} />
-                      <YAxis tickFormatter={(v) => `${(v / 100000000).toFixed(0)}억`} tick={{ fontSize: 11 }} />
+                      <YAxis tickFormatter={(v) => formatAmount(v, 'billion')} tick={{ fontSize: 11 }} />
                       <Tooltip formatter={(v: number) => fmtAmt(v)} />
                       <Bar dataKey="required_provision" name="필요충당금" fill="#00BFA5" radius={[4,4,0,0]} />
                       <Bar dataKey="existing_provision" name="기존충당금" fill="#22c55e" radius={[4,4,0,0]} />

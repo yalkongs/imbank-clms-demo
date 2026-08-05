@@ -15,6 +15,7 @@ from sqlalchemy import text
 
 from ..core.database import get_db
 from ..core.config import AS_OF_STR, AS_OF_DATE
+from ..core.ttl_cache import ttl_get, ttl_set
 
 router = APIRouter(prefix="/api/governance", tags=["Governance"])
 
@@ -149,6 +150,9 @@ def get_business_report(db: Session = Depends(get_db)):
     각 수치는 해당 업무 모듈과 같은 산식을 쓴다 (동일 쿼리 재사용).
     금액 단위: 원 (표시 단계에서 억원 환산).
     """
+    cached = ttl_get("governance:report")
+    if cached is not None:
+        return cached
     # ── 0. 총괄
     base = db.execute(text("""
         SELECT COUNT(*), COUNT(DISTINCT customer_id),
@@ -288,7 +292,7 @@ def get_business_report(db: Session = Depends(get_db)):
     app_map = {r[0]: r[1] for r in app_rows}
     audit_cnt = db.execute(text("SELECT COUNT(*) FROM audit_log")).fetchone()[0]
 
-    return {
+    return ttl_set("governance:report", {
         "report_title": "여신 업무보고서",
         "doc_no": f"CLMS-{AS_OF_DATE.strftime('%Y%m')}-001",
         "base_date": AS_OF_STR,
@@ -426,7 +430,7 @@ def get_business_report(db: Session = Depends(get_db)):
                 "audit_log_count": audit_cnt,
             },
         },
-    }
+    })
 
 
 @router.get("/report/pdf")

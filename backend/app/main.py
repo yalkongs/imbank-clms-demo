@@ -4,6 +4,7 @@ iM뱅크 CLMS - FastAPI 메인 애플리케이션
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
@@ -68,6 +69,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 응답 압축 - 포트폴리오 맵(736KB)·이력(498KB) 같은 대형 JSON 이
+# 저속 회선·무료 인스턴스에서 로딩 시간을 지배한다. gzip 으로 ~1/8 로 줄인다.
+app.add_middleware(GZipMiddleware, minimum_size=2048)
 
 # API 라우터 등록
 app.include_router(dashboard.router)

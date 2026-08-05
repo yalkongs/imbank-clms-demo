@@ -414,3 +414,22 @@ body {
   .pm-dot, .pm-dot--nolerp { transition: none; }
   .pm-pulse { animation: none; }
 }
+
+/* 기존 화면들의 표준 스피너를 민트 이중 링으로 일괄 리브랜딩
+   (개별 파일 수정 없이 클래스 조합을 재스타일) */
+.animate-spin.rounded-full.border-b-2 {
+  border-width: 3px !important;
+  border-style: solid;
+  border-color: rgba(0, 199, 169, 0.15) !important;
+  border-top-color: #00C7A9 !important;
+  box-shadow: 0 0 12px rgba(0, 199, 169, 0.2);
+}
+
+/* 로딩 라벨 말줄임 점 */
+.pm-loading-label::after {
+  content: '';
+  animation: pm-dots 1.4s steps(4, end) infinite;
+}
+@keyframes pm-dots {
+  0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; }
+}

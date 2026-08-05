@@ -13,3 +13,5 @@ export {
 } from './Charts';
 export { default as Modal, FeatureModal, HelpButton } from './Modal';
 export { default as RegionFilter } from './RegionFilter';
+export { default as TopProgressBar } from './TopProgressBar';
+export { default as PageLoader } from './PageLoader';

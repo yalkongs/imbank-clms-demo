@@ -482,3 +482,32 @@ export const lgdBacktestApi = {
 };
 
 export default api;
+
+/**
+ * 네트워크 활동 신호 - 상단 진행 표시줄용
+ * 전역 axios·api 인스턴스의 진행 중 요청 수를 구독할 수 있게 한다.
+ */
+type NetListener = (pending: number) => void;
+const netListeners = new Set<NetListener>();
+let pendingCount = 0;
+
+export function onNetActivity(fn: NetListener): () => void {
+  netListeners.add(fn);
+  fn(pendingCount);
+  return () => netListeners.delete(fn);
+}
+
+function bump(delta: number) {
+  pendingCount = Math.max(0, pendingCount + delta);
+  netListeners.forEach(fn => fn(pendingCount));
+}
+
+function attachActivity(instance: { interceptors: any }) {
+  instance.interceptors.request.use((cfg: any) => { bump(1); return cfg; });
+  instance.interceptors.response.use(
+    (res: any) => { bump(-1); return res; },
+    (err: any) => { bump(-1); throw err; }
+  );
+}
+attachActivity(axios);
+attachActivity(api);

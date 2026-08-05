@@ -1,5 +1,6 @@
 import React from 'react';
 import { Suspense } from 'react';
+import { PageLoader } from './components';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components';
 const CapitalHub = React.lazy(() => import('./pages/CapitalHub'));
@@ -34,11 +35,7 @@ const Delinquency = React.lazy(() => import('./pages/Delinquency'));
 
 function App() {
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    }>
+    <Suspense fallback={<PageLoader label="화면을 여는 중" />}>
     <Routes>
       <Route path="/" element={<Layout />}>
         <Route index element={<Dashboard />} />
