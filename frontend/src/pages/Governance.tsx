@@ -559,8 +559,14 @@ export default function Governance() {
                     <td className="py-2 pr-3 text-center text-[11px] text-gray-500">
                       {r.valid_from} ~ {r.valid_to || '현행'}
                     </td>
-                    <td className="py-2 pr-3 text-[10px] text-gray-500 font-mono max-w-xs truncate">
-                      {JSON.stringify(r.params)}
+                    <td className="py-2 pr-3 max-w-xs" title={JSON.stringify(r.params)}>
+                      <div className="flex flex-wrap gap-1">
+                        {(r.params_display || []).map((d: string, i: number) => (
+                          <span key={i} className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded text-[10px] whitespace-nowrap">
+                            {d}
+                          </span>
+                        ))}
+                      </div>
                     </td>
                     <td className="py-2 text-[11px] text-gray-400 max-w-[10rem]">{r.applied_in}</td>
                   </tr>
