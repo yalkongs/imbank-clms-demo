@@ -24,7 +24,7 @@ from .api import inclusive_finance, pf, governance, export, search
 # 포트폴리오 맵 (기업 다차원 산점도 + what-if)
 from .api import portfolio_map
 # 여신통제 확장: 여신철·EWS 조치의무·금리인하요구권
-from .api import credit_case, ews_actions, rate_reduction
+from .api import credit_case, ews_actions, rate_reduction, obligations, rules
 # 인증 (서버측 전결·승인자 결정)
 from .api import auth as auth_api
 from .core.auth import verify_token
@@ -45,6 +45,17 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"[migrate] 경고: {e}")
     Base.metadata.create_all(bind=engine)
+    # EWS 기한초과 상향보고 실행 (스케줄러 근사 - 기동 시 1회, 멱등)
+    try:
+        from .core.database import SessionLocal as _SL
+        from .api.ews_actions import run_escalation as _rune
+        _db = _SL()
+        _res = _rune(db=_db)
+        if _res.get("escalated"):
+            print(f"[escalation] 상향보고 {_res['escalated']}건 실행")
+        _db.close()
+    except Exception as e:
+        print(f"[escalation] 경고: {e}")
     yield
     # Shutdown
     pass
@@ -169,6 +180,8 @@ app.include_router(credit_case.router)
 app.include_router(ews_actions.router)
 app.include_router(rate_reduction.router)
 app.include_router(auth_api.router)
+app.include_router(obligations.router)
+app.include_router(rules.router)
 
 
 @app.get("/health")

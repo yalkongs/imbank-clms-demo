@@ -56,6 +56,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { path: '/', label: '대시보드', icon: <LayoutDashboard size={20} /> },
       { path: '/governance', label: '보고·감사', icon: <ShieldCheck size={20} /> },
+      { path: '/obligations', label: '의무관리함', icon: <ListChecks size={20} /> },
     ]
   },
   {

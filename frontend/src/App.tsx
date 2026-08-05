@@ -12,6 +12,7 @@ const PortfolioMap = React.lazy(() => import('./pages/PortfolioMap'));
 const CreditCaseFile = React.lazy(() => import('./pages/CreditCaseFile'));
 const RateReduction = React.lazy(() => import('./pages/RateReduction'));
 const CaseLedger = React.lazy(() => import('./pages/CaseLedger'));
+const ObligationInbox = React.lazy(() => import('./pages/ObligationInbox'));
 const Governance = React.lazy(() => import('./pages/Governance'));
 const ApprovalInbox = React.lazy(() => import('./pages/ApprovalInbox'));
 import Dashboard from './pages/Dashboard';
@@ -70,6 +71,7 @@ function App() {
         <Route path="approval-inbox" element={<ApprovalInbox />} />
         <Route path="credit-case/:applicationId" element={<CreditCaseFile />} />
         <Route path="credit-cases" element={<CaseLedger />} />
+        <Route path="obligations" element={<ObligationInbox />} />
         <Route path="rate-reduction" element={<RateReduction />} />
         {/* Phase 2: 부실 관리 핵심 */}
         <Route path="asset-classification" element={<AssetClassification />} />

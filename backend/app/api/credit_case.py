@@ -357,3 +357,50 @@ def create_policy_exception(
                  target_id=ex_id, after={"rule": payload["rule_ref"], "app": application_id})
     db.commit()
     return {"exception_id": ex_id, "status": "ACTIVE"}
+
+
+@router.post("/exceptions/{exception_id}/review")
+def review_exception(exception_id: str, payload: dict = Body(...),
+                     db: Session = Depends(get_db),
+                     current_user: User = Depends(get_current_user)):
+    """정책 예외 재검토 - 연장(EXTEND) 또는 종결(CLOSE). 등록만 있고
+    재검토 절차가 없다는 2차 리뷰 지적 반영. 승인권자 이상만 가능."""
+    action = payload.get("action")
+    if action not in ("EXTEND", "CLOSE"):
+        raise HTTPException(422, "action 은 EXTEND 또는 CLOSE")
+    row = db.execute(text("""
+        SELECT status, approver_level FROM policy_exception WHERE exception_id = :id
+    """), {"id": exception_id}).fetchone()
+    if not row:
+        raise HTTPException(404, "예외를 찾을 수 없습니다")
+    if row[0] != "ACTIVE":
+        raise HTTPException(409, "유효 상태의 예외만 재검토할 수 있습니다")
+    # 이중 승인: 원 승인권자 이상 직급만 재검토 확정 가능 (PoC 근사)
+    ORDER = ["STAFF", "TEAM_LEAD", "DEPT_HEAD", "EXECUTIVE", "COMMITTEE"]
+    req_lvl = row[1] if row[1] in ORDER else "DEPT_HEAD"
+    if ORDER.index(current_user.approval_level) < ORDER.index(req_lvl):
+        raise HTTPException(403, f"재검토 확정은 {req_lvl} 이상 권한이 필요합니다")
+
+    if action == "EXTEND":
+        months = int(payload.get("months", 6))
+        db.execute(text("""
+            UPDATE policy_exception
+            SET valid_until = date(valid_until, :ext), review_date = date(:asof, :ext)
+            WHERE exception_id = :id AND status = 'ACTIVE'
+        """), {"ext": f"+{months} month", "asof": AS_OF_STR, "id": exception_id})
+        result = {"status": "ACTIVE", "extended_months": months}
+    else:
+        outcome = (payload.get("outcome") or "").strip()
+        if len(outcome) < 5:
+            raise HTTPException(422, "종결 시 실제 성과(outcome)를 기록해야 합니다")
+        db.execute(text("""
+            UPDATE policy_exception SET status = 'CLOSED', outcome = :o
+            WHERE exception_id = :id AND status = 'ACTIVE'
+        """), {"o": outcome, "id": exception_id})
+        result = {"status": "CLOSED", "outcome": outcome}
+
+    record_audit(db, action_type=f"EXCEPTION_{action}", target_entity="policy_exception",
+                 target_id=exception_id, after=result,
+                 user_id=current_user.name, user_dept=current_user.dept)
+    db.commit()
+    return {"exception_id": exception_id, **result}

@@ -57,7 +57,8 @@ export default function Governance() {
   const [report, setReport] = useState<any>(null);
   const [authority, setAuthority] = useState<any[]>([]);
   const [audit, setAudit] = useState<any>(null);
-  const [tab, setTab] = useState<'report' | 'authority' | 'audit' | 'exceptions'>('report');
+  const [tab, setTab] = useState<'report' | 'authority' | 'audit' | 'exceptions' | 'rules'>('report');
+  const [rules, setRules] = useState<any>(null);
   const [exceptions, setExceptions] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -67,12 +68,14 @@ export default function Governance() {
       axios.get('/api/governance/approval-authority'),
       axios.get('/api/governance/audit-logs?limit=50'),
       axios.get('/api/credit-case/exceptions'),
+      axios.get('/api/rules'),
     ])
-      .then(([r, a, l, ex]) => {
+      .then(([r, a, l, ex, ru]) => {
         setReport(r.data);
         setAuthority(a.data);
         setAudit(l.data);
         setExceptions(ex.data);
+        setRules(ru.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -121,6 +124,7 @@ export default function Governance() {
           ['authority', '전결 규정', <Stamp key="a" size={15} />],
           ['audit', '감사 추적', <ShieldCheck key="u" size={15} />],
           ['exceptions', '정책 예외', <AlertTriangle key="e" size={15} />],
+          ['rules', '규정 레지스터', <ScrollText key="ru" size={15} />],
         ] as const).map(([k, l, icon]) => (
           <button
             key={k}
@@ -518,6 +522,47 @@ export default function Governance() {
                         e.status === 'CLOSED' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
                       }`}>{e.status === 'ACTIVE' ? '유효' : e.status === 'CLOSED' ? '종결' : '만료'}</span>
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+
+      {tab === 'rules' && rules && (
+        <Card title={`규정 레지스터 (${rules.rules.length}건)`}
+          subtitle="산식·임계값은 하드코딩 대신 이 레지스터의 버전·효력일을 근거로 관리됩니다">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                  <th className="py-2 pr-3">도메인</th>
+                  <th className="py-2 pr-3">규정</th>
+                  <th className="py-2 pr-3">근거</th>
+                  <th className="py-2 pr-3">버전</th>
+                  <th className="py-2 pr-3 text-center">효력기간</th>
+                  <th className="py-2 pr-3">파라미터</th>
+                  <th className="py-2">적용 위치</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rules.rules.map((r: any) => (
+                  <tr key={r.rule_id} className={`border-b border-gray-50 align-top ${!r.effective_now ? 'opacity-50' : ''}`}>
+                    <td className="py-2 pr-3">
+                      <span className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-[10px] font-semibold">{r.domain}</span>
+                    </td>
+                    <td className="py-2 pr-3 text-xs font-medium">{r.name}</td>
+                    <td className="py-2 pr-3 text-xs text-gray-500">{r.basis}</td>
+                    <td className="py-2 pr-3 text-xs">{r.version}</td>
+                    <td className="py-2 pr-3 text-center text-[11px] text-gray-500">
+                      {r.valid_from} ~ {r.valid_to || '현행'}
+                    </td>
+                    <td className="py-2 pr-3 text-[10px] text-gray-500 font-mono max-w-xs truncate">
+                      {JSON.stringify(r.params)}
+                    </td>
+                    <td className="py-2 text-[11px] text-gray-400 max-w-[10rem]">{r.applied_in}</td>
                   </tr>
                 ))}
               </tbody>

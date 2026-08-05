@@ -32,6 +32,13 @@ export default function RateReduction() {
   };
   useEffect(load, []);
 
+  const act = async (url: string, body: any = {}) => {
+    setBusy(true);
+    try { await axios.post(url, body); load(); }
+    catch (e: any) { alert(e?.response?.data?.detail || '처리 실패'); }
+    finally { setBusy(false); }
+  };
+
   const openDecide = (r: any) => {
     setDecideTarget(r);
     setDecision('ACCEPTED');
@@ -57,8 +64,8 @@ export default function RateReduction() {
 
   if (loading) return <PageLoader />;
 
-  const pending = requests.filter(r => ['RECEIVED', 'REVIEWING'].includes(r.status));
-  const done = requests.filter(r => !['RECEIVED', 'REVIEWING'].includes(r.status));
+  const pending = requests.filter(r => ['RECEIVED', 'REVIEWING', 'SUPPLEMENT'].includes(r.status));
+  const done = requests.filter(r => !['RECEIVED', 'REVIEWING', 'SUPPLEMENT'].includes(r.status));
 
   return (
     <div className="space-y-6">
@@ -107,18 +114,37 @@ export default function RateReduction() {
                 <td className="py-2.5 text-center text-xs text-gray-500">{r.request_date}</td>
                 <td className="py-2.5 text-center text-xs text-gray-500">{r.due_date}</td>
                 <td className="py-2.5 text-center">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
-                    r.overdue ? 'bg-red-600 text-white' :
-                    (r.biz_days_left ?? 9) <= 2 ? 'bg-red-100 text-red-700' : 'bg-blue-50 text-blue-700'
-                  }`}>
-                    {r.overdue ? `기한초과 D+${-r.biz_days_left}` : `D-${r.biz_days_left}`}
-                  </span>
+                  {r.status === 'SUPPLEMENT' ? (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-gray-200 text-gray-600">SLA 정지</span>
+                  ) : (
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                      r.overdue ? 'bg-red-600 text-white' :
+                      (r.biz_days_left ?? 9) <= 2 ? 'bg-red-100 text-red-700' : 'bg-blue-50 text-blue-700'
+                    }`}>
+                      {r.overdue ? `기한초과 D+${-r.biz_days_left}` : `D-${r.biz_days_left}`}
+                    </span>
+                  )}
                 </td>
                 <td className="py-2.5 text-center">
-                  <button onClick={() => openDecide(r)}
-                    className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
-                    검토·결정
-                  </button>
+                  <div className="flex items-center justify-center gap-1">
+                    {r.status === 'SUPPLEMENT' ? (
+                      <button disabled={busy}
+                        onClick={() => act(`/api/rate-reduction/requests/${r.request_id}/submit-supplement`)}
+                        className="px-2 py-1 bg-amber-500 text-white rounded text-xs">보완 제출</button>
+                    ) : (
+                      <>
+                        <button onClick={() => openDecide(r)}
+                          className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
+                          검토·결정
+                        </button>
+                        <button disabled={busy}
+                          onClick={() => act(`/api/rate-reduction/requests/${r.request_id}/request-supplement`,
+                            { reason: '재무자료 추가 징구 필요' })}
+                          className="px-2 py-1 border border-amber-300 text-amber-700 rounded text-xs"
+                          title="SLA 정지 (보완기간 제외)">보완요구</button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -161,7 +187,13 @@ export default function RateReduction() {
                   )}
                 </td>
                 <td className="py-2 text-xs text-gray-500 max-w-sm truncate">{r.decision_reason}</td>
-                <td className="py-2 text-center text-xs text-gray-400">{r.notified_at}</td>
+                <td className="py-2 text-center text-xs text-gray-400">
+                  {r.notified_at || (
+                    <button disabled={busy}
+                      onClick={() => act(`/api/rate-reduction/requests/${r.request_id}/notify`, { channel: 'MAIL' })}
+                      className="px-2 py-0.5 bg-blue-600 text-white rounded text-[11px]">통지 발송</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

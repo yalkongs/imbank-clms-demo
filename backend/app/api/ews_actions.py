@@ -100,3 +100,56 @@ def complete_action(action_id: str, payload: dict = Body(...), db: Session = Dep
                  user_id=current_user.name, user_dept=current_user.dept)
     db.commit()
     return {"action_id": action_id, "status": "DONE", "completed_at": AS_OF_STR}
+
+
+@router.post("/run-escalation")
+def run_escalation(db: Session = Depends(get_db)):
+    """기한초과 미결 조치를 실제로 상향보고 처리한다 (멱등).
+
+    조회 시점 계산이 아니라 실행 기록을 남긴다: escalated=1 마킹 +
+    ews_escalation 레코드 + 부서장 수신 notification_log.
+    앱 기동 시(lifespan)에도 1회 실행되어 스케줄러를 근사한다.
+    """
+    import uuid as _uuid
+    overdue = db.execute(text("""
+        SELECT a.action_id, a.step, a.owner, a.due_date, a.customer_id, c.customer_name
+        FROM ews_action a
+        LEFT JOIN customer c ON c.customer_id = a.customer_id
+        WHERE a.status != 'DONE' AND a.due_date < :asof AND a.escalated = 0
+    """), {"asof": AS_OF_STR}).fetchall()
+    created = []
+    for action_id, step, owner, due, cust_id, cust_name in overdue:
+        esc_id = f"ESC_{_uuid.uuid4().hex[:10].upper()}"
+        db.execute(text("""
+            INSERT INTO ews_escalation (escalation_id, action_id, escalated_to, reason)
+            VALUES (:e, :a, 'DEPT_HEAD', :r)
+        """), {"e": esc_id, "a": action_id,
+               "r": f"기한({due}) 초과 - {cust_name or cust_id} '{step}' 미조치"})
+        db.execute(text("""
+            INSERT INTO notification_log
+                (notification_id, channel, recipient, subject, ref_type, ref_id, status)
+            VALUES (:n, 'PORTAL', '박부장(부서장)', :subj, 'EWS_ESCALATION', :ref, 'SENT')
+        """), {"n": f"NTF_{_uuid.uuid4().hex[:10].upper()}",
+               "subj": f"[상향보고] {cust_name or cust_id} EWS 조치 기한초과: {step}",
+               "ref": esc_id})
+        db.execute(text("UPDATE ews_action SET escalated = 1 WHERE action_id = :a"),
+                   {"a": action_id})
+        created.append(esc_id)
+    db.commit()
+    return {"escalated": len(created), "note": "멱등 - 이미 상향보고된 건은 제외"}
+
+
+@router.get("/escalations")
+def list_escalations(db: Session = Depends(get_db)):
+    rows = db.execute(text("""
+        SELECT e.escalation_id, e.reason, e.escalated_to, e.created_at, e.acknowledged,
+               n.status AS notify_status
+        FROM ews_escalation e
+        LEFT JOIN notification_log n ON n.ref_id = e.escalation_id
+        ORDER BY e.created_at DESC LIMIT 50
+    """)).fetchall()
+    return {"escalations": [
+        {"escalation_id": r[0], "reason": r[1], "escalated_to": r[2],
+         "created_at": r[3], "acknowledged": bool(r[4]), "notify_status": r[5]}
+        for r in rows
+    ]}

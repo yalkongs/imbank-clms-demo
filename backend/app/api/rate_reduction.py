@@ -24,21 +24,40 @@ GROUND_LABELS = {
     "REVENUE_UP": "매출 증가·흑자전환", "COLLATERAL_ADD": "담보 보강",
 }
 STATUS_LABELS = {
-    "RECEIVED": "접수", "REVIEWING": "심사중", "ACCEPTED": "수용",
-    "PARTIAL": "부분수용", "REJECTED": "거절",
+    "RECEIVED": "접수", "SUPPLEMENT": "자료보완 중(SLA 정지)", "REVIEWING": "심사중",
+    "ACCEPTED": "수용", "PARTIAL": "부분수용", "REJECTED": "거절",
 }
+PENDING_STATES = ("RECEIVED", "REVIEWING", "SUPPLEMENT")
+
+
+def _holidays() -> set:
+    """은행 영업일 캘린더 - 규정 레지스터(RULE_KOKR_HOLIDAY)에서 로드"""
+    from .rules import get_rule_params
+    p = get_rule_params("RULE_KOKR_HOLIDAY", {"holidays": []})
+    return set(p.get("holidays", []))
 
 
 def biz_days_between(a: date, b: date) -> int:
-    """a→b 남은 영업일 (b<a 면 음수)"""
+    """a→b 남은 영업일 (주말·공휴일 제외, b<a 면 음수)"""
     if b < a:
         return -biz_days_between(b, a)
+    hol = _holidays()
     n, d = 0, a
     while d < b:
         d += timedelta(days=1)
-        if d.weekday() < 5:
+        if d.weekday() < 5 and d.isoformat() not in hol:
             n += 1
     return n
+
+
+def biz_days_after(start: date, n: int) -> date:
+    hol = _holidays()
+    d, added = start, 0
+    while added < n:
+        d += timedelta(days=1)
+        if d.weekday() < 5 and d.isoformat() not in hol:
+            added += 1
+    return d
 
 
 @router.get("/summary")
@@ -49,12 +68,12 @@ def get_summary(db: Session = Depends(get_db)):
         FROM rate_reduction_request GROUP BY status
     """)).fetchall()
     by = {r[0]: r[1] for r in rows}
-    pending = by.get("RECEIVED", 0) + by.get("REVIEWING", 0)
+    pending = by.get("RECEIVED", 0) + by.get("REVIEWING", 0) + by.get("SUPPLEMENT", 0)
     decided = by.get("ACCEPTED", 0) + by.get("PARTIAL", 0) + by.get("REJECTED", 0)
     accepted = by.get("ACCEPTED", 0) + by.get("PARTIAL", 0)
     overdue = db.execute(text("""
         SELECT COUNT(*) FROM rate_reduction_request
-        WHERE status IN ('RECEIVED','REVIEWING') AND due_date < :asof
+        WHERE status IN ('RECEIVED','REVIEWING') AND due_date < :asof   -- SUPPLEMENT 는 SLA 정지
     """), {"asof": AS_OF_STR}).fetchone()[0]
     avg_cut = db.execute(text("""
         SELECT AVG(old_rate - decided_rate) FROM rate_reduction_request
@@ -90,7 +109,7 @@ def list_requests(db: Session = Depends(get_db)):
     """)).fetchall()
     out = []
     for r in rows:
-        pending = r[8] in ("RECEIVED", "REVIEWING")
+        pending = r[8] in PENDING_STATES
         d_left = None
         if pending and r[7]:
             d_left = biz_days_between(AS_OF_DATE, date.fromisoformat(r[7]))
@@ -151,16 +170,113 @@ def decide(request_id: str, payload: dict = Body(...), db: Session = Depends(get
         if decided_rate < old_rate * 0.5:
             raise HTTPException(422, "기존 금리의 50% 미만 인하는 재산정 오류 가능성 - 별도 승인 필요")
 
-    db.execute(text("""
+    # 상태 조건부 UPDATE (중복 결정 방지) - 통지는 별도 /notify 단계
+    updated = db.execute(text("""
         UPDATE rate_reduction_request
         SET status = :st, decided_rate = :dr, proposed_rate = :dr,
-            decision_reason = :rs, decided_at = :at, notified_at = :at
-        WHERE request_id = :id
+            decision_reason = :rs, decided_at = :at
+        WHERE request_id = :id AND status IN ('RECEIVED','REVIEWING')
     """), {"st": decision, "dr": decided_rate, "rs": reason, "at": AS_OF_STR, "id": request_id})
+    if updated.rowcount == 0:
+        db.rollback()
+        raise HTTPException(409, "상태가 변경되어 처리할 수 없습니다 (보완 중이거나 이미 처리됨)")
     record_audit(db, action_type="RATE_REDUCTION_DECIDE", target_entity="rate_reduction_request",
                  target_id=request_id, before={"status": row[0], "old_rate": old_rate},
                  after={"status": decision, "decided_rate": decided_rate},
                  user_id=current_user.name, user_dept=current_user.dept)
     db.commit()
     return {"request_id": request_id, "status": decision,
-            "decided_rate": decided_rate, "notified_at": AS_OF_STR}
+            "decided_rate": decided_rate,
+            "next_step": "통지 발송 필요 (/notify) - 결정과 통지는 분리된 단계"}
+
+
+@router.post("/requests/{request_id}/request-supplement")
+def request_supplement(request_id: str, payload: dict = Body(...),
+                       db: Session = Depends(get_db),
+                       current_user: User = Depends(get_current_user)):
+    """자료보완 요구 - 시행령 §18-4: 보완 요구일~제출일은 10영업일에서 제외 (SLA 정지)"""
+    reason = (payload.get("reason") or "").strip()
+    if len(reason) < 5:
+        raise HTTPException(422, "보완 요구 사유를 기록해야 합니다")
+    updated = db.execute(text("""
+        UPDATE rate_reduction_request
+        SET status = 'SUPPLEMENT', supplement_requested_at = :at
+        WHERE request_id = :id AND status IN ('RECEIVED','REVIEWING')
+    """), {"at": AS_OF_STR, "id": request_id})
+    if updated.rowcount == 0:
+        raise HTTPException(409, "보완 요구 가능한 상태가 아닙니다")
+    record_audit(db, action_type="RATE_SUPPLEMENT_REQ", target_entity="rate_reduction_request",
+                 target_id=request_id, after={"reason": reason},
+                 user_id=current_user.name, user_dept=current_user.dept)
+    db.commit()
+    return {"request_id": request_id, "status": "SUPPLEMENT", "sla": "정지"}
+
+
+@router.post("/requests/{request_id}/submit-supplement")
+def submit_supplement(request_id: str, db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_user)):
+    """보완자료 제출 - SLA 재개, 정지기간만큼 통지기한 연장"""
+    row = db.execute(text("""
+        SELECT supplement_requested_at, due_date, supplement_days
+        FROM rate_reduction_request WHERE request_id = :id AND status = 'SUPPLEMENT'
+    """), {"id": request_id}).fetchone()
+    if not row:
+        raise HTTPException(409, "보완 중인 요청이 아닙니다")
+    paused_from = date.fromisoformat(row[0])
+    paused_days = biz_days_between(paused_from, AS_OF_DATE)
+    new_due = biz_days_after(date.fromisoformat(row[1]), paused_days)
+    db.execute(text("""
+        UPDATE rate_reduction_request
+        SET status = 'REVIEWING', supplement_submitted_at = :at,
+            supplement_days = COALESCE(supplement_days, 0) + :pd, due_date = :nd
+        WHERE request_id = :id
+    """), {"at": AS_OF_STR, "pd": paused_days, "nd": new_due.isoformat(), "id": request_id})
+    record_audit(db, action_type="RATE_SUPPLEMENT_SUBMIT", target_entity="rate_reduction_request",
+                 target_id=request_id,
+                 after={"paused_biz_days": paused_days, "new_due": new_due.isoformat()},
+                 user_id=current_user.name, user_dept=current_user.dept)
+    db.commit()
+    return {"request_id": request_id, "status": "REVIEWING",
+            "excluded_biz_days": paused_days, "new_due_date": new_due.isoformat()}
+
+
+@router.post("/requests/{request_id}/notify")
+def notify_decision(request_id: str, payload: dict = Body(default={}),
+                    db: Session = Depends(get_db),
+                    current_user: User = Depends(get_current_user)):
+    """결정 통지 발송 - 채널·문서·발송결과를 기록한다 (결정과 분리된 단계)"""
+    import uuid as _uuid
+    row = db.execute(text("""
+        SELECT r.status, r.decision_reason, c.customer_name
+        FROM rate_reduction_request r
+        LEFT JOIN customer c ON c.customer_id = r.customer_id
+        WHERE r.request_id = :id
+    """), {"id": request_id}).fetchone()
+    if not row:
+        raise HTTPException(404, "요청 건을 찾을 수 없습니다")
+    if row[0] not in ("ACCEPTED", "PARTIAL", "REJECTED"):
+        raise HTTPException(409, "결정 완료 상태에서만 통지할 수 있습니다")
+    already = db.execute(text(
+        "SELECT notified_at FROM rate_reduction_request WHERE request_id = :id"
+    ), {"id": request_id}).fetchone()
+    if already and already[0]:
+        raise HTTPException(409, "이미 통지가 발송되었습니다 (중복 통지 방지)")
+
+    channel = payload.get("channel", "MAIL")
+    ntf = f"NTF_{_uuid.uuid4().hex[:10].upper()}"
+    db.execute(text("""
+        INSERT INTO notification_log
+            (notification_id, channel, recipient, subject, ref_type, ref_id, status)
+        VALUES (:n, :ch, :rc, :subj, 'RATE_REDUCTION', :ref, 'SENT')
+    """), {"n": ntf, "ch": channel, "rc": row[2] or request_id,
+           "subj": f"금리인하요구 처리결과 통지 ({STATUS_LABELS.get(row[0], row[0])})",
+           "ref": request_id})
+    db.execute(text(
+        "UPDATE rate_reduction_request SET notified_at = :at WHERE request_id = :id"
+    ), {"at": AS_OF_STR, "id": request_id})
+    record_audit(db, action_type="RATE_NOTIFY", target_entity="rate_reduction_request",
+                 target_id=request_id, after={"channel": channel, "notification_id": ntf},
+                 user_id=current_user.name, user_dept=current_user.dept)
+    db.commit()
+    return {"request_id": request_id, "notified_at": AS_OF_STR,
+            "channel": channel, "notification_id": ntf}
