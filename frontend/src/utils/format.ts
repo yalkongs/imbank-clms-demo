@@ -12,6 +12,13 @@ export function formatAmount(value: number, unit: 'won' | 'million' | 'billion' 
     case 'million':
       return new Intl.NumberFormat('ko-KR').format(value / 1_000_000) + '백만원';
     case 'billion':
+      // 1조 이상은 조 단위로 - '179,209.2억원' 같은 표기를 '17.9조원'으로 읽기 쉽게
+      if (Math.abs(value) >= 1_000_000_000_000) {
+        const cho = value / 1_000_000_000_000;
+        return new Intl.NumberFormat('ko-KR', {
+          maximumFractionDigits: Math.abs(cho) >= 10 ? 1 : 2,
+        }).format(cho) + '조원';
+      }
       return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 1 }).format(value / 100_000_000) + '억원';
     case 'trillion':
       return new Intl.NumberFormat('ko-KR', { maximumFractionDigits: 2 }).format(value / 1_000_000_000_000) + '조원';

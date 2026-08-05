@@ -22,8 +22,16 @@ EOK = 1e8
 
 
 def _eok(v: float, digits: int = 0) -> str:
-    """원 → 억원 문자열"""
+    """원 → 억원 문자열 (표 컬럼용 - 헤더에 단위 명시)"""
     return f"{v / EOK:,.{digits}f}"
+
+
+def _amt(v: float) -> str:
+    """원 → 단위 포함 금액 문자열. 1조 이상은 조 단위 (요약 지표용)"""
+    if abs(v) >= 1e12:
+        cho = v / 1e12
+        return f"{cho:,.1f} 조원" if abs(cho) >= 10 else f"{cho:,.2f} 조원"
+    return f"{v / EOK:,.0f} 억원"
 
 
 class ReportPDF(FPDF):
@@ -57,7 +65,8 @@ class ReportPDF(FPDF):
 
     # ── 구성 요소 ────────────────────────────────────────────
     def section_title(self, title: str):
-        if self.get_y() > 250:
+        # 제목만 페이지 끝에 남는 고아를 막는다 - 첫 내용 행까지 들어갈 여백 확보
+        if self.get_y() > 235:
             self.add_page()
         self.ln(2)
         self.set_fill_color(*MINT)
@@ -150,9 +159,9 @@ def build_report_pdf(data: dict) -> bytes:
     sm = s["summary"]
     pdf.section_title("총괄")
     pdf.kv_grid([
-        ("총여신 잔액", f"{_eok(sm['total_outstanding'])} 억원"),
+        ("총여신 잔액", _amt(sm['total_outstanding'])),
         ("여신 건수 / 차주 수", f"{sm['facility_count']:,} 건 / {sm['borrower_count']:,} 개사"),
-        ("당년 신규취급(YTD)", f"{_eok(sm['new_amount'])} 억원 ({sm['new_count']}건)"),
+        ("당년 신규취급(YTD)", f"{_amt(sm['new_amount'])} ({sm['new_count']}건)"),
         ("고정이하여신비율(NPL)", f"{sm['npl_ratio']:.2f} %"),
         ("연체율(30일+)", f"{sm['delinquency_rate']:.3f} %"),
         ("BIS 자기자본비율", f"{sm['bis_ratio']:.2f} %"),
@@ -224,8 +233,8 @@ def build_report_pdf(data: dict) -> bytes:
         ("Tier1 비율", f"{cp['tier1_ratio']:.2f} %"),
         ("CET1 비율", f"{cp['cet1_ratio']:.2f} %"),
         ("레버리지 비율", f"{cp['leverage_ratio']:.2f} %"),
-        ("총자본", f"{_eok(cp['total_capital'])} 억원"),
-        ("총 RWA", f"{_eok(cp['total_rwa'])} 억원"),
+        ("총자본", _amt(cp['total_capital'])),
+        ("총 RWA", _amt(cp['total_rwa'])),
     ], cols=3)
 
     # ── 5. 포트폴리오
@@ -256,11 +265,11 @@ def build_report_pdf(data: dict) -> bytes:
     pdf.section_title(pj["title"])
     pdf.kv_grid([
         ("사업장 수", f"{pj['project_count']} 개 (브릿지 {pj['bridge_count']})"),
-        ("총 익스포저", f"{_eok(pj['exposure'])} 억원"),
+        ("총 익스포저", _amt(pj['exposure'])),
         ("워치리스트", f"{pj['watchlist_count']} 개"),
         ("공정-분양 괴리 경보(≥30%p)", f"{pj['gap_alert_count']} 개"),
         ("평균 사업장 자기자본비율", f"{pj['avg_equity_ratio']:.1f} %"),
-        ("브릿지 익스포저", f"{_eok(pj['bridge_exposure'])} 억원"),
+        ("브릿지 익스포저", _amt(pj['bridge_exposure'])),
     ], cols=3)
 
     # ── 7. 포용금융
@@ -286,9 +295,9 @@ def build_report_pdf(data: dict) -> bytes:
     strat = " · ".join(f"{x['name']} {x['count']}" for x in w["by_strategy"]) or "-"
     pdf.kv_grid([
         ("진행 중 케이스", f"{w['active_cases']} 건"),
-        ("관리 익스포저", f"{_eok(w['active_exposure'])} 억원"),
+        ("관리 익스포저", _amt(w['active_exposure'])),
         ("회수 완료(누적)", f"{w['recovered_cases']} 건"),
-        ("예상 회수액", f"{_eok(w['expected_recovery'])} 억원 ({w['expected_recovery_rate']:.1f}%)"),
+        ("예상 회수액", f"{_amt(w['expected_recovery'])} ({w['expected_recovery_rate']:.1f}%)"),
         ("전략별 분포", strat),
         ("", ""),
     ], cols=3)

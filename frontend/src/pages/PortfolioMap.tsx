@@ -511,7 +511,7 @@ export default function PortfolioMap() {
             </button>
           </div>
           <p className="text-sm text-gray-500 mt-1">
-            여신 보유 {companies.length}개사 다차원 분석 - 크기는 여신잔액
+            여신 보유 기업 전체를 지표 공간에 배치 - 포인트 크기는 여신잔액
           </p>
         </div>
         <RegionFilter value={region} onChange={setRegion} />
