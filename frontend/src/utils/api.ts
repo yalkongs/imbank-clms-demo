@@ -2,11 +2,39 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
+
+/**
+ * 콜드스타트·배포 재시작 순단 내성
+ * ----------------------------------
+ * Render 재시작 직후에는 일부 API 가 일시적으로 실패(네트워크 오류·5xx)한다.
+ * 화면들이 실패를 조용히 0 으로 그리지 않도록, 전송 계층에서 GET 요청을
+ * 지수 백오프(1s → 2.5s → 5s)로 최대 3회 재시도한다.
+ * 전역 axios 와 api 인스턴스 모두에 적용 (일부 화면은 전역 axios 를 직접 쓴다).
+ */
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+const BACKOFF_MS = [1000, 2500, 5000];
+
+function attachRetry(instance: { interceptors: any; request: (cfg: any) => Promise<any> }) {
+  instance.interceptors.response.use(undefined, async (error: any) => {
+    const cfg = error?.config || {};
+    const isGet = (cfg.method || 'get').toLowerCase() === 'get';
+    const retryable =
+      !error?.response || RETRYABLE_STATUS.has(error.response.status) || error?.code === 'ECONNABORTED';
+    cfg.__retryCount = cfg.__retryCount || 0;
+    if (!isGet || !retryable || cfg.__retryCount >= BACKOFF_MS.length) throw error;
+    const delay = BACKOFF_MS[cfg.__retryCount];
+    cfg.__retryCount += 1;
+    await new Promise(r => setTimeout(r, delay));
+    return instance.request(cfg);
+  });
+}
+attachRetry(axios);
+attachRetry(api);
 
 // 요청 인터셉터
 api.interceptors.request.use(
