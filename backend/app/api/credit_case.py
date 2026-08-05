@@ -19,6 +19,42 @@ from ..core.auth import get_current_user, User
 
 router = APIRouter(prefix="/api/credit-case", tags=["CreditCase"])
 
+
+@router.get("")
+def list_case_files(q: str = None, status: str = None, limit: int = 50,
+                    db: Session = Depends(get_db)):
+    """여신철 대장 - 승인·심사 건 검색 (스냅샷 봉인 여부 포함)"""
+    cond, params = "1=1", {"lim": min(limit, 200)}
+    if q:
+        cond += " AND (c.customer_name LIKE :q OR la.application_id LIKE :q)"
+        params["q"] = f"%{q}%"
+    if status:
+        cond += " AND la.status = :st"
+        params["st"] = status
+    rows = db.execute(text(f"""
+        SELECT la.application_id, la.application_date, la.status, la.requested_amount,
+               c.customer_name,
+               (SELECT COUNT(*) FROM approval_history ah
+                 WHERE ah.application_id = la.application_id) AS approvals,
+               (SELECT COUNT(*) FROM decision_snapshot ds
+                 WHERE ds.application_id = la.application_id) AS snapshots,
+               (SELECT COUNT(*) FROM policy_exception pe
+                 WHERE pe.application_id = la.application_id) AS exceptions
+        FROM loan_application la
+        JOIN customer c ON c.customer_id = la.customer_id
+        WHERE {cond}
+        ORDER BY la.application_date DESC LIMIT :lim
+    """), params).fetchall()
+    return {
+        "as_of": AS_OF_STR,
+        "cases": [
+            {"application_id": r[0], "application_date": r[1], "status": r[2],
+             "requested_amount": r[3], "customer_name": r[4],
+             "approvals": r[5], "sealed": r[6] > 0, "exceptions": r[7]}
+            for r in rows
+        ],
+    }
+
 # 적용 규정 레지스터 - 하드코딩된 산식이 어느 규정·버전을 따르는지 명시
 APPLIED_RULES = [
     {"rule": "자산건전성 분류·최저적립률", "basis": "은행업감독규정 §29 · 시행세칙 별표3", "version": "2026-01 개정"},
@@ -177,8 +213,31 @@ def get_case_file(application_id: str, db: Session = Depends(get_db)):
         WHERE customer_id = :cid ORDER BY score_date DESC LIMIT 1
     """), {"cid": cust_id}).fetchone()
 
+    # 승인 시점 봉인 스냅샷 (불변) - '결정 당시 보기'의 정본
+    snap_row = db.execute(text("""
+        SELECT snapshot_id, snapshot_timestamp, input_data_json, output_data_json,
+               feature_values_json, parameters_json
+        FROM decision_snapshot WHERE application_id = :aid
+        ORDER BY snapshot_timestamp DESC LIMIT 1
+    """), {"aid": application_id}).fetchone()
+    snapshot = None
+    if snap_row:
+        import json as _json
+        params_j = _json.loads(snap_row[5] or "{}")
+        snapshot = {
+            "snapshot_id": snap_row[0],
+            "sealed_at": snap_row[1],
+            "input": _json.loads(snap_row[2] or "{}"),
+            "output": _json.loads(snap_row[3] or "{}"),
+            "evidence": _json.loads(snap_row[4] or "{}"),
+            "hash": params_j.get("hash"),
+            "backfilled": params_j.get("backfilled", False),
+            "rule_versions": params_j.get("rule_versions", {}),
+        }
+
     return {
         "as_of": AS_OF_STR,
+        "snapshot": snapshot,
         "application": {
             "application_id": app_row[0], "application_date": app_row[1],
             "type": app_row[2], "product_code": app_row[4], "product_name": app_row[12],

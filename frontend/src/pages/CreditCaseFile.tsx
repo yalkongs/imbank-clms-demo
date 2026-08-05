@@ -89,7 +89,45 @@ export default function CreditCaseFile() {
         </div>
       </div>
 
-      <Card>
+      {data.snapshot && (
+        <Card>
+          <div className="flex items-start justify-between flex-wrap gap-3">
+            <div>
+              <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
+                🔒 승인 시점 봉인 스냅샷
+                {data.snapshot.backfilled && (
+                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px]">이력 재구성(백필)</span>
+                )}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">
+                봉인일 {String(data.snapshot.sealed_at).slice(0, 10)} · SHA-256 {String(data.snapshot.hash).slice(0, 16)}… ·
+                이후 자료가 갱신되어도 이 기록은 불변입니다
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+            {[
+              ['봉인 등급', data.snapshot.input?.rating?.final_grade || '산출 전',
+               data.snapshot.input?.rating ? `${data.snapshot.input.rating.model_id} · ${data.snapshot.input.rating.rating_date}` : ''],
+              ['봉인 재무', data.snapshot.input?.financial_statement ? `FY${data.snapshot.input.financial_statement.fiscal_year}` : '-',
+               data.snapshot.input?.financial_statement?.source || ''],
+              ['동일차주 소진', data.snapshot.input?.borrower_scope?.vs_capital_pct != null
+                ? `${data.snapshot.input.borrower_scope.vs_capital_pct}%` : '그룹 없음',
+               '자기자본 대비'],
+              ['한도 검증', data.snapshot.input?.limit_check?.within_limit === false ? '초과' :
+                data.snapshot.input?.limit_check?.within_limit === true ? '충족' : '-', '규제 25% 기준'],
+            ].map(([l, v, sub]) => (
+              <div key={l as string} className="bg-emerald-50/60 border border-emerald-100 rounded-lg px-3 py-2">
+                <p className="text-[11px] text-gray-400">{l}</p>
+                <p className="text-sm font-bold text-gray-900">{v}</p>
+                {sub && <p className="text-[10px] text-gray-400">{sub}</p>}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card title="현재 기준 재구성 보기" subtitle="아래 섹션은 현재 DB 에서 as-of 원칙으로 재구성한 참고 화면입니다">
         <div className="pt-2">
           {/* ① 신청 */}
           <Section icon={<FileText size={14} />} title="① 신청"

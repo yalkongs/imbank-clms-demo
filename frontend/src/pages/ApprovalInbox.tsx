@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Stamp, ShieldAlert } from 'lucide-react';
 import { Card } from '../components';
 import { formatAmount, formatNumber } from '../utils/format';
+import { Link as RouterLink } from 'react-router-dom';
 import { getAuth, onAuthChange } from '../utils/api';
 import axios from 'axios';
 
@@ -66,11 +67,13 @@ export default function ApprovalInbox() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">결재함</h1>
+          
           <p className="text-sm text-gray-500 mt-1">
             {me.name} {me.title} - 전결 한도{' '}
             {data?.my_limit ? formatAmount(data.my_limit, 'billion') : '무제한'} ·
             결재 가능 {formatNumber(data?.actionable || 0)}건 / 전체 {formatNumber(data?.items?.length || 0)}건
           </p>
+          <RouterLink to="/credit-cases" className="inline-block mt-1 text-xs text-blue-600 hover:underline">📁 여신철 대장 열기 →</RouterLink>
         </div>
         <p className="text-xs text-gray-400">역할은 우측 상단 아바타에서 전환</p>
       </div>

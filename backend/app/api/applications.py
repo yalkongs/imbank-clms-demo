@@ -9,6 +9,7 @@ from datetime import datetime
 from ..core.database import get_db
 from ..core.audit import record_audit
 from ..core.auth import get_current_user, get_optional_user, User
+from ..services.snapshot import build_and_seal_snapshot
 from ..core.config import AS_OF_DATE
 from ..services.calculations import (
     calculate_raroc, calculate_pricing, calculate_rwa,
@@ -989,6 +990,19 @@ def approve_application(
         except Exception as e:
             db.rollback()
             raise HTTPException(500, f"한도 예약 실패로 승인을 중단했습니다 (원자성 보장): {e}")
+
+    # 승인 확정 시 판단 근거를 불변 스냅샷으로 봉인 (같은 트랜잭션)
+    if decision in ("APPROVE", "CONDITIONAL"):
+        try:
+            build_and_seal_snapshot(
+                db, application_id, decision=decision,
+                approved_amount=approved_amount or float(app[0] or 0),
+                approver_name=approver_name, approval_level=approval_level,
+                as_of=AS_OF_DATE.strftime('%Y-%m-%d'),
+            )
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(500, f"스냅샷 봉인 실패로 승인을 롤백했습니다: {e}")
 
     try:
         record_audit(

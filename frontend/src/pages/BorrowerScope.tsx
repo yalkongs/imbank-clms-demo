@@ -13,11 +13,13 @@ import { formatAmount, formatPercent } from '../utils/format';
 
 export default function BorrowerScope() {
   const [data, setData] = useState<any>(null);
+  const [statutory, setStatutory] = useState<any>(null);
   const [detail, setDetail] = useState<any>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
     axios.get('/api/group-credit/regulatory-scope').then(r => setData(r.data)).catch(console.error);
+    axios.get('/api/group-credit/statutory-limits').then(r => setStatutory(r.data)).catch(console.error);
   }, []);
   useEffect(() => {
     if (!selected) { setDetail(null); return; }
@@ -37,6 +39,28 @@ export default function BorrowerScope() {
         내부 집중한도 20% = {formatAmount(data.internal_limit.amount, 'billion')} (조기경보) ·
         신용공여 = 대출잔액 + 미사용약정 (규제 근사치·시연용 - 감독규정 별표2 신용환산율 미적용)
       </div>
+
+      {statutory && (
+        <div className="grid grid-cols-3 gap-4">
+          {statutory.controls.map((c: any) => (
+            <div key={c.key} className={`bg-white rounded-xl border p-4 ${c.breach ? 'border-red-300' : 'border-gray-200'}`}>
+              <p className="text-xs text-gray-500">{c.name}</p>
+              <p className="text-[10px] text-gray-400 mb-2">{c.basis}</p>
+              <p className="text-lg font-bold tabular">
+                {formatPercent(c.utilization_pct, 1)}
+                <span className="text-xs font-normal text-gray-400"> 소진</span>
+              </p>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-1.5">
+                <div className={`h-full rounded-full ${c.breach ? 'bg-red-500' : c.utilization_pct > 80 ? 'bg-amber-500' : 'bg-[#00BFA5]'}`}
+                  style={{ width: `${Math.min(c.utilization_pct, 100)}%` }} />
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1.5 truncate">
+                최대 {c.current_label} · {formatAmount(c.current, 'billion')} / 한도 {formatAmount(c.limit, 'billion')}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
         {/* 그룹 목록 */}
@@ -133,6 +157,8 @@ export default function BorrowerScope() {
                   <b className="tabular text-xs">{formatAmount(detail.aggregation.loans, 'billion')}</b></div>
                 <div className="flex justify-between"><span className="text-gray-500 text-xs">미사용약정</span>
                   <b className="tabular text-xs">{formatAmount(detail.aggregation.undrawn, 'billion')}</b></div>
+                <div className="flex justify-between"><span className="text-gray-500 text-xs">은행 지급보증 (난외)</span>
+                  <b className="tabular text-xs">{formatAmount(detail.aggregation.bank_guarantees, 'billion')}</b></div>
                 <div className="flex justify-between"><span className="text-gray-500 text-xs">계열사 보증 (참고·합산 제외)</span>
                   <b className="tabular text-xs text-gray-400">{formatAmount(detail.aggregation.intra_group_guarantees, 'billion')}</b></div>
                 <div className="flex justify-between"><span className="text-gray-500 text-xs">신용공여 합계</span>

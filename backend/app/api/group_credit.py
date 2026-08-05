@@ -435,89 +435,195 @@ def _exposure_status(utilization_pct: Optional[float]) -> str:
 
 
 # ─────────────────────────────────────────────────────────
-# 동일차주 규제 범위 엔진 v0 (제3자 리뷰 ② 의 PoC 최소 조각)
-# 은행법 §35: 동일차주 신용공여 한도 = 은행 자기자본의 25%.
-# 단순 합산이 아니라 '포함 근거(관계 유형·지분율·보증)'와 '효력일'을
-# 함께 반환해 특정 시점의 판단을 재현할 수 있게 한다.
-# 신용공여 = 대출잔액 + 미사용약정 + 그룹 내 지급보증 수취분.
+# 동일차주 규제 범위 엔진 v1 - 신용공여 원장(credit_exposure_ledger) 기반
+# (2차 리뷰 P0-2 반영)
+#
+# 원장은 난내(ON_LOAN)·난외(OFF_UNDRAWN·OFF_GUARANTEE)를 CCF 적용 후
+# net_exposure 로 보유한다. 여기서는 원장 합산으로 법정 3개 한도를 통제한다:
+#   · 동일차주(그룹) 25%           - 은행법 §35①
+#   · 동일한 개인·법인(단일) 20%   - 은행법 §35③
+#   · 거액신용공여 총액 500%       - 은행법 §35④ (자기자본 10% 초과 건 합계)
+# 계열사 간 보증(group_guarantee)은 익스포저가 아니라 동일차주 구성·
+# 위험전이 판단 자료로만 쓴다.
 # ─────────────────────────────────────────────────────────
 
-REGULATORY_LIMIT_RATIO = 0.25   # 은행법 §35 동일차주 한도
-INTERNAL_LIMIT_RATIO = 0.20    # 내부 집중한도 (조기경보용)
+LIMIT_GROUP_RATIO = 0.25     # 동일차주(그룹)
+LIMIT_SINGLE_RATIO = 0.20    # 동일한 개인·법인
+LIMIT_LARGE_TRIGGER = 0.10   # 거액신용공여 판정 기준
+LIMIT_LARGE_TOTAL = 5.00     # 거액신용공여 총액 한도 (자기자본의 500%)
+INTERNAL_ALERT_RATIO = 0.15  # 내부 조기경보 (법정한도와 별개)
+
+
+def _capital(db) -> float:
+    row = db.execute(text(
+        "SELECT total_capital FROM capital_position ORDER BY base_date DESC LIMIT 1"
+    )).fetchone()
+    return row[0] if row else 0.0
+
+
+def _ledger_by_customer(db) -> dict:
+    """고객별 원장 합산 {cust: {ON_LOAN, OFF_UNDRAWN, OFF_GUARANTEE, total}}"""
+    out: dict = {}
+    for cust, etype, net in db.execute(text("""
+        SELECT customer_id, exposure_type, SUM(net_exposure)
+        FROM credit_exposure_ledger GROUP BY customer_id, exposure_type
+    """)).fetchall():
+        d = out.setdefault(cust, {"ON_LOAN": 0.0, "OFF_UNDRAWN": 0.0,
+                                  "OFF_GUARANTEE": 0.0, "total": 0.0})
+        d[etype] = net or 0.0
+        d["total"] += net or 0.0
+    return out
+
+
+@router.get("/statutory-limits")
+def statutory_limits(db: Session = Depends(get_db)):
+    """법정 3개 한도 통제 현황 (신용공여 원장 기반)"""
+    capital = _capital(db)
+    ledger = _ledger_by_customer(db)
+
+    # ① 동일차주(그룹) 25%
+    group_rows = db.execute(text("""
+        SELECT bg.group_id, bg.group_name, m.customer_id
+        FROM borrower_group bg JOIN borrower_group_member m ON m.group_id = bg.group_id
+    """)).fetchall()
+    group_sum: dict = {}
+    grouped_customers = set()
+    for gid, gname, cust in group_rows:
+        g = group_sum.setdefault(gid, {"group_id": gid, "group_name": gname, "total": 0.0})
+        g["total"] += ledger.get(cust, {}).get("total", 0.0)
+        grouped_customers.add(cust)
+    groups = sorted(group_sum.values(), key=lambda x: -x["total"])
+    for g in groups:
+        g["vs_capital_pct"] = round(g["total"] / capital * 100, 2) if capital else 0
+        g["breach"] = g["total"] > capital * LIMIT_GROUP_RATIO
+
+    # ② 동일한 개인·법인 20% (그룹 무관 단일 차주)
+    singles = sorted(
+        ({"customer_id": c, "total": v["total"]} for c, v in ledger.items()),
+        key=lambda x: -x["total"])[:10]
+    names = {r[0]: r[1] for r in db.execute(text(
+        "SELECT customer_id, customer_name FROM customer WHERE customer_id IN ({})".format(
+            ",".join(f"'{s['customer_id']}'" for s in singles) or "''")
+    )).fetchall()}
+    for s_ in singles:
+        s_["name"] = names.get(s_["customer_id"], s_["customer_id"])
+        s_["vs_capital_pct"] = round(s_["total"] / capital * 100, 2) if capital else 0
+        s_["breach"] = s_["total"] > capital * LIMIT_SINGLE_RATIO
+
+    # ③ 거액신용공여 총액 (자기자본 10% 초과 차주·그룹의 합 ≤ 500%)
+    large_units = []
+    for g in groups:
+        if g["total"] > capital * LIMIT_LARGE_TRIGGER:
+            large_units.append({"unit": g["group_name"], "total": g["total"]})
+    for c, v in ledger.items():
+        if c not in grouped_customers and v["total"] > capital * LIMIT_LARGE_TRIGGER:
+            large_units.append({"unit": names.get(c, c), "total": v["total"]})
+    large_total = sum(u["total"] for u in large_units)
+
+    return {
+        "capital": capital,
+        "basis": "신용공여 원장(credit_exposure_ledger) - 난내·난외 CCF 적용 합산 (별표2 근사)",
+        "controls": [
+            {
+                "key": "same_borrower_group",
+                "name": "동일차주(그룹) 한도", "basis": "은행법 §35① - 자기자본의 25%",
+                "limit": capital * LIMIT_GROUP_RATIO,
+                "current": groups[0]["total"] if groups else 0,
+                "current_label": groups[0]["group_name"] if groups else "-",
+                "utilization_pct": round((groups[0]["total"] if groups else 0)
+                                         / (capital * LIMIT_GROUP_RATIO) * 100, 1) if capital else 0,
+                "breach": any(g["breach"] for g in groups),
+                "top": groups[:5],
+            },
+            {
+                "key": "same_person",
+                "name": "동일한 개인·법인 한도", "basis": "은행법 §35③ - 자기자본의 20%",
+                "limit": capital * LIMIT_SINGLE_RATIO,
+                "current": singles[0]["total"] if singles else 0,
+                "current_label": singles[0]["name"] if singles else "-",
+                "utilization_pct": round((singles[0]["total"] if singles else 0)
+                                         / (capital * LIMIT_SINGLE_RATIO) * 100, 1) if capital else 0,
+                "breach": any(x["breach"] for x in singles),
+                "top": singles[:5],
+            },
+            {
+                "key": "large_exposure_total",
+                "name": "거액신용공여 총액 한도",
+                "basis": "은행법 §35④ - 자기자본 10% 초과 건 합계 ≤ 자기자본의 500%",
+                "limit": capital * LIMIT_LARGE_TOTAL,
+                "current": large_total,
+                "current_label": f"{len(large_units)}개 거액차주",
+                "utilization_pct": round(large_total / (capital * LIMIT_LARGE_TOTAL) * 100, 1)
+                                   if capital else 0,
+                "breach": large_total > capital * LIMIT_LARGE_TOTAL,
+                "top": sorted(large_units, key=lambda x: -x["total"])[:5],
+            },
+        ],
+        "disclaimer": "신용환산율·제외항목은 별표2의 근사(PoC)이며, 실제 산정은 "
+                      "감독규정 정본과 준법 부서 해석을 따라야 한다.",
+    }
 
 
 @router.get("/regulatory-scope")
 def regulatory_scope_overview(db: Session = Depends(get_db)):
-    """그룹별 동일차주 합산 vs 자기자본 25% - 전체 조망"""
-    cap = db.execute(text(
-        "SELECT total_capital, base_date FROM capital_position ORDER BY base_date DESC LIMIT 1"
-    )).fetchone()
-    capital = cap[0] if cap else 0
-    reg_limit = capital * REGULATORY_LIMIT_RATIO
-    int_limit = capital * INTERNAL_LIMIT_RATIO
-
+    """그룹별 동일차주 합산 (원장 기반) - 난내·난외 분해 포함"""
+    capital = _capital(db)
+    ledger = _ledger_by_customer(db)
     rows = db.execute(text("""
-        SELECT bg.group_id, bg.group_name,
-               COUNT(DISTINCT m.customer_id) AS members,
-               COALESCE(SUM(f.outstanding_amount), 0) AS loans,
-               COALESCE(SUM(f.current_limit - f.outstanding_amount), 0) AS undrawn
-        FROM borrower_group bg
-        JOIN borrower_group_member m ON m.group_id = bg.group_id
-        LEFT JOIN facility f ON f.customer_id = m.customer_id AND f.status = 'ACTIVE'
-        GROUP BY bg.group_id, bg.group_name
+        SELECT bg.group_id, bg.group_name, m.customer_id
+        FROM borrower_group bg JOIN borrower_group_member m ON m.group_id = bg.group_id
     """)).fetchall()
     guar = {r[0]: r[1] or 0 for r in db.execute(text("""
         SELECT group_id, SUM(guarantee_amount) FROM group_guarantee
         WHERE status = 'ACTIVE' OR status IS NULL GROUP BY group_id
     """)).fetchall()}
 
+    agg: dict = {}
+    for gid, gname, cust in rows:
+        g = agg.setdefault(gid, {"group_id": gid, "group_name": gname, "members": 0,
+                                 "on_loan": 0.0, "off_undrawn": 0.0, "off_guarantee": 0.0})
+        g["members"] += 1
+        led = ledger.get(cust, {})
+        g["on_loan"] += led.get("ON_LOAN", 0.0)
+        g["off_undrawn"] += led.get("OFF_UNDRAWN", 0.0)
+        g["off_guarantee"] += led.get("OFF_GUARANTEE", 0.0)
+
     groups = []
-    for gid, name, members, loans, undrawn in rows:
-        # 계열사 간 보증(group_guarantee)은 은행의 지급보증 익스포저가 아니라
-        # 위험공유 판단 자료다 - 신용공여 합산에서 제외하고 참고로만 표시
-        total = loans + undrawn
+    for g in agg.values():
+        total = g["on_loan"] + g["off_undrawn"] + g["off_guarantee"]
         groups.append({
-            "group_id": gid, "group_name": name, "members": members,
-            "loans": round(loans, 2), "undrawn": round(undrawn, 2),
-            "intra_group_guarantees": round(guar.get(gid, 0), 2),   # 참고 (합산 제외)
+            **{k: round(v, 2) if isinstance(v, float) else v for k, v in g.items()},
             "total_credit": round(total, 2),
+            "intra_group_guarantees": round(guar.get(g["group_id"], 0), 2),
             "vs_capital_pct": round(total / capital * 100, 2) if capital else 0,
-            "regulatory_breach": total > reg_limit,
-            "internal_alert": total > int_limit,
+            "regulatory_breach": total > capital * LIMIT_GROUP_RATIO,
+            "internal_alert": total > capital * INTERNAL_ALERT_RATIO,
         })
-    groups.sort(key=lambda g: -g["total_credit"])
+    groups.sort(key=lambda x: -x["total_credit"])
     return {
-        "as_of": cap[1] if cap else None,
         "capital": capital,
-        "regulatory_limit": {"ratio": REGULATORY_LIMIT_RATIO * 100, "amount": reg_limit,
-                             "basis": "은행법 §35 동일차주 25% (규제 근사치 - 시연용)"},
-        "internal_limit": {"ratio": INTERNAL_LIMIT_RATIO * 100, "amount": int_limit,
-                           "basis": "내부 집중한도 (법정 동일인 20% 한도와는 별개의 내부 기준)"},
-        "disclaimer": "신용공여 산정은 감독규정 별표2(난내·난외, 신용환산율, 제외항목)를 "
-                      "적용하지 않은 근사치다. 법정 3개 한도(동일차주 25%·동일인 20%·"
-                      "거액신용공여 총액) 중 25% 한도만 근사 구현되어 있다.",
+        "regulatory_limit": {"ratio": LIMIT_GROUP_RATIO * 100, "amount": capital * LIMIT_GROUP_RATIO,
+                             "basis": "은행법 §35① 동일차주 25% (원장 기반 - 별표2 근사)"},
+        "internal_limit": {"ratio": INTERNAL_ALERT_RATIO * 100, "amount": capital * INTERNAL_ALERT_RATIO,
+                           "basis": "내부 조기경보 기준 (법정 동일인 20% 한도와 별개)"},
         "groups": groups,
+        "disclaimer": "신용공여 = 원장 net_exposure 합 (난내 대출 + 미사용약정 CCF 40% + 지급보증 CCF 100%)",
     }
 
 
 @router.get("/regulatory-scope/{group_id}")
 def regulatory_scope_detail(group_id: str, db: Session = Depends(get_db)):
-    """동일차주 판단 재현 - 구성원별 포함 근거·지분율·위험전이 관계·익스포저"""
+    """동일차주 판단 재현 - 구성원별 포함 근거·원장 분해·위험전이 관계"""
     grp = db.execute(text(
         "SELECT group_id, group_name, group_type FROM borrower_group WHERE group_id = :g"
     ), {"g": group_id}).fetchone()
     if not grp:
         raise HTTPException(404, "차주그룹을 찾을 수 없습니다")
-
-    cap = db.execute(text(
-        "SELECT total_capital FROM capital_position ORDER BY base_date DESC LIMIT 1"
-    )).fetchone()
-    capital = cap[0] if cap else 0
+    capital = _capital(db)
+    ledger = _ledger_by_customer(db)
 
     members = db.execute(text("""
         SELECT m.customer_id, c.customer_name, m.relationship_type, m.ownership_pct,
-               COALESCE(SUM(f.outstanding_amount), 0),
-               COALESCE(SUM(f.current_limit - f.outstanding_amount), 0),
                MIN(f.contract_date)
         FROM borrower_group_member m
         JOIN customer c ON c.customer_id = m.customer_id
@@ -525,7 +631,6 @@ def regulatory_scope_detail(group_id: str, db: Session = Depends(get_db)):
         WHERE m.group_id = :g
         GROUP BY m.customer_id, c.customer_name, m.relationship_type, m.ownership_pct
     """), {"g": group_id}).fetchall()
-
     guarantees = db.execute(text("""
         SELECT gg.guarantor_id, gc.customer_name, gg.beneficiary_id, bc.customer_name,
                gg.guarantee_type, gg.guarantee_amount, gg.effective_date
@@ -535,24 +640,25 @@ def regulatory_scope_detail(group_id: str, db: Session = Depends(get_db)):
         WHERE gg.group_id = :g AND (gg.status = 'ACTIVE' OR gg.status IS NULL)
     """), {"g": group_id}).fetchall()
 
-    BASIS = {
-        "PARENT": "모회사 (지배)", "SUBSIDIARY": "자회사 (피지배)",
-        "AFFILIATE": "계열회사 (동일 지배하)", "GUARANTOR": "상호보증 (위험공유)",
-    }
-    member_list = []
-    loans = undrawn = 0.0
-    for cid, name, rel, pct, l, u, first_contract in members:
-        loans += l
-        undrawn += u
+    BASIS = {"PARENT": "모회사 (지배)", "SUBSIDIARY": "자회사 (피지배)",
+             "AFFILIATE": "계열회사 (동일 지배하)", "GUARANTOR": "상호보증 (위험공유)"}
+    member_list, on_loan, off_und, off_g = [], 0.0, 0.0, 0.0
+    for cid, name, rel, pct, first_contract in members:
+        led = ledger.get(cid, {})
+        on_loan += led.get("ON_LOAN", 0.0)
+        off_und += led.get("OFF_UNDRAWN", 0.0)
+        off_g += led.get("OFF_GUARANTEE", 0.0)
         member_list.append({
             "customer_id": cid, "name": name,
             "relationship": rel, "basis": BASIS.get(rel, rel or "지분관계"),
             "ownership_pct": pct,
-            "loans": round(l, 2), "undrawn": round(u, 2),
+            "loans": round(led.get("ON_LOAN", 0.0), 2),
+            "undrawn": round(led.get("OFF_UNDRAWN", 0.0), 2),
+            "guarantee": round(led.get("OFF_GUARANTEE", 0.0), 2),
             "effective_from": first_contract,
         })
-    guar_total = sum(g[5] or 0 for g in guarantees)   # 위험전이 참고치 (합산 제외)
-    total = loans + undrawn
+    total = on_loan + off_und + off_g
+    guar_total = sum(g[5] or 0 for g in guarantees)
 
     return {
         "group": {"group_id": grp[0], "group_name": grp[1], "type": grp[2]},
@@ -563,13 +669,15 @@ def regulatory_scope_detail(group_id: str, db: Session = Depends(get_db)):
             for g in guarantees
         ],
         "aggregation": {
-            "loans": round(loans, 2), "undrawn": round(undrawn, 2),
-            "intra_group_guarantees": round(guar_total, 2), "total_credit": round(total, 2),
+            "loans": round(on_loan, 2), "undrawn": round(off_und, 2),
+            "bank_guarantees": round(off_g, 2),
+            "intra_group_guarantees": round(guar_total, 2),
+            "total_credit": round(total, 2),
             "capital": capital,
             "vs_capital_pct": round(total / capital * 100, 2) if capital else 0,
-            "regulatory_limit_pct": REGULATORY_LIMIT_RATIO * 100,
-            "internal_limit_pct": INTERNAL_LIMIT_RATIO * 100,
-            "note": "신용공여 = 대출잔액 + 미사용약정 (규제 근사치 - 감독규정 별표2 신용환산율 미적용). "
-                    "계열사 간 보증은 익스포저가 아니라 동일차주 구성·위험전이 판단 자료로만 표시.",
+            "regulatory_limit_pct": LIMIT_GROUP_RATIO * 100,
+            "internal_limit_pct": INTERNAL_ALERT_RATIO * 100,
+            "note": "신용공여 원장 기반: 난내 대출(CCF 1.0) + 미사용약정(CCF 0.4) + "
+                    "은행 지급보증(CCF 1.0). 계열사 간 보증은 위험전이 참고.",
         },
     }
