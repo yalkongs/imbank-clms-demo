@@ -114,7 +114,7 @@ export default function Dashboard() {
               {formatAmount(heroExposure, 'billion')}
             </p>
             <p className="text-xs opacity-70 mt-1">
-              {formatNumber(portfolio.total_customers || 0)}개 기업 · 여신 {formatNumber(portfolio.total_facilities || 1200)}건
+              {formatNumber(portfolio.total_customers || 0)}개 기업 · 여신 {formatNumber(portfolio.total_facilities || 0)}건
             </p>
           </div>
           <div className="flex items-center gap-6 text-sm">

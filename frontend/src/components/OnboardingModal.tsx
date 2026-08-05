@@ -133,10 +133,10 @@ export default function OnboardingModal({ onClose }: { onClose: (startTour?: boo
             <p className="text-[11px] font-semibold text-gray-400 tracking-wider mb-2">구축 규모</p>
             <div className="grid grid-cols-4 gap-3 text-center">
               {[
-                { n: '25',     l: '화면' },
-                { n: '210',    l: 'API' },
+                { n: '26',     l: '화면' },
+                { n: '215',    l: 'API' },
                 { n: '84',     l: 'DB 테이블' },
-                { n: '1,200',  l: '여신' },
+                { n: '3,700',  l: '여신' },
               ].map(s => (
                 <div key={s.l}>
                   <p className="text-base font-bold text-gray-900 tabular leading-tight">{s.n}</p>
@@ -146,7 +146,7 @@ export default function OnboardingModal({ onClose }: { onClose: (startTour?: boo
             </div>
             <p className="text-[11px] text-gray-500 mt-2.5 leading-relaxed">
               Basel IRB · IFRS 9 · 금융감독규정 기준 산식 내장 -
-              고객 1,010개 · 자산건전성 분류 이력 14,400건
+              고객 2,160개 · 자산건전성 분류 이력 18,100건
             </p>
           </div>
         </div>

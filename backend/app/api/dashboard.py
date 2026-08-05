@@ -33,8 +33,9 @@ def get_dashboard_summary(region: str = Query(None), db: Session = Depends(get_d
     portfolio = db.execute(text(f"""
         SELECT
             COUNT(DISTINCT f.customer_id) as total_customers,
-            SUM(f.approved_amount) as total_exposure,
-            AVG(f.final_rate) as avg_rate
+            SUM(f.outstanding_amount) as total_exposure,
+            AVG(f.final_rate) as avg_rate,
+            COUNT(*) as total_facilities
         FROM facility f
         JOIN customer c ON f.customer_id = c.customer_id
         WHERE f.status = 'ACTIVE' {region_cond}
@@ -122,6 +123,7 @@ def get_dashboard_summary(region: str = Query(None), db: Session = Depends(get_d
         "portfolio": {
             "total_customers": portfolio[0] if portfolio else 0,
             "total_exposure": float(portfolio[1]) if portfolio and portfolio[1] else 0,
+            "total_facilities": portfolio[3] if portfolio else 0,
             "avg_rate": float(portfolio[2] * 100) if portfolio and portfolio[2] else 0,
             "weighted_pd": float(risk_params[0]) if risk_params and risk_params[0] else 0.02,
             "weighted_lgd": float(risk_params[1]) if risk_params and risk_params[1] else 0.35,
