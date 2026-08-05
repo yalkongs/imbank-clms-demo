@@ -15,6 +15,7 @@ from sqlalchemy import text
 from ..core.database import get_db
 from ..core.config import AS_OF_STR
 from ..core.audit import record_audit
+from ..core.auth import get_current_user, User
 
 router = APIRouter(prefix="/api/credit-case", tags=["CreditCase"])
 
@@ -264,6 +265,7 @@ def create_policy_exception(
     application_id: str,
     payload: dict = Body(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """정책 예외 등록 - 자유 메모가 아니라 규정·사유·완화수단·재검토일 구조 강제"""
     required = ["rule_ref", "reason", "mitigation", "approver_level", "valid_until", "review_date"]
@@ -288,10 +290,10 @@ def create_policy_exception(
         "id": ex_id, "aid": application_id, "cid": cust[0],
         "rule": payload["rule_ref"], "ver": payload.get("rule_version", "현행"),
         "reason": payload["reason"], "mit": payload["mitigation"],
-        "lvl": payload["approver_level"], "name": payload.get("approver_name", ""),
+        "lvl": current_user.approval_level, "name": current_user.name,
         "at": AS_OF_STR, "until": payload["valid_until"], "rev": payload["review_date"],
     })
-    record_audit(db, user_id=payload.get("approver_name", "SYSTEM"), user_dept="여신심사부",
+    record_audit(db, user_id=current_user.name, user_dept=current_user.dept,
                  action_type="POLICY_EXCEPTION", target_entity="policy_exception",
                  target_id=ex_id, after={"rule": payload["rule_ref"], "app": application_id})
     db.commit()

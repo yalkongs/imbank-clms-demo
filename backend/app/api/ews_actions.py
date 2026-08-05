@@ -12,6 +12,7 @@ from sqlalchemy import text
 from ..core.database import get_db
 from ..core.config import AS_OF_STR
 from ..core.audit import record_audit
+from ..core.auth import get_current_user, User
 
 router = APIRouter(prefix="/api/ews-actions", tags=["EWSActions"])
 
@@ -67,7 +68,8 @@ def list_actions(db: Session = Depends(get_db)):
 
 
 @router.post("/{action_id}/complete")
-def complete_action(action_id: str, payload: dict = Body(...), db: Session = Depends(get_db)):
+def complete_action(action_id: str, payload: dict = Body(...), db: Session = Depends(get_db),
+                    current_user: User = Depends(get_current_user)):
     """조치 완료 - 조치 내용 필수 (자유 메모가 아니라 근거 강제)"""
     taken = (payload.get("action_taken") or "").strip()
     if len(taken) < 5:
@@ -95,6 +97,6 @@ def complete_action(action_id: str, payload: dict = Body(...), db: Session = Dep
     record_audit(db, action_type="EWS_ACTION_DONE", target_entity="ews_action",
                  target_id=action_id, before={"status": row[0]},
                  after={"status": "DONE", "step": row[1], "action_taken": taken[:80]},
-                 user_id=payload.get("user", "김여신"), user_dept="여신관리부")
+                 user_id=current_user.name, user_dept=current_user.dept)
     db.commit()
     return {"action_id": action_id, "status": "DONE", "completed_at": AS_OF_STR}

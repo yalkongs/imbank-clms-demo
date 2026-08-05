@@ -511,3 +511,43 @@ function attachActivity(instance: { interceptors: any }) {
 }
 attachActivity(axios);
 attachActivity(api);
+
+/**
+ * 인증 토큰 관리 - 쓰기 작업(승인·조치·결정)은 서버가 로그인 사용자로
+ * 승인자·전결권을 결정한다. 토큰은 localStorage 에 두고 모든 요청에 첨부.
+ */
+const AUTH_KEY = 'clms-auth';
+
+export function getAuth(): { token: string; user: any } | null {
+  try {
+    const raw = localStorage.getItem(AUTH_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+export function setAuth(auth: { token: string; user: any } | null) {
+  if (auth) localStorage.setItem(AUTH_KEY, JSON.stringify(auth));
+  else localStorage.removeItem(AUTH_KEY);
+  authListeners.forEach(fn => fn(auth));
+}
+
+type AuthListener = (auth: { token: string; user: any } | null) => void;
+const authListeners = new Set<AuthListener>();
+export function onAuthChange(fn: AuthListener): () => void {
+  authListeners.add(fn);
+  fn(getAuth());
+  return () => authListeners.delete(fn);
+}
+
+function attachAuthHeader(instance: { interceptors: any }) {
+  instance.interceptors.request.use((cfg: any) => {
+    const auth = getAuth();
+    if (auth?.token) {
+      cfg.headers = cfg.headers || {};
+      cfg.headers['Authorization'] = `Bearer ${auth.token}`;
+    }
+    return cfg;
+  });
+}
+attachAuthHeader(axios);
+attachAuthHeader(api);

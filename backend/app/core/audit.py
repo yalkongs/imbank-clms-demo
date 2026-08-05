@@ -27,8 +27,13 @@ def record_audit(
     after: dict | None = None,
     user_id: str = "김여신",
     user_dept: str = "여신심사부",
+    critical: bool = False,
 ) -> None:
-    """감사 기록 1건 삽입. 실패해도 본 트랜잭션을 깨지 않는다(로그가 업무를 막으면 안 됨)."""
+    """감사 기록 1건 삽입.
+
+    critical=False: 실패해도 본 트랜잭션을 깨지 않는다 (조회성 부가 기록).
+    critical=True : 승인 같은 핵심 행위 - 감사기록 실패는 은폐하지 않고
+                    예외를 올려 전체 트랜잭션을 롤백시킨다 (제3자 리뷰 P0-1)."""
     try:
         db.execute(text("""
             INSERT INTO audit_log
@@ -49,6 +54,8 @@ def record_audit(
             "ip": "127.0.0.1",
         })
     except Exception:
-        # 감사 기록 실패가 업무 처리를 막아서는 안 된다 - 조용히 넘어간다.
-        # 실제 시스템이라면 별도 채널로 경보를 남긴다.
+        # critical 행위(승인 등)의 감사기록 실패는 은폐하지 않는다 - 롤백 유도
+        if critical:
+            raise
+        # 부가 기록 실패는 업무 처리를 막지 않는다 (실제 시스템은 outbox·경보 필요)
         pass

@@ -25,12 +25,25 @@ from .api import inclusive_finance, pf, governance, export, search
 from .api import portfolio_map
 # 여신통제 확장: 여신철·EWS 조치의무·금리인하요구권
 from .api import credit_case, ews_actions, rate_reduction
+# 인증 (서버측 전결·승인자 결정)
+from .api import auth as auth_api
+from .core.auth import verify_token
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """애플리케이션 라이프사이클 관리"""
-    # Startup
+    # Startup - 마이그레이션 먼저 (새 배포 환경 스키마 보장)
+    try:
+        import sys as _sys
+        from pathlib import Path as _P
+        _sys.path.insert(0, str(_P(__file__).resolve().parents[2] / "database"))
+        from migrate import run_migrations
+        applied = run_migrations()
+        if applied:
+            print(f"[migrate] 적용: {applied}")
+    except Exception as e:
+        print(f"[migrate] 경고: {e}")
     Base.metadata.create_all(bind=engine)
     yield
     # Shutdown
@@ -75,6 +88,23 @@ app.add_middleware(
 # 응답 압축 - 포트폴리오 맵(736KB)·이력(498KB) 같은 대형 JSON 이
 # 저속 회선·무료 인스턴스에서 로딩 시간을 지배한다. gzip 으로 ~1/8 로 줄인다.
 app.add_middleware(GZipMiddleware, minimum_size=2048)
+
+
+# 쓰기 인증 - 공개 배포에서 익명 쓰기를 차단한다 (제3자 리뷰 P0-1).
+# GET 은 공개, POST/PUT/DELETE /api/* 는 데모 계정 로그인 필수.
+from fastapi import Request as _Req
+from fastapi.responses import JSONResponse as _JR
+
+@app.middleware("http")
+async def _write_auth_guard(request: _Req, call_next):
+    if (request.method in ("POST", "PUT", "DELETE", "PATCH")
+            and request.url.path.startswith("/api/")
+            and request.url.path != "/api/auth/login"):
+        authz = request.headers.get("Authorization", "")
+        if not (authz.startswith("Bearer ") and verify_token(authz[7:])):
+            return _JR(status_code=401, content={
+                "detail": "쓰기 작업은 로그인이 필요합니다 - 우측 상단 사용자 메뉴에서 데모 계정으로 로그인하세요"})
+    return await call_next(request)
 
 
 # 읽기 전용 모드 토글 - READ_ONLY=true 로 기동하면 /api/* 쓰기 요청을 차단한다.
@@ -138,6 +168,7 @@ app.include_router(portfolio_map.router)
 app.include_router(credit_case.router)
 app.include_router(ews_actions.router)
 app.include_router(rate_reduction.router)
+app.include_router(auth_api.router)
 
 
 @app.get("/health")

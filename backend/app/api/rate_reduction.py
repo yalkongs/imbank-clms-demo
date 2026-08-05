@@ -15,6 +15,7 @@ from sqlalchemy import text
 from ..core.database import get_db
 from ..core.config import AS_OF_STR, AS_OF_DATE
 from ..core.audit import record_audit
+from ..core.auth import get_current_user, User
 
 router = APIRouter(prefix="/api/rate-reduction", tags=["RateReduction"])
 
@@ -109,7 +110,8 @@ def list_requests(db: Session = Depends(get_db)):
 
 
 @router.post("/requests/{request_id}/decide")
-def decide(request_id: str, payload: dict = Body(...), db: Session = Depends(get_db)):
+def decide(request_id: str, payload: dict = Body(...), db: Session = Depends(get_db),
+           current_user: User = Depends(get_current_user)):
     """수용/부분수용/거절 결정 + 통지 기록. 사유 필수 (설명의무).
 
     PoC 한계: 통지는 별도 발송 채널 없이 결정과 동시에 기록된다
@@ -158,7 +160,7 @@ def decide(request_id: str, payload: dict = Body(...), db: Session = Depends(get
     record_audit(db, action_type="RATE_REDUCTION_DECIDE", target_entity="rate_reduction_request",
                  target_id=request_id, before={"status": row[0], "old_rate": old_rate},
                  after={"status": decision, "decided_rate": decided_rate},
-                 user_id=payload.get("user", "김여신"), user_dept="여신심사부")
+                 user_id=current_user.name, user_dept=current_user.dept)
     db.commit()
     return {"request_id": request_id, "status": decision,
             "decided_rate": decided_rate, "notified_at": AS_OF_STR}

@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Stamp, ShieldAlert } from 'lucide-react';
 import { Card } from '../components';
 import { formatAmount, formatNumber } from '../utils/format';
-import { useTheme, ROLES } from '../context/ThemeProvider';
+import { getAuth, onAuthChange } from '../utils/api';
 import axios from 'axios';
 
 /**
@@ -14,8 +14,11 @@ import axios from 'axios';
  * 서버가 403 으로 차단한다(전결권 검증) - 그 흐름을 그대로 체험시킨다.
  */
 export default function ApprovalInbox() {
-  const { role } = useTheme();
-  const me = ROLES[role];
+  const [auth, setAuth] = React.useState(getAuth());
+  React.useEffect(() => onAuthChange(setAuth), []);
+  const me = auth?.user
+    ? { name: auth.user.name, title: auth.user.level_ko, level: auth.user.approval_level }
+    : { name: '미로그인', title: '조회 전용', level: 'TEAM_LEAD' };
   const [data, setData] = useState<any>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
@@ -23,11 +26,11 @@ export default function ApprovalInbox() {
 
   const load = useCallback(() => {
     setLoading(true);
-    axios.get('/api/applications/approval-inbox', { params: { level: me.level } })
+    axios.get('/api/applications/approval-inbox', { params: auth?.user ? {} : { level: me.level } })
       .then(r => setData(r.data))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [me.level]);
+  }, [me.level, auth?.user?.user_id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -38,7 +41,6 @@ export default function ApprovalInbox() {
       await axios.post(`/api/applications/${id}/approve`, null, {
         params: {
           decision,
-          approval_level: me.level,
           approver_name: `${me.name}(${me.title})`,
         },
       });

@@ -8,6 +8,7 @@ from typing import Optional
 from datetime import datetime
 from ..core.database import get_db
 from ..core.audit import record_audit
+from ..core.auth import get_current_user, get_optional_user, User
 from ..core.config import AS_OF_DATE
 from ..services.calculations import (
     calculate_raroc, calculate_pricing, calculate_rwa,
@@ -297,12 +298,16 @@ def get_applications_summary(region: Optional[str] = None, db: Session = Depends
 def get_approval_inbox(
     level: str = "TEAM_LEAD",
     db: Session = Depends(get_db),
+    viewer=Depends(get_optional_user),
 ):
     """결재함 - 심사 진행 중이며 지정 전결 레벨의 결재가 필요한 신청 목록.
 
     필요 전결 레벨은 신청 금액으로 산출한다(전결 규정 DB 기준). 조회자의
     레벨과 비교해 '내가 결재 가능한 건'과 '상위 결재 필요 건'을 구분한다.
     """
+    # 로그인 사용자가 있으면 그 사용자의 전결권이 정본 - 파라미터는 무시
+    if viewer is not None:
+        level = viewer.approval_level
     authority = load_approval_authority(db)
     if level not in authority:
         raise HTTPException(422, f"알 수 없는 권한: {level}")
@@ -859,16 +864,24 @@ def update_stage(
 def approve_application(
     application_id: str,
     decision: str,
-    approval_level: Optional[str] = None,
-    approver_name: Optional[str] = None,
+    approval_level: Optional[str] = None,   # deprecated - 서버가 인증 사용자로 결정
+    approver_name: Optional[str] = None,    # deprecated - 서버가 인증 사용자로 결정
     conditions: Optional[str] = None,
     comments: Optional[str] = None,
     approved_amount: Optional[float] = None,
     approved_rate: Optional[float] = None,
     approved_tenor: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """여신 승인/반려 처리"""
+    """여신 승인/반려 처리.
+
+    승인자·부서·전결권은 클라이언트 파라미터가 아니라 인증 사용자에서
+    서버가 결정한다. 승인·한도예약·감사기록은 하나의 트랜잭션이다.
+    """
+    # 서버측 결정 - 전달된 approval_level/approver_name 은 무시
+    approval_level = current_user.approval_level
+    approver_name = current_user.name
 
     # 신청 정보 확인
     app = db.execute(text("""
@@ -879,13 +892,22 @@ def approve_application(
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
 
+    # 중복 결재·직무분리: 같은 사용자가 이 신청에 이미 결재했다면 다시 결재할 수 없다
+    dup = db.execute(text("""
+        SELECT approval_level FROM approval_history
+        WHERE application_id = :app_id AND approver_name = :nm LIMIT 1
+    """), {"app_id": application_id, "nm": approver_name}).fetchone()
+    if dup:
+        raise HTTPException(409, f"직무분리 위반: {approver_name} 은(는) 이 건에 이미 "
+                                 f"{dup[0]} 단계로 결재했습니다 - 다른 결재자가 필요합니다")
+
     # 전결권 검증 - 승인 금액이 승인자 권한 한도를 넘으면 거부한다.
     # 종전에는 파라미터로 받은 레벨을 검증 없이 그대로 기록했다.
     if decision in ("APPROVE", "CONDITIONAL"):
         authority = load_approval_authority(db)
         effective_amount = approved_amount if approved_amount is not None else float(app[0] or 0)
         required = get_required_authority(effective_amount, db)
-        level = approval_level or required["level"]
+        level = approval_level    # = 인증 사용자의 전결권
         if level not in authority:
             raise HTTPException(status_code=422, detail=f"알 수 없는 승인 권한: {level}")
         if effective_amount > authority[level]["limit"]:
@@ -902,13 +924,17 @@ def approve_application(
         "CONDITIONAL" if decision == "CONDITIONAL" else "REJECTED"
     )
 
-    db.execute(text("""
+    updated = db.execute(text("""
         UPDATE loan_application
         SET status = :status,
             current_stage = 'COMPLETED',
             updated_at = CURRENT_TIMESTAMP
         WHERE application_id = :app_id
+          AND status NOT IN ('APPROVED', 'REJECTED', 'WITHDRAWN')
     """), {"status": new_status, "app_id": application_id})
+    if updated.rowcount == 0:
+        db.rollback()
+        raise HTTPException(409, "이미 처리 완료된 신청입니다 (중복 결재 방지)")
 
     # 승인 이력 추가
     approval_id = f"APPR_{application_id}_{AS_OF_DATE.strftime('%Y%m%d%H%M%S')}"
@@ -958,17 +984,26 @@ def approve_application(
                         SET reserved_amount = COALESCE(reserved_amount, 0) + :amt
                         WHERE limit_id = :lid
                     """), {"amt": approved_amount or float(app[0] or 0), "lid": lim[0]})
-        except Exception:
-            pass   # 예약 실패가 승인을 막지 않는다
+        except HTTPException:
+            raise
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(500, f"한도 예약 실패로 승인을 중단했습니다 (원자성 보장): {e}")
 
-    record_audit(
-        db, f"LOAN_{decision}", "loan_application", application_id,
-        before={"status": app[1]},
-        after={"status": new_status, "approved_amount": approved_amount,
-               "approval_level": approval_level},
-        user_id=approver_name or "김여신",
-    )
-    db.commit()
+    try:
+        record_audit(
+            db, f"LOAN_{decision}", "loan_application", application_id,
+            before={"status": app[1]},
+            after={"status": new_status, "approved_amount": approved_amount,
+                   "approval_level": approval_level, "approver": approver_name},
+            user_id=approver_name, user_dept=current_user.dept, critical=True,
+        )
+        db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"감사기록 실패로 승인을 롤백했습니다 (증거 없는 승인 금지): {e}")
 
     return {
         "status": "success",

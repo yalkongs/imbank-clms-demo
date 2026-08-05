@@ -21,6 +21,12 @@ from app.main import app  # noqa: E402
 client = TestClient(app)
 
 
+def _auth_headers(user_id="kim.yeosin", pin="1234"):
+    r = client.post("/api/auth/login", json={"user_id": user_id, "pin": pin})
+    assert r.status_code == 200, f"데모 로그인 실패: {r.text[:120]}"
+    return {"Authorization": f"Bearer {r.json()['token']}"}
+
+
 def _parameterless_get_paths():
     # FastAPI 버전에 따라 include_router 가 중첩 보관되므로 OpenAPI 스펙에서 수집.
     # 필수 쿼리 파라미터가 있는 엔드포인트(검색·what-if 등)는 인자 없이 422 가 정상이라 제외.
@@ -31,6 +37,8 @@ def _parameterless_get_paths():
         if not get or not path.startswith("/api/") or "{" in path:
             continue
         if any(p.get("required") for p in get.get("parameters", [])):
+            continue
+        if path == "/api/auth/me":            # 인증 필수 GET
             continue
         out.append(path)
     return sorted(out)
@@ -87,7 +95,7 @@ def test_read_only_guard():
         from app.main import app as ro_app
         ro = TestClient(ro_app)
         r = ro.post("/api/applications/APP_X/approve", params={"decision": "APPROVED"})
-        assert r.status_code == 403, f"읽기 전용인데 쓰기가 {r.status_code}"
+        assert r.status_code in (401, 403), f"읽기 전용인데 쓰기가 {r.status_code}"
         assert ro.get("/health").status_code == 200
     finally:
         os.environ.pop("READ_ONLY", None)
@@ -132,7 +140,8 @@ def test_ews_action_sequence_guard():
     if not row:
         pytest.skip("후행 대기 단계 표본 없음")
     r = client.post(f"/api/ews-actions/{row[0]}/complete",
-                    json={"action_taken": "순서 위반 시도 테스트"})
+                    json={"action_taken": "순서 위반 시도 테스트"},
+                    headers=_auth_headers())
     assert r.status_code == 422, f"선행단계 가드 미작동: {r.status_code}"
 
 
@@ -151,7 +160,8 @@ def test_rate_reduction_rejects_invalid_rates():
     for bad in (-0.01, 0, old * 1.5, "NaN"):
         r = client.post(f"/api/rate-reduction/requests/{rid}/decide",
                         json={"decision": "ACCEPTED", "new_rate": bad,
-                              "reason": "유효성 테스트 사유입니다"})
+                              "reason": "유효성 테스트 사유입니다"},
+                        headers=_auth_headers())
         assert r.status_code == 422, f"{bad} 통과됨 ({r.status_code})"
 
 
@@ -171,3 +181,38 @@ def test_borrower_scope_excludes_intra_group_guarantees():
     assert abs(agg["total_credit"] - (agg["loans"] + agg["undrawn"])) < 1, \
         "보증이 신용공여에 합산됨"
     assert abs(g["total_credit"] - agg["total_credit"]) < 1, "목록·상세 합산 불일치"
+
+
+def test_write_requires_auth():
+    """미인증 쓰기는 401 - 공개 배포에서 익명 쓰기 차단"""
+    r = client.post("/api/ews-actions/X/complete", json={"action_taken": "test"})
+    assert r.status_code == 401
+
+
+def test_approver_is_server_decided():
+    """승인자·전결권은 클라이언트 파라미터가 아니라 토큰 사용자로 결정"""
+    from app.core.database import SessionLocal
+    from sqlalchemy import text
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT la.application_id FROM loan_application la
+        WHERE la.status IN ('REVIEWING','RECEIVED','SCREENING')
+          AND la.requested_amount < 50e8
+          AND NOT EXISTS (SELECT 1 FROM approval_history ah
+                          WHERE ah.application_id = la.application_id)
+        LIMIT 1
+    """)).fetchone()
+    if not row:
+        pytest.skip("승인 가능 표본 없음")
+    aid = row[0]
+    # 클라이언트가 EXECUTIVE 를 사칭해도 서버는 토큰(TEAM_LEAD)으로 기록해야 한다
+    r = client.post(f"/api/applications/{aid}/approve",
+                    params={"decision": "APPROVE", "approval_level": "EXECUTIVE",
+                            "approver_name": "가짜임원"},
+                    headers=_auth_headers("kim.yeosin", "1234"))
+    assert r.status_code == 200, r.text[:200]
+    rec = db.execute(text("""
+        SELECT approval_level, approver_name FROM approval_history
+        WHERE application_id = :a ORDER BY decided_at DESC LIMIT 1
+    """), {"a": aid}).fetchone()
+    assert rec[0] == "TEAM_LEAD" and rec[1] == "김여신", f"사칭 값이 기록됨: {rec}"
