@@ -1,4 +1,5 @@
-# Render Blueprint — iM뱅크 CLMS 데모 (읽기 전용 데모)
+# Render Blueprint - iM뱅크 CLMS 공개 데모 (쓰기 가능 - 승인·시뮬레이션 체험용.
+# 데이터는 배포 시점 시드로 리셋되며, READ_ONLY=true 로 쓰기를 잠글 수 있다)
 # 단일 FastAPI 프로세스가 API와 빌드된 SPA(frontend/dist)를 함께 서빙한다.
 # 프론트엔드는 사전 빌드되어 리포에 포함되므로 빌드 단계는 pip 설치만 수행한다.
 services:
@@ -11,5 +12,8 @@ services:
     startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      # 쓰기 차단이 필요하면 주석 해제
+      # - key: READ_ONLY
+      #   value: "true"
       - key: PYTHON_VERSION
         value: "3.13.4"

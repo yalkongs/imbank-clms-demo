@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from pathlib import Path
@@ -10,6 +10,15 @@ engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False}
 )
+
+
+@event.listens_for(engine, "connect")
+def _enable_foreign_keys(dbapi_conn, _record):
+    """SQLite 는 연결마다 FK 검사를 켜야 한다 - 고아 참조 데이터 유입 방지
+    (제3자 리뷰 지적: 미활성 상태에서 group_guarantee 고아 238건이 허용됐음)"""
+    cursor = dbapi_conn.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

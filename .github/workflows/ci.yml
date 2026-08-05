@@ -1,0 +1,28 @@
+# API 스모크 테스트 CI
+# =====================
+# 실제 발생했던 회귀(라우트 가로채기·배포 의존성 누락·전부-0 응답)를
+# push 시점에 잡는다. 파라미터 없는 GET 전수 + PDF + 읽기전용 가드.
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install deps
+        run: |
+          pip install -r requirements.txt
+          pip install pytest httpx
+      - name: Run smoke tests
+        run: cd backend && python -m pytest tests -q --tb=short

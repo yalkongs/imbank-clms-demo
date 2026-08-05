@@ -74,6 +74,23 @@ app.add_middleware(
 # 저속 회선·무료 인스턴스에서 로딩 시간을 지배한다. gzip 으로 ~1/8 로 줄인다.
 app.add_middleware(GZipMiddleware, minimum_size=2048)
 
+
+# 읽기 전용 모드 토글 - READ_ONLY=true 로 기동하면 /api/* 쓰기 요청을 차단한다.
+# 공개 데모는 승인·시뮬레이션 체험이 핵심 가치라 기본은 쓰기 허용이며,
+# 필요 시(악용 징후 등) 환경변수 하나로 잠글 수 있게 한다.
+if os.getenv("READ_ONLY", "").lower() in ("1", "true", "yes"):
+    from fastapi import Request
+    from fastapi.responses import JSONResponse
+
+    @app.middleware("http")
+    async def _read_only_guard(request: Request, call_next):
+        if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith("/api/"):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "읽기 전용 모드입니다 - 쓰기 작업이 비활성화되어 있습니다."},
+            )
+        return await call_next(request)
+
 # API 라우터 등록
 app.include_router(dashboard.router)
 app.include_router(applications.router)
