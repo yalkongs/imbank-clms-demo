@@ -570,3 +570,99 @@ def get_classification_trend(
 
     trend = sorted(timeline.values(), key=lambda x: x["base_date"])[-months:]
     return {"trend": trend}
+
+
+# ─────────────────────────────────────────────────────────
+# 3체계 대사표 (제3자 리뷰 ⑧): 감독분류 × IFRS9 Stage × EWS 등급을
+# 하나로 합치지 않고 병렬 대사한다. 불일치는 자동 설명 코드를 부여하고,
+# 설명이 안 되는 조합만 '개별 검토' 로 표기한다.
+# ─────────────────────────────────────────────────────────
+
+_RECON_CLS_ORDER = ["NORMAL", "PRECAUTIONARY", "SUBSTANDARD", "DOUBTFUL", "LOSS"]
+_RECON_CLS_KO = {"NORMAL": "정상", "PRECAUTIONARY": "요주의", "SUBSTANDARD": "고정",
+                 "DOUBTFUL": "회수의문", "LOSS": "추정손실"}
+
+
+def _recon_explain(cls: str, stage: int, ews_grade: str, dpd: int) -> tuple[str, bool]:
+    """(설명, 개별검토 필요 여부). 세 체계는 목적이 달라 불일치 자체는 정상이다."""
+    npl = cls in ("SUBSTANDARD", "DOUBTFUL", "LOSS")
+    if cls == "NORMAL" and stage == 2:
+        return "SICR 선행 인식 - 회계(전 생애 ECL)가 감독분류보다 먼저 반응 (정상 작동)", False
+    if cls == "PRECAUTIONARY" and stage == 2:
+        return "요주의·Stage 2 정합", False
+    if npl and stage == 3:
+        return "신용손상·고정이하 정합", False
+    if cls == "NORMAL" and stage == 1:
+        return "정합", False
+    if cls == "PRECAUTIONARY" and stage == 1:
+        return "감독 보수주의(DPD 30일+) 선행 - SICR 미충족. ECL 개별 재검토 권고", True
+    if npl and stage < 3:
+        return "감독분류 부실인데 회계 손상 미인식 - 즉시 개별 검토 대상", True
+    if cls == "NORMAL" and stage == 3:
+        return "회계 손상인데 감독분류 정상 - 분류 재실행 필요", True
+    return "기타 조합 - 개별 검토", True
+
+
+@router.get("/reconciliation")
+def get_reconciliation(db: Session = Depends(get_db)):
+    """시설별 최신 감독분류·Stage·EWS 를 병렬 대사"""
+    rows = db.execute(text("""
+        SELECT ac.facility_id, ac.customer_id, c.customer_name,
+               ac.classification, ac.dpd, ac.exposure_at_class,
+               e.stage, e.sicr_reason,
+               ew.ews_grade, ew.composite_score
+        FROM asset_classification ac
+        JOIN (SELECT facility_id, MAX(base_date) latest
+              FROM asset_classification GROUP BY facility_id) mx
+          ON mx.facility_id = ac.facility_id AND mx.latest = ac.base_date
+        LEFT JOIN (SELECT e1.facility_id, e1.stage, e1.sicr_reason
+                   FROM ecl_calculation e1
+                   JOIN (SELECT facility_id, MAX(calc_date) latest
+                         FROM ecl_calculation GROUP BY facility_id) m2
+                     ON m2.facility_id = e1.facility_id AND m2.latest = e1.calc_date) e
+          ON e.facility_id = ac.facility_id
+        LEFT JOIN (SELECT customer_id, ews_grade, composite_score,
+                          ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY score_date DESC) rn
+                   FROM ews_composite_score) ew
+          ON ew.customer_id = ac.customer_id AND ew.rn = 1
+        LEFT JOIN customer c ON c.customer_id = ac.customer_id
+    """)).fetchall()
+
+    matrix: dict = {}
+    mismatches = []
+    consistent = 0
+    for fac_id, cust_id, cname, cls, dpd, exp, stage, sicr, ews_g, ews_s in rows:
+        stage = stage or 1
+        key = (cls, stage)
+        cell = matrix.setdefault(key, {"count": 0, "exposure": 0.0})
+        cell["count"] += 1
+        cell["exposure"] += exp or 0
+        explain, needs_review = _recon_explain(cls, stage, ews_g or "", dpd or 0)
+        if cls == "NORMAL" and stage == 1:
+            consistent += 1
+        else:
+            mismatches.append({
+                "facility_id": fac_id, "customer_id": cust_id, "customer_name": cname,
+                "classification": _RECON_CLS_KO.get(cls, cls), "stage": stage,
+                "sicr_reason": sicr, "ews_grade": ews_g, "ews_score": ews_s,
+                "dpd": dpd, "exposure": round(exp or 0, 2),
+                "explanation": explain, "needs_review": needs_review,
+            })
+    mismatches.sort(key=lambda m: (not m["needs_review"], -m["exposure"]))
+
+    return {
+        "matrix": [
+            {"classification": _RECON_CLS_KO[c], "stage": s,
+             "count": matrix[(c, s)]["count"],
+             "exposure": round(matrix[(c, s)]["exposure"], 2)}
+            for c in _RECON_CLS_ORDER for s in (1, 2, 3) if (c, s) in matrix
+        ],
+        "total": len(rows),
+        "consistent": consistent,
+        "mismatch_count": len(mismatches),
+        "needs_review_count": sum(1 for m in mismatches if m["needs_review"]),
+        "mismatches": mismatches[:60],
+        "note": "세 체계(감독분류·IFRS9 Stage·EWS)는 목적이 달라 단일 등급으로 통합하지 않고 "
+                "병렬 대사한다. 불일치 중 규정상 자연스러운 조합은 설명 코드로, "
+                "그 외는 개별 검토로 표기.",
+    }

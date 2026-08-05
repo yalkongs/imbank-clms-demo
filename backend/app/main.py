@@ -23,6 +23,8 @@ from .api import automation
 from .api import inclusive_finance, pf, governance, export, search
 # 포트폴리오 맵 (기업 다차원 산점도 + what-if)
 from .api import portfolio_map
+# 여신통제 확장: 여신철·EWS 조치의무·금리인하요구권
+from .api import credit_case, ews_actions, rate_reduction
 
 
 @asynccontextmanager
@@ -133,6 +135,9 @@ app.include_router(governance.router)
 app.include_router(export.router)
 app.include_router(search.router)
 app.include_router(portfolio_map.router)
+app.include_router(credit_case.router)
+app.include_router(ews_actions.router)
+app.include_router(rate_reduction.router)
 
 
 @app.get("/health")

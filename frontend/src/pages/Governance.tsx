@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Printer, ShieldCheck, ScrollText, Stamp, FileDown } from 'lucide-react';
+import { Printer, ShieldCheck, ScrollText, Stamp, FileDown, AlertTriangle } from 'lucide-react';
 import { Card } from '../components';
 import { formatAmount, formatPercent, formatNumber } from '../utils/format';
 import axios from 'axios';
@@ -57,7 +57,8 @@ export default function Governance() {
   const [report, setReport] = useState<any>(null);
   const [authority, setAuthority] = useState<any[]>([]);
   const [audit, setAudit] = useState<any>(null);
-  const [tab, setTab] = useState<'report' | 'authority' | 'audit'>('report');
+  const [tab, setTab] = useState<'report' | 'authority' | 'audit' | 'exceptions'>('report');
+  const [exceptions, setExceptions] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -65,11 +66,13 @@ export default function Governance() {
       axios.get('/api/governance/report'),
       axios.get('/api/governance/approval-authority'),
       axios.get('/api/governance/audit-logs?limit=50'),
+      axios.get('/api/credit-case/exceptions'),
     ])
-      .then(([r, a, l]) => {
+      .then(([r, a, l, ex]) => {
         setReport(r.data);
         setAuthority(a.data);
         setAudit(l.data);
+        setExceptions(ex.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -117,6 +120,7 @@ export default function Governance() {
           ['report', '업무보고서', <ScrollText key="r" size={15} />],
           ['authority', '전결 규정', <Stamp key="a" size={15} />],
           ['audit', '감사 추적', <ShieldCheck key="u" size={15} />],
+          ['exceptions', '정책 예외', <AlertTriangle key="e" size={15} />],
         ] as const).map(([k, l, icon]) => (
           <button
             key={k}
@@ -461,6 +465,64 @@ export default function Governance() {
           <p className="text-xs text-gray-400 mt-3">
             승인 처리 시 승인 금액이 결재자 전결 한도를 초과하면 시스템이 차단합니다.
           </p>
+        </Card>
+      )}
+
+
+      {tab === 'exceptions' && exceptions && (
+        <Card title={`정책 예외 관리 대장 (유효 ${exceptions.active}건 / 총 ${exceptions.total}건)`}
+          subtitle="예외는 자유 메모가 아니라 규정→사유→완화수단→승인→재검토→성과의 구조로 관리됩니다">
+          {exceptions.review_due > 0 && (
+            <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              재검토일이 도래한 유효 예외 <b>{exceptions.review_due}건</b> - 재검토 후 연장 또는 종결 처리가 필요합니다
+            </div>
+          )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                  <th className="py-2 pr-3">대상 규정</th>
+                  <th className="py-2 pr-3">기업 / 신청</th>
+                  <th className="py-2 pr-3">사유 → 완화수단</th>
+                  <th className="py-2 pr-3">승인</th>
+                  <th className="py-2 pr-3 text-center">재검토일</th>
+                  <th className="py-2 text-center">상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exceptions.exceptions.map((e: any) => (
+                  <tr key={e.exception_id} className={`border-b border-gray-50 align-top ${e.review_due ? 'bg-red-50/40' : ''}`}>
+                    <td className="py-2.5 pr-3">
+                      <p className="font-medium text-xs">{e.rule_ref}</p>
+                      <p className="text-[10px] text-gray-400">{e.rule_version}</p>
+                    </td>
+                    <td className="py-2.5 pr-3 text-xs">
+                      {e.customer_name}
+                      <p className="text-[10px] text-gray-400">{e.application_id}</p>
+                    </td>
+                    <td className="py-2.5 pr-3 text-xs text-gray-600 max-w-md">
+                      {e.reason}
+                      <p className="text-blue-700 mt-0.5">완화: {e.mitigation}</p>
+                      {e.outcome && <p className="text-green-700 mt-0.5">성과: {e.outcome}</p>}
+                    </td>
+                    <td className="py-2.5 pr-3 text-xs">
+                      {e.approver_name}
+                      <p className="text-[10px] text-gray-400">{e.approver_level} · {e.approved_at}</p>
+                    </td>
+                    <td className={`py-2.5 pr-3 text-center text-xs ${e.review_due ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
+                      {e.review_date}
+                    </td>
+                    <td className="py-2.5 text-center">
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                        e.status === 'ACTIVE' ? 'bg-amber-100 text-amber-700' :
+                        e.status === 'CLOSED' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                      }`}>{e.status === 'ACTIVE' ? '유효' : e.status === 'CLOSED' ? '종결' : '만료'}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       )}
 

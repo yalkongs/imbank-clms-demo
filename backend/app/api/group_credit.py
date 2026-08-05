@@ -432,3 +432,138 @@ def _exposure_status(utilization_pct: Optional[float]) -> str:
     if utilization_pct >= 80:
         return 'WARNING'
     return 'NORMAL'
+
+
+# ─────────────────────────────────────────────────────────
+# 동일차주 규제 범위 엔진 v0 (제3자 리뷰 ② 의 PoC 최소 조각)
+# 은행법 §35: 동일차주 신용공여 한도 = 은행 자기자본의 25%.
+# 단순 합산이 아니라 '포함 근거(관계 유형·지분율·보증)'와 '효력일'을
+# 함께 반환해 특정 시점의 판단을 재현할 수 있게 한다.
+# 신용공여 = 대출잔액 + 미사용약정 + 그룹 내 지급보증 수취분.
+# ─────────────────────────────────────────────────────────
+
+REGULATORY_LIMIT_RATIO = 0.25   # 은행법 §35 동일차주 한도
+INTERNAL_LIMIT_RATIO = 0.20    # 내부 집중한도 (조기경보용)
+
+
+@router.get("/regulatory-scope")
+def regulatory_scope_overview(db: Session = Depends(get_db)):
+    """그룹별 동일차주 합산 vs 자기자본 25% - 전체 조망"""
+    cap = db.execute(text(
+        "SELECT total_capital, base_date FROM capital_position ORDER BY base_date DESC LIMIT 1"
+    )).fetchone()
+    capital = cap[0] if cap else 0
+    reg_limit = capital * REGULATORY_LIMIT_RATIO
+    int_limit = capital * INTERNAL_LIMIT_RATIO
+
+    rows = db.execute(text("""
+        SELECT bg.group_id, bg.group_name,
+               COUNT(DISTINCT m.customer_id) AS members,
+               COALESCE(SUM(f.outstanding_amount), 0) AS loans,
+               COALESCE(SUM(f.current_limit - f.outstanding_amount), 0) AS undrawn
+        FROM borrower_group bg
+        JOIN borrower_group_member m ON m.group_id = bg.group_id
+        LEFT JOIN facility f ON f.customer_id = m.customer_id AND f.status = 'ACTIVE'
+        GROUP BY bg.group_id, bg.group_name
+    """)).fetchall()
+    guar = {r[0]: r[1] or 0 for r in db.execute(text("""
+        SELECT group_id, SUM(guarantee_amount) FROM group_guarantee
+        WHERE status = 'ACTIVE' OR status IS NULL GROUP BY group_id
+    """)).fetchall()}
+
+    groups = []
+    for gid, name, members, loans, undrawn in rows:
+        total = loans + undrawn + guar.get(gid, 0)
+        groups.append({
+            "group_id": gid, "group_name": name, "members": members,
+            "loans": round(loans, 2), "undrawn": round(undrawn, 2),
+            "guarantees": round(guar.get(gid, 0), 2),
+            "total_credit": round(total, 2),
+            "vs_capital_pct": round(total / capital * 100, 2) if capital else 0,
+            "regulatory_breach": total > reg_limit,
+            "internal_alert": total > int_limit,
+        })
+    groups.sort(key=lambda g: -g["total_credit"])
+    return {
+        "as_of": cap[1] if cap else None,
+        "capital": capital,
+        "regulatory_limit": {"ratio": REGULATORY_LIMIT_RATIO * 100, "amount": reg_limit,
+                             "basis": "은행법 §35 (동일차주 25%)"},
+        "internal_limit": {"ratio": INTERNAL_LIMIT_RATIO * 100, "amount": int_limit,
+                           "basis": "내부 집중한도 (조기경보)"},
+        "groups": groups,
+    }
+
+
+@router.get("/regulatory-scope/{group_id}")
+def regulatory_scope_detail(group_id: str, db: Session = Depends(get_db)):
+    """동일차주 판단 재현 - 구성원별 포함 근거·지분율·위험전이 관계·익스포저"""
+    grp = db.execute(text(
+        "SELECT group_id, group_name, group_type FROM borrower_group WHERE group_id = :g"
+    ), {"g": group_id}).fetchone()
+    if not grp:
+        raise HTTPException(404, "차주그룹을 찾을 수 없습니다")
+
+    cap = db.execute(text(
+        "SELECT total_capital FROM capital_position ORDER BY base_date DESC LIMIT 1"
+    )).fetchone()
+    capital = cap[0] if cap else 0
+
+    members = db.execute(text("""
+        SELECT m.customer_id, c.customer_name, m.relationship_type, m.ownership_pct,
+               COALESCE(SUM(f.outstanding_amount), 0),
+               COALESCE(SUM(f.current_limit - f.outstanding_amount), 0),
+               MIN(f.contract_date)
+        FROM borrower_group_member m
+        JOIN customer c ON c.customer_id = m.customer_id
+        LEFT JOIN facility f ON f.customer_id = m.customer_id AND f.status = 'ACTIVE'
+        WHERE m.group_id = :g
+        GROUP BY m.customer_id, c.customer_name, m.relationship_type, m.ownership_pct
+    """), {"g": group_id}).fetchall()
+
+    guarantees = db.execute(text("""
+        SELECT gg.guarantor_id, gc.customer_name, gg.beneficiary_id, bc.customer_name,
+               gg.guarantee_type, gg.guarantee_amount, gg.effective_date
+        FROM group_guarantee gg
+        LEFT JOIN customer gc ON gc.customer_id = gg.guarantor_id
+        LEFT JOIN customer bc ON bc.customer_id = gg.beneficiary_id
+        WHERE gg.group_id = :g
+    """), {"g": group_id}).fetchall()
+
+    BASIS = {
+        "PARENT": "모회사 (지배)", "SUBSIDIARY": "자회사 (피지배)",
+        "AFFILIATE": "계열회사 (동일 지배하)", "GUARANTOR": "상호보증 (위험공유)",
+    }
+    member_list = []
+    loans = undrawn = 0.0
+    for cid, name, rel, pct, l, u, first_contract in members:
+        loans += l
+        undrawn += u
+        member_list.append({
+            "customer_id": cid, "name": name,
+            "relationship": rel, "basis": BASIS.get(rel, rel or "지분관계"),
+            "ownership_pct": pct,
+            "loans": round(l, 2), "undrawn": round(u, 2),
+            "effective_from": first_contract,
+        })
+    guar_total = sum(g[5] or 0 for g in guarantees)
+    total = loans + undrawn + guar_total
+
+    return {
+        "group": {"group_id": grp[0], "group_name": grp[1], "type": grp[2]},
+        "members": member_list,
+        "risk_transfer": [
+            {"guarantor_id": g[0], "guarantor": g[1], "beneficiary_id": g[2],
+             "beneficiary": g[3], "type": g[4], "amount": g[5], "effective_date": g[6]}
+            for g in guarantees
+        ],
+        "aggregation": {
+            "loans": round(loans, 2), "undrawn": round(undrawn, 2),
+            "guarantees": round(guar_total, 2), "total_credit": round(total, 2),
+            "capital": capital,
+            "vs_capital_pct": round(total / capital * 100, 2) if capital else 0,
+            "regulatory_limit_pct": REGULATORY_LIMIT_RATIO * 100,
+            "internal_limit_pct": INTERNAL_LIMIT_RATIO * 100,
+            "note": "신용공여 = 대출잔액 + 미사용약정 + 그룹 내 지급보증 (은행법 §35 기준 근사)",
+        },
+    }

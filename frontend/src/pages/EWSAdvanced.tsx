@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Newspaper,
   Network,
+  ClipboardCheck,
 } from 'lucide-react';
 import { FeatureModal, HelpButton, RegionFilter } from '../components';
 import { ewsAdvancedApi } from '../utils/api';
@@ -16,6 +17,7 @@ import EWSPublicRegistry from './ews/EWSPublicRegistry';
 import EWSMarketSignals from './ews/EWSMarketSignals';
 import EWSNewsSentiment from './ews/EWSNewsSentiment';
 import EWSSupplyChain from './ews/EWSSupplyChain';
+import EWSActionCenter from './ews/EWSActionCenter';
 
 const TABS = [
   { id: 'integrated', label: '통합 대시보드', icon: <Activity size={16} /> },
@@ -24,6 +26,7 @@ const TABS = [
   { id: 'market', label: '시장신호', icon: <TrendingUp size={16} /> },
   { id: 'news', label: '뉴스/감성', icon: <Newspaper size={16} /> },
   { id: 'supply', label: '공급망', icon: <Network size={16} /> },
+  { id: 'actions', label: '조치 관리', icon: <ClipboardCheck size={16} /> },
 ];
 
 export default function EWSAdvanced() {
@@ -50,6 +53,7 @@ export default function EWSAdvanced() {
       case 'market': return <EWSMarketSignals region={region} />;
       case 'news': return <EWSNewsSentiment region={region} />;
       case 'supply': return <EWSSupplyChain region={region} />;
+      case 'actions': return <EWSActionCenter />;
       default: return <EWSIntegratedDashboard region={region} />;
     }
   };

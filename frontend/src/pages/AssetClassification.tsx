@@ -66,13 +66,15 @@ interface MigrationRow {
   [key: string]: any;
 }
 
+import axios from 'axios';
 import { formatAmount } from '../utils/format';
 
 const fmtAmt = (v: number) => formatAmount(v, 'billion');
 const fmtPct = (v: number) => `${v.toFixed(2)}%`;
 
 export default function AssetClassification() {
-  const [tab, setTab] = useState<'portfolio' | 'migration' | 'gap'>('portfolio');
+  const [tab, setTab] = useState<'portfolio' | 'migration' | 'gap' | 'recon'>('portfolio');
+  const [recon, setRecon] = useState<any>(null);
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null);
   const [migration, setMigration] = useState<any>(null);
   const [gapData, setGapData]   = useState<any>(null);
@@ -128,6 +130,9 @@ export default function AssetClassification() {
     setTab(t);
     if (t === 'migration' && !migration) loadMigration();
     if (t === 'gap' && !gapData) loadGap();
+    if (t === 'recon' && !recon) {
+      axios.get('/api/classification/reconciliation').then((r: any) => setRecon(r.data)).catch(console.error);
+    }
   };
 
   const handleRunClassification = async () => {
@@ -211,6 +216,7 @@ export default function AssetClassification() {
               { key: 'portfolio', label: '분류 현황', icon: <Shield size={14} /> },
               { key: 'migration', label: '이동 행렬', icon: <ChevronRight size={14} /> },
               { key: 'gap',       label: '충당금 부족', icon: <AlertTriangle size={14} /> },
+              { key: 'recon',     label: '3체계 대사', icon: <Shield size={14} /> },
             ].map(({ key, label, icon }) => (
               <button
                 key={key}
@@ -415,6 +421,104 @@ export default function AssetClassification() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 3체계 대사 탭 - 감독분류 × IFRS9 Stage × EWS 를 통합하지 않고 병렬 대사 */}
+          {tab === 'recon' && (
+            <div>
+              {!recon ? (
+                <div className="text-center py-12 text-gray-400">로딩 중...</div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-4 gap-4 text-center">
+                    {[
+                      ['대상 시설', recon.total],
+                      ['정합 (정상·Stage1)', recon.consistent],
+                      ['불일치 (설명 부여)', recon.mismatch_count],
+                      ['개별 검토 필요', recon.needs_review_count],
+                    ].map(([l, v]) => (
+                      <div key={l as string} className="bg-gray-50 rounded-lg py-3">
+                        <p className={`text-xl font-bold tabular ${l === '개별 검토 필요' && (v as number) > 0 ? 'text-red-600' : 'text-gray-900'}`}>{v as number}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5">{l}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-2">분류 × Stage 매트릭스 (건수 · 잔액)</p>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                          <th className="py-2">감독분류</th>
+                          <th className="py-2 text-center">Stage 1</th>
+                          <th className="py-2 text-center">Stage 2 (SICR)</th>
+                          <th className="py-2 text-center">Stage 3 (손상)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {['정상', '요주의', '고정', '회수의문', '추정손실'].map(cls => (
+                          <tr key={cls} className="border-b border-gray-50">
+                            <td className="py-2 font-medium">{cls}</td>
+                            {[1, 2, 3].map(st => {
+                              const cell = recon.matrix.find((m: any) => m.classification === cls && m.stage === st);
+                              const expected = (cls === '정상' && st <= 2) || (cls === '요주의' && st === 2) ||
+                                (['고정', '회수의문', '추정손실'].includes(cls) && st === 3);
+                              return (
+                                <td key={st} className="py-2 text-center">
+                                  {cell ? (
+                                    <span className={`inline-block px-2 py-1 rounded text-xs tabular ${
+                                      expected ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700 font-semibold'
+                                    }`}>
+                                      {cell.count}건 · {formatAmount(cell.exposure, 'billion')}
+                                    </span>
+                                  ) : <span className="text-gray-200">-</span>}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold text-gray-500 mb-2">불일치 상세 (개별 검토 우선, 상위 {Math.min(recon.mismatches.length, 60)}건)</p>
+                    <div className="max-h-96 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="sticky top-0 bg-white">
+                          <tr className="text-left text-xs text-gray-500 border-b border-gray-200">
+                            <th className="py-2">시설 / 기업</th>
+                            <th className="py-2 text-center">감독분류</th>
+                            <th className="py-2 text-center">Stage</th>
+                            <th className="py-2 text-center">EWS</th>
+                            <th className="py-2 text-right">잔액</th>
+                            <th className="py-2">설명</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recon.mismatches.map((m: any) => (
+                            <tr key={m.facility_id} className={`border-b border-gray-50 ${m.needs_review ? 'bg-red-50/40' : ''}`}>
+                              <td className="py-2">
+                                <p className="font-medium text-xs">{m.customer_name}</p>
+                                <p className="text-[10px] text-gray-400">{m.facility_id}{m.dpd > 0 ? ` · DPD ${m.dpd}일` : ''}</p>
+                              </td>
+                              <td className="py-2 text-center text-xs">{m.classification}</td>
+                              <td className="py-2 text-center text-xs tabular">Stage {m.stage}</td>
+                              <td className="py-2 text-center text-xs">{m.ews_grade || '-'}</td>
+                              <td className="py-2 text-right text-xs tabular">{formatAmount(m.exposure, 'billion')}</td>
+                              <td className="py-2 text-xs">
+                                <span className={m.needs_review ? 'text-red-600 font-semibold' : 'text-gray-500'}>{m.explanation}</span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400">{recon.note}</p>
                 </div>
               )}
             </div>

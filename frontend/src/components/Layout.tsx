@@ -27,7 +27,8 @@ import {
   ShieldCheck,
   Stamp,
   Landmark,
-  Info
+  Info,
+  Percent
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeProvider';
 import OnboardingModal from './OnboardingModal';
@@ -65,6 +66,7 @@ export const navGroups: NavGroup[] = [
       { path: '/applications', label: '여신신청', icon: <FileText size={20} /> },
       { path: '/approval-inbox', label: '결재함', icon: <Stamp size={20} /> },
       { path: '/covenant', label: '코베넌트 관리', icon: <FileCheck size={20} /> },
+      { path: '/rate-reduction', label: '금리인하요구권', icon: <Percent size={20} /> },
       { path: '/inclusive-finance', label: '포용금융 이행', icon: <HeartHandshake size={20} /> },
     ]
   },

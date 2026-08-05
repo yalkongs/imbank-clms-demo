@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Stamp, ShieldAlert } from 'lucide-react';
 import { Card } from '../components';
@@ -100,7 +101,11 @@ export default function ApprovalInbox() {
                   <p className="font-medium text-gray-900">{it.application_id}</p>
                   <p className="text-xs text-gray-400">{it.application_date} · {it.current_stage}</p>
                 </td>
-                <td className="py-2.5 pr-4">{it.customer_name}</td>
+                <td className="py-2.5 pr-4">
+                  {it.customer_name}
+                  <Link to={`/credit-case/${it.application_id}`}
+                        className="ml-2 text-[11px] text-blue-600 hover:underline">여신철</Link>
+                </td>
                 <td className="py-2.5 pr-4">{it.credit_grade || '-'}</td>
                 <td className="py-2.5 pr-4 text-right tabular font-medium">
                   {formatAmount(it.requested_amount, 'billion')}
