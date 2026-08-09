@@ -143,3 +143,45 @@ print(f"수익성 재계산(재가격 반영): {len(rows)}개사")
 
 con.commit()
 cur.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+
+# ── 5. 등급 없는 차주 보정 - 전환 잠재고객 150개사 ──
+#     원 시드는 등급을 '신청 단위'로 생성해 잠재고객에는 등급이 없었고,
+#     전환 시 고객 단위 시드를 건너뛰어 맵에서 PD 0.00% 로 노출되던 결함.
+import uuid as _uuid
+GRADE_PD_FIX = {
+    "A-": 0.0018, "BBB+": 0.0028, "BBB": 0.0042, "BBB-": 0.0065,
+    "BB+": 0.0098, "BB": 0.0150, "BB-": 0.0225, "B+": 0.0340,
+}
+rows = cur.execute("""
+    SELECT c.customer_id,
+           MAX(CASE f.classification WHEN 'LOSS' THEN 5 WHEN 'DOUBTFUL' THEN 4
+               WHEN 'SUBSTANDARD' THEN 3 WHEN 'PRECAUTIONARY' THEN 2 ELSE 1 END),
+           MIN(f.contract_date)
+    FROM customer c
+    JOIN facility f ON f.customer_id = c.customer_id AND f.status = 'ACTIVE'
+    WHERE NOT EXISTS (SELECT 1 FROM credit_rating_result r
+                      WHERE r.customer_id = c.customer_id)
+    GROUP BY c.customer_id
+""").fetchall()
+ins = []
+for cid, worst, first_contract in rows:
+    rng = random.Random(cid)
+    if worst >= 3:
+        grade = rng.choice(["B+", "BB-"])
+    elif worst == 2:
+        grade = rng.choice(["BB", "BB-"])
+    else:
+        grade = rng.choice(["A-", "BBB+", "BBB", "BBB-", "BB+", "BB"])
+    pd_v = GRADE_PD_FIX[grade]
+    rdate = (first_contract or "2025-06-01")[:10]
+    ins.append((f"RAT_{_uuid.uuid4().hex[:10].upper()}", cid, None, rdate,
+                "CORP_RATING_V3", "3.1", rng.uniform(40, 90), grade, 0, pd_v))
+cur.executemany("""
+    INSERT INTO credit_rating_result
+    (rating_id, customer_id, application_id, rating_date, model_id, model_version,
+     raw_score, final_grade, grade_notch, pd_value)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+""", ins)
+print(f"등급 보정: {len(ins)}개사")
+con.commit()
+cur.execute("PRAGMA wal_checkpoint(TRUNCATE)")

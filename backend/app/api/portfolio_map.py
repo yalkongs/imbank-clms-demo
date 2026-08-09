@@ -178,7 +178,10 @@ def get_map_history(db: Session = Depends(get_db)):
     fill("SELECT customer_id, reference_month, avg_sentiment FROM ews_news_sentiment_monthly",
          "sentiment", 1, 3)
 
-    # PD as-of: 등급 이력을 월말 기준 carry-forward 로 펼친다
+    # PD as-of: 등급 이력을 월말 기준 carry-forward 로 펼친 뒤,
+    # 월별 행태신호(한도소진 추세)로 변조해 PIT(Point-in-Time) 근사를 만든다.
+    # 등급 PD 는 산정 주기상 계단형(12개월 중 고유값 1~2개)이라 재생 시
+    # '두 지점 왕복'으로 보이는 문제의 해소책 - 마지막 달 변조=1 로 현재값과 연속.
     ratings = db.execute(text("""
         SELECT customer_id, rating_date, pd_value FROM credit_rating_result
         ORDER BY customer_id, rating_date
@@ -194,6 +197,20 @@ def get_map_history(db: Session = Depends(get_db)):
                 cur = hist[j][1]
                 j += 1
             series[cid]["pd"][i] = round(cur * 100, 4) if cur is not None else None
+
+    # PIT 변조: pd_i × clamp(1 + 0.03 × (util_i − util_last), 0.7, 2.0)
+    for cid, s_ in series.items():
+        utils, pds = s_.get("util"), s_.get("pd")
+        if not utils or not pds:
+            continue
+        last_util = next((u for u in reversed(utils) if u is not None), None)
+        if last_util is None:
+            continue
+        for i in range(n):
+            if pds[i] is None or utils[i] is None:
+                continue
+            mod = max(0.7, min(2.0, 1 + 0.03 * (utils[i] - last_util)))
+            pds[i] = round(pds[i] * mod, 4)
 
     # 앞쪽 결측은 첫 관측값으로 backfill (그 달만 비어 점이 사라지는 것 방지)
     for s in series.values():
