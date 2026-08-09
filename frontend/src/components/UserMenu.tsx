@@ -105,6 +105,8 @@ export default function UserMenu() {
                   <span className="text-sm font-medium flex-none">{acc.name}</span>
                   <input autoFocus type="password" value={pin} onChange={e => setPin(e.target.value)}
                     placeholder={`PIN (힌트: ${acc.pin_hint})`}
+                    aria-label={`${acc.name} PIN 번호 입력`}
+                    inputMode="numeric" autoComplete="off"
                     className="flex-1 border rounded px-2 py-1 text-xs" />
                   <button type="submit" className="px-2.5 py-1 bg-blue-600 text-white rounded text-xs">확인</button>
                 </form>

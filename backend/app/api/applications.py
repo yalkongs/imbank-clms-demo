@@ -340,6 +340,9 @@ def get_approval_inbox(
             "can_approve": amount <= my_limit,
         })
 
+    # 내가 결재 가능한 건을 먼저 - 상위권한 건 뒤에 묻히지 않게 한다
+    items.sort(key=lambda i: (not i["can_approve"], -i["requested_amount"]))
+
     return {
         "level": level, "level_name": authority[level]["name"],
         "my_limit": None if my_limit == float("inf") else my_limit,

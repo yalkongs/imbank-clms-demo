@@ -28,6 +28,14 @@ export default function Dashboard() {
   const { introOpen } = useTheme();
   const [loading, setLoading] = useState(true);
   const [region, setRegion] = useState('');
+  // 기준일 배지 - 고정 시점 데이터를 '실시간'으로 오인하지 않게 단일 소스에서 표시
+  const [asOfLabel, setAsOfLabel] = useState('');
+  useEffect(() => {
+    fetch('/api/system/as-of')
+      .then(r => r.json())
+      .then(d => setAsOfLabel(`${d.label_ko} 집계`))
+      .catch(() => {});
+  }, []);
   const [summary, setSummary] = useState<any>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [kpis, setKpis] = useState<any>(null);
@@ -141,7 +149,7 @@ export default function Dashboard() {
           <RegionFilter value={region} onChange={setRegion} />
           <div className="flex items-center space-x-2 text-sm text-gray-500">
             <span className="status-dot is-live"></span>
-            <span>실시간 업데이트</span>
+            <span>{asOfLabel || '월말 기준 집계'}</span>
           </div>
         </div>
       </div>
