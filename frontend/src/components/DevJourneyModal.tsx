@@ -80,6 +80,68 @@ export default function DevJourneyModal({ onClose }: { onClose: () => void }) {
             {STATS.map(s => <StatCard key={s.title} {...s} />)}
           </div>
 
+          {/* 전통 개발 대비 - 바이브 코딩의 효과 */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-base font-bold text-gray-900 mb-1">같은 것을 사람이 만들었다면?</h3>
+            <p className="text-xs text-gray-400 mb-5">
+              코드 4.4만 줄 · 화면 42개 · API 242개 규모를 통상적 SI 산정 방식으로 환산한 비교
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-xl border border-gray-200 p-5">
+                <p className="text-xs font-semibold text-gray-400 mb-3">전통 개발 (외주 SI 기준 추정)</p>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-gray-500">투입 인력</span>
+                    <span className="text-lg font-bold text-gray-800">5명 내외</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-gray-500">개발 기간</span>
+                    <span className="text-lg font-bold text-gray-800">6~9개월</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-gray-500">투입 공수</span>
+                    <span className="text-lg font-bold text-gray-800">30~45인월</span>
+                  </div>
+                  <div className="flex justify-between items-baseline border-t border-gray-100 pt-2.5">
+                    <span className="text-sm text-gray-500">환산 비용</span>
+                    <span className="text-xl font-bold text-red-600">약 3.6~5.4억원</span>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-xl border-2 border-[#00BFA5]/40 bg-[#00BFA5]/[0.04] p-5">
+                <p className="text-xs font-semibold text-[#00897B] mb-3">바이브 코딩 (이 프로젝트 실적)</p>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-gray-500">투입 인력</span>
+                    <span className="text-lg font-bold text-gray-800">1명 + AI</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-gray-500">개발 기간</span>
+                    <span className="text-lg font-bold text-gray-800">활동일 13일 (여가 시간)</span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-gray-500">투입 공수</span>
+                    <span className="text-lg font-bold text-gray-800">1인월 미만</span>
+                  </div>
+                  <div className="flex justify-between items-baseline border-t border-[#00BFA5]/20 pt-2.5">
+                    <span className="text-sm text-gray-500">직접 비용</span>
+                    <span className="text-xl font-bold text-[#00897B]">AI 구독료 수십만원</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p className="mt-4 text-center text-sm font-bold text-gray-800">
+              비용 기준 약 <span className="text-[#00897B] text-lg">수백분의 1</span>,
+              기간 기준 약 <span className="text-[#00897B] text-lg">15분의 1</span>
+            </p>
+            <p className="mt-3 text-[11px] text-gray-400 leading-relaxed">
+              산정 근거: 고전적 COCOMO(organic) 모형으로는 44 KLOC ≈ 127인월(10.6인년)이나, 현대
+              프레임워크 생산성을 반영해 보수적으로 30~45인월로 추정. 비용은 SW기술자 평균임금 기반
+              외주 인월 단가 약 1,200만원 적용. 요구 정련·품질 수준이 동일하다는 가정의 단순 비교이며,
+              운영계 전환 시 필요한 보안·연계·감리 비용은 양쪽 모두 제외한 수치입니다.
+            </p>
+          </div>
+
           {/* 작업 루프 */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-base font-bold text-gray-900 mb-1">바이브 코딩 작업 루프</h3>
