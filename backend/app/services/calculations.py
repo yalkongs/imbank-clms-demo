@@ -162,7 +162,7 @@ def calculate_pricing(
     target_margin: float = 0.01,
     strategy_code: Optional[str] = None,
     has_collateral: bool = False,
-    hurdle_rate: float = 0.12
+    hurdle_rate: float = 0.15   # 정본: rule_register RULE_RAROC_HURDLE (15%)
 ) -> Dict:
     """
     가격결정 (금리 산출)

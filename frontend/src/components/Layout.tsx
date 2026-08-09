@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
+  Sparkles,
   LayoutDashboard,
   FileText,
   PiggyBank,
@@ -57,6 +58,7 @@ export const navGroups: NavGroup[] = [
       { path: '/', label: '대시보드', icon: <LayoutDashboard size={20} /> },
       { path: '/governance', label: '보고·감사', icon: <ShieldCheck size={20} /> },
       { path: '/obligations', label: '의무관리함', icon: <ListChecks size={20} /> },
+      { path: '/dev-journey', label: '개발 여정', icon: <Sparkles size={20} /> },
     ]
   },
   {

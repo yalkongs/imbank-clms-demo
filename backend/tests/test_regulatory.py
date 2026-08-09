@@ -49,6 +49,43 @@ def test_authority_exceeded_is_blocked():
     assert r.status_code == 403, f"전결권 초과가 차단되지 않음: {r.status_code}"
 
 
+def test_authority_bypass_via_approved_amount_is_blocked():
+    """전결권 우회: 담당자가 대형 건에 approved_amount=1 을 보내도 403
+    (전결권은 신청금액 기준 - AGY 검토 P0-1 재현 시나리오 고정)"""
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT application_id FROM loan_application
+        WHERE status IN ('REVIEWING','RECEIVED') AND requested_amount > 100e8 LIMIT 1
+    """)).fetchone()
+    if not row:
+        pytest.skip("대형 심사 건 없음")
+    r = client.post(f"/api/applications/{row[0]}/approve",
+                    params={"decision": "APPROVE", "approved_amount": 1},
+                    headers=_login("kim.simsa", "1111"))
+    assert r.status_code == 403, f"approved_amount 조작 우회가 차단되지 않음: {r.status_code}"
+
+
+def test_approved_amount_out_of_range_is_rejected():
+    """승인금액 유효성: 신청금액 초과·0 이하 → 422"""
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT application_id, requested_amount FROM loan_application
+        WHERE status IN ('REVIEWING','RECEIVED') LIMIT 1
+    """)).fetchone()
+    if not row:
+        pytest.skip("심사 건 없음")
+    hdr = _login("lee.jeonmu", "3333")   # 임원 - 전결권은 충분, 유효성만 검증
+    over = client.post(f"/api/applications/{row[0]}/approve",
+                       params={"decision": "APPROVE",
+                               "approved_amount": float(row[1]) * 2},
+                       headers=hdr)
+    assert over.status_code == 422, f"신청금액 초과 승인금액이 통과됨: {over.status_code}"
+    zero = client.post(f"/api/applications/{row[0]}/approve",
+                       params={"decision": "APPROVE", "approved_amount": 0},
+                       headers=hdr)
+    assert zero.status_code == 422, f"0원 승인금액이 통과됨: {zero.status_code}"
+
+
 def test_snapshot_sealed_on_approval_and_immutable():
     """승인 → 스냅샷 봉인. 이후 등급이 갱신돼도 봉인 값은 불변"""
     db = SessionLocal()

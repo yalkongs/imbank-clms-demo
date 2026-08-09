@@ -25,6 +25,7 @@ from .api import inclusive_finance, pf, governance, export, search
 from .api import portfolio_map
 # 여신통제 확장: 여신철·EWS 조치의무·금리인하요구권
 from .api import credit_case, ews_actions, rate_reduction, obligations, rules
+from .api import opinion
 # 인증 (서버측 전결·승인자 결정)
 from .api import auth as auth_api
 from .core.auth import verify_token
@@ -182,6 +183,7 @@ app.include_router(rate_reduction.router)
 app.include_router(auth_api.router)
 app.include_router(obligations.router)
 app.include_router(rules.router)
+app.include_router(opinion.router)
 
 
 @app.get("/health")

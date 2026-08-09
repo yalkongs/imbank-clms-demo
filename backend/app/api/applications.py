@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
+import math
 from datetime import datetime
 from ..core.database import get_db
 from ..core.audit import record_audit
@@ -905,21 +906,34 @@ def approve_application(
         raise HTTPException(409, f"직무분리 위반: {approver_name} 은(는) 이 건에 이미 "
                                  f"{dup[0]} 단계로 결재했습니다 - 다른 결재자가 필요합니다")
 
-    # 전결권 검증 - 승인 금액이 승인자 권한 한도를 넘으면 거부한다.
-    # 종전에는 파라미터로 받은 레벨을 검증 없이 그대로 기록했다.
+    # 승인조건 검증 - 감액 승인은 (0, 신청금액] 범위만 허용한다.
+    # 범위 밖 값(음수·0·초과·비정상 수치)은 전결권 조작 시도로 간주해 422.
+    requested_amount = float(app[0] or 0)
+    if approved_amount is not None:
+        if not math.isfinite(approved_amount) or approved_amount <= 0 \
+                or approved_amount > requested_amount:
+            raise HTTPException(422, f"승인금액이 유효 범위를 벗어났습니다 "
+                                     f"(0 초과 ~ 신청금액 {requested_amount/1e8:,.1f}억 이하)")
+    if approved_rate is not None and (not math.isfinite(approved_rate) or not 0 < approved_rate < 0.5):
+        raise HTTPException(422, "승인금리가 유효 범위(0~50%)를 벗어났습니다")
+    if approved_tenor is not None and not 0 < approved_tenor <= 600:
+        raise HTTPException(422, "승인기간이 유효 범위(1~600개월)를 벗어났습니다")
+
+    # 전결권 검증 - 심사 대상은 신청 건 전체이므로 전결권은 '신청금액' 기준이다.
+    # (종전에는 클라이언트가 보낸 approved_amount 기준이라 1원 감액승인으로
+    #  전결권을 우회할 수 있었다)
     if decision in ("APPROVE", "CONDITIONAL"):
         authority = load_approval_authority(db)
-        effective_amount = approved_amount if approved_amount is not None else float(app[0] or 0)
-        required = get_required_authority(effective_amount, db)
+        required = get_required_authority(requested_amount, db)
         level = approval_level    # = 인증 사용자의 전결권
         if level not in authority:
             raise HTTPException(status_code=422, detail=f"알 수 없는 승인 권한: {level}")
-        if effective_amount > authority[level]["limit"]:
+        if requested_amount > authority[level]["limit"]:
             raise HTTPException(
                 status_code=403,
                 detail=(f"전결권 초과: {authority[level]['name']} 한도 "
-                        f"{authority[level]['limit']/1e8:,.0f}억 < 승인금액 "
-                        f"{effective_amount/1e8:,.0f}억 - {required['name']} 이상 결재 필요"),
+                        f"{authority[level]['limit']/1e8:,.0f}억 < 신청금액 "
+                        f"{requested_amount/1e8:,.0f}억 - {required['name']} 이상 결재 필요"),
             )
         approval_level = level
 
@@ -928,14 +942,21 @@ def approve_application(
         "CONDITIONAL" if decision == "CONDITIONAL" else "REJECTED"
     )
 
+    # 승인조건 영속화 - 미지정 시 신청 조건을 그대로 승인한 것으로 기록
+    final_amount = approved_amount if approved_amount is not None else requested_amount
     updated = db.execute(text("""
         UPDATE loan_application
         SET status = :status,
             current_stage = 'COMPLETED',
+            approved_amount = :appr_amt,
+            approved_rate = :appr_rate,
+            approved_tenor = :appr_tenor,
             updated_at = CURRENT_TIMESTAMP
         WHERE application_id = :app_id
           AND status NOT IN ('APPROVED', 'REJECTED', 'WITHDRAWN')
-    """), {"status": new_status, "app_id": application_id})
+    """), {"status": new_status, "app_id": application_id,
+           "appr_amt": final_amount if new_status != "REJECTED" else None,
+           "appr_rate": approved_rate, "appr_tenor": approved_tenor})
     if updated.rowcount == 0:
         db.rollback()
         raise HTTPException(409, "이미 처리 완료된 신청입니다 (중복 결재 방지)")
@@ -980,14 +1001,14 @@ def approve_application(
                     """), {
                         "rid": f"RSV_{application_id}",
                         "lid": lim[0], "app_id": application_id,
-                        "amt": approved_amount or float(app[0] or 0),
+                        "amt": final_amount,
                         "dt": AS_OF_DATE.strftime('%Y-%m-%d'),
                     })
                     db.execute(text("""
                         UPDATE limit_exposure
                         SET reserved_amount = COALESCE(reserved_amount, 0) + :amt
                         WHERE limit_id = :lid
-                    """), {"amt": approved_amount or float(app[0] or 0), "lid": lim[0]})
+                    """), {"amt": final_amount, "lid": lim[0]})
         except HTTPException:
             raise
         except Exception as e:
@@ -999,7 +1020,7 @@ def approve_application(
         try:
             build_and_seal_snapshot(
                 db, application_id, decision=decision,
-                approved_amount=approved_amount or float(app[0] or 0),
+                approved_amount=final_amount,
                 approver_name=approver_name, approval_level=approval_level,
                 as_of=AS_OF_DATE.strftime('%Y-%m-%d'),
             )
@@ -1026,7 +1047,7 @@ def approve_application(
         "status": "success",
         "new_status": new_status,
         "approval_id": approval_id,
-        "approved_amount": approved_amount or app[0],
+        "approved_amount": final_amount if new_status != "REJECTED" else None,
         "approved_rate": approved_rate,
         "approved_tenor": approved_tenor
     }

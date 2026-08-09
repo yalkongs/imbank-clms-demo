@@ -27,6 +27,7 @@ import {
   Minus
 } from 'lucide-react';
 import { Card, Table, Badge, CellFormatters, RegionFilter } from '../components';
+import OpinionDraftModal from '../components/OpinionDraftModal';
 import { applicationsApi, financialApi, groupCreditApi, covenantApi } from '../utils/api';
 import { formatAmount, formatPercent, formatDate, formatInputAmount, parseFormattedNumber } from '../utils/format';
 
@@ -88,6 +89,7 @@ export default function Applications() {
 
   // 상세 모달 상태
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showOpinionModal, setShowOpinionModal] = useState(false);
 
   // What-if 모달 상태
   const [showWhatIfModal, setShowWhatIfModal] = useState(false);
@@ -530,6 +532,12 @@ export default function Applications() {
       </Card>
 
       {/* 상세 정보 모달 */}
+      {showOpinionModal && selectedApp && (
+        <OpinionDraftModal
+          applicationId={selectedApp.application?.application_id}
+          onClose={() => setShowOpinionModal(false)} />
+      )}
+
       {showDetailModal && selectedApp && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] overflow-hidden flex flex-col">
@@ -553,9 +561,15 @@ export default function Applications() {
                   </p>
                 </div>
               </div>
-              <button onClick={closeDetailModal} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
-                <X size={24} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setShowOpinionModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-semibold btn-accent rounded-lg">
+                  ✨ AI 심사의견서 초안
+                </button>
+                <button onClick={closeDetailModal} className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
             </div>
 
             {/* 단계 진행 표시 */}

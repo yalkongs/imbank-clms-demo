@@ -320,3 +320,71 @@ def build_report_pdf(data: dict) -> bytes:
     ], cols=3)
 
     return bytes(pdf.output())
+
+
+def build_opinion_pdf(draft: dict) -> bytes:
+    """심사의견서 자동 초안 PDF - /api/applications/{id}/opinion-draft/pdf"""
+    pdf = ReportPDF()
+    pdf.doc_title = "여신 심사의견서 (자동 초안)"
+    pdf.add_page()
+
+    # 표지부: 문서번호 + 결재란
+    pdf.set_font("PD", "", 8.5)
+    pdf.set_text_color(*GRAY_TEXT)
+    pdf.cell(95, 5, f"문서번호 OPN-{draft['application_id']}", align="L")
+    x0 = pdf.get_x() + 35
+    y0 = pdf.get_y()
+    pdf.set_draw_color(*GRAY_LINE)
+    for j, role in enumerate(["담당", "검토", "승인"]):
+        pdf.set_xy(x0 + j * 20, y0)
+        pdf.set_font("PD", "", 7.5)
+        pdf.cell(20, 5, role, border=1, align="C")
+        pdf.set_xy(x0 + j * 20, y0 + 5)
+        pdf.cell(20, 13, "", border=1)
+    pdf.set_xy(10, y0 + 20)
+    pdf.set_text_color(0, 0, 0)
+
+    pdf.set_font("PD", "B", 17)
+    pdf.cell(0, 10, "여신 심사의견서", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("PD", "", 9.5)
+    pdf.set_text_color(*GRAY_TEXT)
+    pdf.cell(0, 6, f"{draft['customer_name']} · {draft['application_id']} · "
+                   f"기준일 {draft['as_of']}", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+
+    # 종합판단 배지
+    pdf.ln(2)
+    pdf.set_fill_color(*FILL_HEAD)
+    pdf.set_font("PD", "B", 11)
+    pdf.cell(60, 9, f"종합판단: {draft['verdict']}", border=1, align="C", fill=True,
+             new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(2)
+
+    for sec in draft["sections"]:
+        pdf.section_title(sec["title"])
+        if sec["rows"]:
+            ncol = len(sec["rows"][0])
+            if ncol == 2:
+                pdf.table(["항목", "내용"], [45, 145], ["L", "L"], sec["rows"])
+            else:
+                pdf.table(["담보 유형", "인정가액", "건수"], [70, 60, 60],
+                          ["L", "R", "R"], sec["rows"])
+        for para in sec["text"]:
+            pdf.set_font("PD", "", 9.5)
+            pdf.multi_cell(0, 5.6, para, new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1.5)
+
+    if draft["recommended_conditions"]:
+        pdf.section_title("권고 승인조건")
+        pdf.set_font("PD", "", 9.5)
+        for i, c in enumerate(draft["recommended_conditions"], 1):
+            pdf.multi_cell(0, 5.6, f"{i}. {c}", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(1.5)
+
+    pdf.ln(2)
+    pdf.set_font("PD", "", 8)
+    pdf.set_text_color(*GRAY_TEXT)
+    pdf.multi_cell(0, 4.6, draft["disclaimer"], new_x="LMARGIN", new_y="NEXT")
+    pdf.set_text_color(0, 0, 0)
+
+    return bytes(pdf.output())

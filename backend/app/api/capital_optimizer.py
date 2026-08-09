@@ -210,7 +210,7 @@ def get_allocation_optimization(region: str = Query(None), db: Session = Depends
         WHERE segment_type IS NULL LIMIT 1
     """)).fetchone()
 
-    hurdle_rate = hurdle[0] if hurdle else 0.12
+    hurdle_rate = hurdle[0] if hurdle else 0.15  # 폴백 정본: RULE_RAROC_HURDLE
     target_rate = hurdle[1] if hurdle else 0.15
 
     # 자본배분 효율성 계산
@@ -344,7 +344,7 @@ def get_dynamic_pricing_suggestion(
         ORDER BY segment_type DESC LIMIT 1
     """), {"size": app_info[7]}).fetchone()
 
-    hurdle_rate = hurdle[0] if hurdle else 0.12
+    hurdle_rate = hurdle[0] if hurdle else 0.15  # 폴백 정본: RULE_RAROC_HURDLE
     default_target = hurdle[1] if hurdle else 0.15
 
     # 전략 조정값 조회
