@@ -79,24 +79,33 @@ export default function StoryTour({ step, onStep, onExit }: Props) {
   const isLast = step === TOUR_STEPS.length - 1;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[65] w-full max-w-xl px-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
-        <div className="im-gradient h-1" />
-        <div className="p-5">
+    <>
+      {/* 옅은 스크림 - 카드로 시선을 모으되 클릭은 통과시켜 화면 탐색을 막지 않는다 */}
+      <div className="fixed inset-0 z-[64] bg-black/25 pointer-events-none transition-opacity" aria-hidden="true" />
+      <div className="fixed bottom-12 left-1/2 -translate-x-1/2 z-[65] w-full max-w-2xl px-4">
+      <div className="modal-in bg-white rounded-2xl border border-gray-200 overflow-hidden"
+           style={{ boxShadow: '0 24px 60px rgba(0,0,0,0.35), 0 0 0 4px rgba(0,199,169,0.25)' }}>
+        <div className="im-gradient h-1.5" />
+        <div className="p-6">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <span className="mt-0.5 w-8 h-8 flex-none rounded-full bg-blue-100 text-blue-700 flex items-center justify-center">
-                <MapPin size={16} />
+            <div className="flex items-start gap-3.5">
+              <span className="mt-0.5 w-10 h-10 flex-none rounded-full im-gradient text-white flex items-center justify-center shadow-md">
+                <MapPin size={18} />
               </span>
               <div>
-                <p className="text-sm font-bold text-gray-900">{cur.title}</p>
-                <p className="text-sm text-gray-600 mt-1 leading-relaxed">{cur.body}</p>
-                {cur.hint && <p className="text-xs text-blue-600 mt-1.5">💡 {cur.hint}</p>}
+                <div className="flex items-center gap-2">
+                  <p className="text-base font-bold text-gray-900">{cur.title}</p>
+                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[11px] font-semibold flex-none">
+                    {step + 1} / {TOUR_STEPS.length}
+                  </span>
+                </div>
+                <p className="text-[15px] text-gray-600 mt-1.5 leading-relaxed">{cur.body}</p>
+                {cur.hint && <p className="text-sm text-blue-600 mt-2">💡 {cur.hint}</p>}
               </div>
             </div>
             <button onClick={exitTour} aria-label="투어 종료"
                     className="p-1 text-gray-400 hover:text-gray-600 rounded flex-none">
-              <X size={16} />
+              <X size={18} />
             </button>
           </div>
 
@@ -106,28 +115,30 @@ export default function StoryTour({ step, onStep, onExit }: Props) {
             </p>
           )}
 
-          <div className="flex items-center justify-between mt-4">
-            <div className="flex gap-1">
+          <div className="flex items-center justify-between mt-5">
+            <div className="flex gap-1.5">
               {TOUR_STEPS.map((_, i) => (
                 <span key={i}
-                      className={`w-1.5 h-1.5 rounded-full ${i === step ? 'bg-blue-600' : i < step ? 'bg-blue-300' : 'bg-gray-200'}`} />
+                      className={`h-2 rounded-full transition-all ${
+                        i === step ? 'w-6 bg-[#00BFA5]' : i < step ? 'w-2 bg-[#00BFA5]/40' : 'w-2 bg-gray-200'
+                      }`} />
               ))}
             </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => onStep(step - 1)}
                 disabled={step === 0}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40"
+                className="flex items-center gap-1 px-3.5 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40"
               >
-                <ChevronLeft size={14} /> 이전
+                <ChevronLeft size={15} /> 이전
               </button>
               {!isLast ? (
                 <button onClick={() => onStep(step + 1)}
-                        className="flex items-center gap-1 px-4 py-1.5 text-xs font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                  다음 <ChevronRight size={14} />
+                        className="flex items-center gap-1 px-5 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                  다음 <ChevronRight size={15} />
                 </button>
               ) : (
-                <button onClick={exitTour} className="btn-accent px-4 py-1.5 text-xs">
+                <button onClick={exitTour} className="btn-accent px-5 py-2 text-sm">
                   투어 마치기
                 </button>
               )}
@@ -135,6 +146,7 @@ export default function StoryTour({ step, onStep, onExit }: Props) {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
