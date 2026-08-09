@@ -119,11 +119,10 @@ export const navGroups: NavGroup[] = [
 
 export default function Layout() {
   const { setOnboarded, setIntroOpen } = useTheme();
-  // 딥링크 진입(여신철 URL 공유·알림 링크·화면 새로고침)은 업무 문맥을 보존한다 -
-  // 소개 팝업·모의 데이터 고지·대시보드 리다이렉트를 모두 생략한다.
-  // 루트(/) 접속일 때만 소개 → 고지 → 카운트업 진입 경험을 유지한다.
-  const [entryIsDeepLink] = useState(() => window.location.pathname !== '/');
-  const [showOnboarding, setShowOnboarding] = useState(!entryIsDeepLink);
+  // 접속·새로고침 때마다 소개 팝업을 먼저 띄운다 (사용자 지정 동작).
+  // 단, 종전의 대시보드 강제 리다이렉트는 하지 않는다 - 팝업을 닫으면
+  // 원래 열려 있던 화면(여신철 딥링크·알림 링크 포함)이 그대로 유지된다.
+  const [showOnboarding, setShowOnboarding] = useState(true);
   // 모의 데이터 고지 - 소개 팝업이 닫힌 직후 1회 표시하고 명시적 확인을 받는다.
   // (ⓘ 로 소개를 다시 열었다 닫을 때는 반복하지 않는다)
   const [showMockNotice, setShowMockNotice] = useState(false);
@@ -141,12 +140,6 @@ export default function Layout() {
   // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 - 화면에 날짜를 박아두지 않는다.
   const [asOfLabel, setAsOfLabel] = useState('');
 
-  // 딥링크 진입이면 카운트업 게이트(introOpen)를 즉시 해제한다 -
-  // 소개·고지 절차가 없으므로 대시보드로 이동해도 바로 동작해야 한다.
-  useEffect(() => {
-    if (entryIsDeepLink) setIntroOpen(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     fetch('/api/system/as-of')
