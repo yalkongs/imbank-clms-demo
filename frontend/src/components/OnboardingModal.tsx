@@ -48,7 +48,10 @@ function ThemeCard({
   );
 }
 
-export default function OnboardingModal({ onClose }: { onClose: (startTour?: boolean) => void }) {
+export default function OnboardingModal({ onClose, onDevJourney }: {
+  onClose: (startTour?: boolean) => void;
+  onDevJourney?: () => void;
+}) {
   const { theme, setTheme } = useTheme();
 
   return (
@@ -153,7 +156,17 @@ export default function OnboardingModal({ onClose }: { onClose: (startTour?: boo
 
         {/* 푸터 */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-          <span className="text-xs text-gray-400">v1.0.0 · PoC · © 2026 yalkongs</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">v1.0.0 · PoC · © 2026 yalkongs</span>
+            {onDevJourney && (
+              <button
+                onClick={onDevJourney}
+                className="text-xs font-medium text-[#00897B] hover:text-[#00BFA5] hover:underline"
+              >
+                ✨ 개발 여정 - 어떻게 만들었나
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {/* 스토리 투어 - 한 기업의 생애주기 악화 경로(경보→위반→강등→연체→회수)를
                 화면 순서대로 안내한다 */}

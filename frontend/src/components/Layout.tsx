@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Sparkles,
   LayoutDashboard,
   FileText,
   PiggyBank,
@@ -39,6 +38,7 @@ import UserMenu from './UserMenu';
 import TopProgressBar from './TopProgressBar';
 import CommandPalette from './CommandPalette';
 import StoryTour from './StoryTour';
+import DevJourneyModal from './DevJourneyModal';
 
 interface NavItem {
   path: string;
@@ -58,7 +58,6 @@ export const navGroups: NavGroup[] = [
       { path: '/', label: '대시보드', icon: <LayoutDashboard size={20} /> },
       { path: '/governance', label: '보고·감사', icon: <ShieldCheck size={20} /> },
       { path: '/obligations', label: '의무관리함', icon: <ListChecks size={20} /> },
-      { path: '/dev-journey', label: '개발 여정', icon: <Sparkles size={20} /> },
     ]
   },
   {
@@ -125,6 +124,8 @@ export default function Layout() {
   // (사용자 지정 동작 - 소개 → 고지 → 대시보드 카운트업 진입 경험을
   //  어느 화면에서 새로고침해도 동일하게 유지한다)
   const [showOnboarding, setShowOnboarding] = useState(true);
+  // 개발 여정 대형 팝업 - 소개 팝업에서 진입한다
+  const [showDevJourney, setShowDevJourney] = useState(false);
   // 모의 데이터 고지 - 소개 팝업이 닫힌 직후 1회 표시하고 명시적 확인을 받는다.
   // (ⓘ 로 소개를 다시 열었다 닫을 때는 반복하지 않는다)
   const [showMockNotice, setShowMockNotice] = useState(false);
@@ -186,8 +187,9 @@ export default function Layout() {
 
   return (
     <div className="app-root flex h-screen bg-gray-50">
-      {showOnboarding && <OnboardingModal onClose={closeOnboarding} />}
+      {showOnboarding && <OnboardingModal onClose={closeOnboarding} onDevJourney={() => setShowDevJourney(true)} />}
       {showMockNotice && <MockDataNotice onConfirm={confirmMockNotice} />}
+      {showDevJourney && <DevJourneyModal onClose={() => setShowDevJourney(false)} />}
       <TopProgressBar />
       <CommandPalette />
       {tourStep !== null && (
