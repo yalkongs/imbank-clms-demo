@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   FileText,
@@ -119,9 +119,9 @@ export const navGroups: NavGroup[] = [
 
 export default function Layout() {
   const { setOnboarded, setIntroOpen } = useTheme();
-  // 접속·새로고침 때마다 소개 팝업을 먼저 띄운다 (사용자 지정 동작).
-  // 단, 종전의 대시보드 강제 리다이렉트는 하지 않는다 - 팝업을 닫으면
-  // 원래 열려 있던 화면(여신철 딥링크·알림 링크 포함)이 그대로 유지된다.
+  // 접속·새로고침 때마다 소개 팝업을 먼저 띄우고 대시보드에서 시작한다
+  // (사용자 지정 동작 - 소개 → 고지 → 대시보드 카운트업 진입 경험을
+  //  어느 화면에서 새로고침해도 동일하게 유지한다)
   const [showOnboarding, setShowOnboarding] = useState(true);
   // 모의 데이터 고지 - 소개 팝업이 닫힌 직후 1회 표시하고 명시적 확인을 받는다.
   // (ⓘ 로 소개를 다시 열었다 닫을 때는 반복하지 않는다)
@@ -140,6 +140,16 @@ export default function Layout() {
   // 기준일은 백엔드 단일 소스(AS_OF_DATE)에서 받는다 - 화면에 날짜를 박아두지 않는다.
   const [asOfLabel, setAsOfLabel] = useState('');
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // 접속·새로고침 시에는 항상 대시보드에서 시작한다. (마운트 1회만 실행)
+  useEffect(() => {
+    if (location.pathname !== '/') {
+      navigate('/', { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetch('/api/system/as-of')
