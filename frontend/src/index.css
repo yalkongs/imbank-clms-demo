@@ -433,3 +433,18 @@ body {
 @keyframes pm-dots {
   0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; }
 }
+
+/* 섹션 로딩 스켈레톤 - 콘텐츠 골격을 먼저 보여 대기 체감을 줄인다 */
+.skeleton {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eef2f1 25%, #f7faf9 45%, #eef2f1 65%);
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-wave {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}

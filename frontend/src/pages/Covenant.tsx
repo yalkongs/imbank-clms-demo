@@ -3,7 +3,7 @@ import {
   FileCheck, AlertTriangle, CheckCircle, XCircle,
   Clock, RefreshCw, ChevronDown, ChevronUp, Shield, Info
 } from 'lucide-react';
-import { Card, Badge, RegionFilter } from '../components';
+import { Card, Badge, RegionFilter, PageLoader } from '../components';
 import { covenantApi } from '../utils/api';
 import { formatAmount, formatDate } from '../utils/format';
 
@@ -134,12 +134,7 @@ export default function Covenant() {
 
   // ──────────────── 렌더링 ────────────────
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="animate-spin text-blue-600 mr-3" size={24} />
-        <span className="text-gray-600">코베넌트 데이터 로딩 중...</span>
-      </div>
-    );
+    return <PageLoader label="코베넌트 데이터를 불러오는 중" />;
   }
 
   const breach = breachData?.breach_summary || {};

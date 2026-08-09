@@ -169,11 +169,10 @@ export default function Models() {
   return (
     <div className="space-y-6">
       {/* 페이지 헤더 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">모델관리 (MRM)</h1>
-          <p className="text-sm text-gray-500 mt-1">신용평가모델 성능 모니터링 및 검증 관리</p>
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">모델관리 (MRM)</h1>
+        <p className="text-sm text-gray-500 mt-1">신용평가모델 성능 모니터링 및 검증 관리</p>
+      </div>
 
       {/* EWS 백테스트 실측 - 외부 검증 데이터셋(부도 라벨) 기반. 이 화면에서 유일하게
           실측 라벨에 근거한 성능 수치다. */}
@@ -206,7 +205,6 @@ export default function Models() {
           </div>
         </div>
       )}
-      </div>
 
       {/* 요약 카드 */}
       <div className="grid grid-cols-4 gap-4">

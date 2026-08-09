@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { assetClassificationApi } from '../utils/api';
+import { SectionSkeleton, SectionError, AsyncStatus } from '../components';
 import {
   AlertTriangle,
   TrendingDown,
@@ -81,6 +82,10 @@ export default function AssetClassification() {
   const [trend, setTrend]       = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);
   const [running, setRunning]   = useState(false);
+  // 탭별 비동기 상태 - 빈 데이터·오류를 '로딩 중'과 구분한다
+  const [migStatus, setMigStatus]     = useState<AsyncStatus>('idle');
+  const [gapStatus, setGapStatus]     = useState<AsyncStatus>('idle');
+  const [reconStatus, setReconStatus] = useState<AsyncStatus>('idle');
 
   useEffect(() => {
     loadPortfolio();
@@ -100,21 +105,34 @@ export default function AssetClassification() {
   };
 
   const loadMigration = async () => {
+    setMigStatus('loading');
     try {
       const res = await assetClassificationApi.getMigrationMatrix();
       setMigration(res.data);
+      setMigStatus('ready');
     } catch (e) {
       console.error(e);
+      setMigStatus('error');
     }
   };
 
   const loadGap = async () => {
+    setGapStatus('loading');
     try {
       const res = await assetClassificationApi.getProvisionGap();
       setGapData(res.data);
+      setGapStatus('ready');
     } catch (e) {
       console.error(e);
+      setGapStatus('error');
     }
+  };
+
+  const loadRecon = () => {
+    setReconStatus('loading');
+    axios.get('/api/classification/reconciliation')
+      .then((r: any) => { setRecon(r.data); setReconStatus('ready'); })
+      .catch((e: any) => { console.error(e); setReconStatus('error'); });
   };
 
   const loadTrend = async () => {
@@ -128,11 +146,9 @@ export default function AssetClassification() {
 
   const handleTabChange = (t: typeof tab) => {
     setTab(t);
-    if (t === 'migration' && !migration) loadMigration();
-    if (t === 'gap' && !gapData) loadGap();
-    if (t === 'recon' && !recon) {
-      axios.get('/api/classification/reconciliation').then((r: any) => setRecon(r.data)).catch(console.error);
-    }
+    if (t === 'migration' && migStatus === 'idle') loadMigration();
+    if (t === 'gap' && gapStatus === 'idle') loadGap();
+    if (t === 'recon' && reconStatus === 'idle') loadRecon();
   };
 
   const handleRunClassification = async () => {
@@ -318,8 +334,10 @@ export default function AssetClassification() {
           {/* 이동 행렬 탭 */}
           {tab === 'migration' && (
             <div>
-              {!migration ? (
-                <div className="text-center py-12 text-gray-400">로딩 중...</div>
+              {migStatus === 'loading' || migStatus === 'idle' ? (
+                <SectionSkeleton rows={5} />
+              ) : migStatus === 'error' || !migration ? (
+                <SectionError onRetry={loadMigration} />
               ) : migration.error ? (
                 <div className="text-center py-12 text-gray-400">{migration.error}</div>
               ) : (
@@ -381,8 +399,10 @@ export default function AssetClassification() {
           {/* 충당금 부족 탭 */}
           {tab === 'gap' && (
             <div>
-              {!gapData ? (
-                <div className="text-center py-12 text-gray-400">로딩 중...</div>
+              {gapStatus === 'loading' || gapStatus === 'idle' ? (
+                <SectionSkeleton rows={5} />
+              ) : gapStatus === 'error' || !gapData ? (
+                <SectionError onRetry={loadGap} />
               ) : (
                 <div className="space-y-4">
                   <div className="p-4 bg-red-50 rounded-lg border border-red-200">
@@ -429,8 +449,10 @@ export default function AssetClassification() {
           {/* 3체계 대사 탭 - 감독분류 × IFRS9 Stage × EWS 를 통합하지 않고 병렬 대사 */}
           {tab === 'recon' && (
             <div>
-              {!recon ? (
-                <div className="text-center py-12 text-gray-400">로딩 중...</div>
+              {reconStatus === 'loading' || reconStatus === 'idle' ? (
+                <SectionSkeleton rows={5} />
+              ) : reconStatus === 'error' || !recon ? (
+                <SectionError onRetry={loadRecon} />
               ) : (
                 <div className="space-y-6">
                   <div className="grid grid-cols-4 gap-4 text-center">

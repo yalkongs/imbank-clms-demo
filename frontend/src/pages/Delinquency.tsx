@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { delinquencyApi } from '../utils/api';
+import { SectionSkeleton, SectionError, SectionEmpty, AsyncStatus } from '../components';
 import {
   AlertCircle,
   PhoneCall,
@@ -91,6 +92,10 @@ export default function Delinquency() {
   const [items, setItems]         = useState<DelinquencyItem[]>([]);
   const [rollRate, setRollRate]   = useState<any[]>([]);
   const [performance, setPerformance] = useState<any>(null);
+  // 탭별 비동기 상태 - 빈 데이터·오류를 '로딩 중'과 구분한다
+  const [listStatus, setListStatus] = useState<AsyncStatus>('idle');
+  const [rollStatus, setRollStatus] = useState<AsyncStatus>('idle');
+  const [perfStatus, setPerfStatus] = useState<AsyncStatus>('idle');
   const [filterStage, setFilterStage] = useState<string>('');
   const [expandedId, setExpandedId]   = useState<string | null>(null);
   const [expandedDetail, setExpandedDetail] = useState<any>(null);
@@ -122,29 +127,38 @@ export default function Delinquency() {
   };
 
   const loadList = async (stage?: string) => {
+    setListStatus('loading');
     try {
       const res = await delinquencyApi.getActive(stage || undefined, 50);
       setItems(res.data.items || []);
+      setListStatus('ready');
     } catch (e) {
       console.error(e);
+      setListStatus('error');
     }
   };
 
   const loadRollRate = async () => {
+    setRollStatus('loading');
     try {
       const res = await delinquencyApi.getRollRate();
       setRollRate(res.data.roll_rates || []);
+      setRollStatus('ready');
     } catch (e) {
       console.error(e);
+      setRollStatus('error');
     }
   };
 
   const loadPerformance = async () => {
+    setPerfStatus('loading');
     try {
       const res = await delinquencyApi.getCollectionPerformance(3);
       setPerformance(res.data);
+      setPerfStatus('ready');
     } catch (e) {
       console.error(e);
+      setPerfStatus('error');
     }
   };
 
@@ -163,9 +177,9 @@ export default function Delinquency() {
 
   const handleTabChange = (t: typeof tab) => {
     setTab(t);
-    if (t === 'list' && items.length === 0) loadList();
-    if (t === 'rollrate' && rollRate.length === 0) loadRollRate();
-    if (t === 'performance' && !performance) loadPerformance();
+    if (t === 'list' && listStatus === 'idle') loadList();
+    if (t === 'rollrate' && rollStatus === 'idle') loadRollRate();
+    if (t === 'performance' && perfStatus === 'idle') loadPerformance();
   };
 
   const handleExpandRow = async (id: string, facilityId: string) => {
@@ -385,7 +399,9 @@ export default function Delinquency() {
               </div>
 
               <div className="space-y-2">
-                {items.map((item) => (
+                {(listStatus === 'loading' || listStatus === 'idle') && <SectionSkeleton rows={6} />}
+                {listStatus === 'error' && <SectionError onRetry={() => loadList(filterStage)} />}
+                {listStatus === 'ready' && items.map((item) => (
                   <div key={item.delinquency_id} className="border border-gray-200 rounded-lg overflow-hidden">
                     <div
                       className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-50"
@@ -451,8 +467,8 @@ export default function Delinquency() {
                     )}
                   </div>
                 ))}
-                {items.length === 0 && (
-                  <div className="text-center py-12 text-gray-400">연체 데이터가 없습니다</div>
+                {listStatus === 'ready' && items.length === 0 && (
+                  <SectionEmpty message="해당 단계의 연체 건이 없습니다" />
                 )}
               </div>
             </div>
@@ -461,8 +477,12 @@ export default function Delinquency() {
           {/* Roll Rate 탭 */}
           {tab === 'rollrate' && (
             <div>
-              {rollRate.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">Roll Rate 데이터 로딩 중...</div>
+              {rollStatus === 'loading' || rollStatus === 'idle' ? (
+                <SectionSkeleton rows={5} />
+              ) : rollStatus === 'error' ? (
+                <SectionError onRetry={loadRollRate} />
+              ) : rollRate.length === 0 ? (
+                <SectionEmpty message="분석 기간 내 연체 단계 전이 관측치가 없습니다" />
               ) : (
                 <div>
                   <p className="text-sm text-gray-500 mb-4">
@@ -513,8 +533,12 @@ export default function Delinquency() {
           {/* 추심 성과 탭 */}
           {tab === 'performance' && (
             <div>
-              {!performance ? (
-                <div className="text-center py-12 text-gray-400">로딩 중...</div>
+              {perfStatus === 'loading' || perfStatus === 'idle' ? (
+                <SectionSkeleton rows={4} />
+              ) : perfStatus === 'error' ? (
+                <SectionError onRetry={loadPerformance} />
+              ) : !performance ? (
+                <SectionEmpty />
               ) : (
                 <div className="space-y-6">
                   {/* 회수 요약 */}

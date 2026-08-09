@@ -313,26 +313,25 @@ def get_transfer_candidates(db: Session = Depends(get_db)):
 
 @router.get("/roll-rate")
 def get_roll_rate(
-    months: int = Query(6, description="분석 기간 (개월)"),
+    months: int = Query(18, description="분석 기간 (개월)"),
     db: Session = Depends(get_db)
 ):
     """
     Roll Rate 분석
-    - DPD 버킷별 다음 기간 이동률 (전이 행렬)
+    - 연체 단계 월별 스냅샷(delinquency_stage_history)의 연속 관측 쌍으로
+      전이 행렬을 만든다. 같은 에피소드 내 seq 연속 쌍만 짝지어
+      재연체 에피소드 간 교차 오염이 없다.
     """
     rows = db.execute(
         text("""
-            SELECT
-                d1.delinquency_stage AS from_stage,
-                d2.delinquency_stage AS to_stage,
-                COUNT(*) AS cnt
-            FROM delinquency_record d1
-            JOIN delinquency_record d2 ON d1.facility_id = d2.facility_id
-            WHERE d1.delinquency_id != d2.delinquency_id
-              AND d2.overdue_date > d1.overdue_date
-              AND d2.overdue_date <= date(d1.overdue_date, '+30 days')
-            GROUP BY d1.delinquency_stage, d2.delinquency_stage
-        """)
+            SELECT h1.stage AS from_stage, h2.stage AS to_stage, COUNT(*) AS cnt
+            FROM delinquency_stage_history h1
+            JOIN delinquency_stage_history h2
+              ON h2.episode_id = h1.episode_id AND h2.seq = h1.seq + 1
+            WHERE h1.snapshot_date >= date(:as_of, '-' || :months || ' months')
+            GROUP BY h1.stage, h2.stage
+        """),
+        {"as_of": AS_OF_DATE.strftime('%Y-%m-%d'), "months": months}
     ).fetchall()
 
     stages = ['EARLY', 'MID', 'LATE', 'NPL', 'WRITEOFF']

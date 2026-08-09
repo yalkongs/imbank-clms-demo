@@ -10,7 +10,7 @@ import {
   FileText,
   X
 } from 'lucide-react';
-import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton, RegionFilter } from '../components';
+import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton, RegionFilter, SectionSkeleton, SectionError, AsyncStatus } from '../components';
 import { workoutApi, workoutEclApi } from '../utils/api';
 import { formatAmount, formatPercent } from '../utils/format';
 
@@ -34,6 +34,7 @@ export default function Workout() {
   const [region, setRegion] = useState('');
   const [mainTab, setMainTab] = useState<'cases' | 'ecl'>('cases');
   const [eclData, setEclData] = useState<any>(null);
+  const [eclStatus, setEclStatus] = useState<AsyncStatus>('idle');
 
   useEffect(() => {
     loadData();
@@ -78,11 +79,14 @@ export default function Workout() {
   };
 
   const loadEclData = async () => {
+    setEclStatus('loading');
     try {
       const res = await workoutEclApi.getEclSummary();
       setEclData(res.data);
+      setEclStatus('ready');
     } catch (e) {
       console.error(e);
+      setEclStatus('error');
     }
   };
 
@@ -214,7 +218,7 @@ export default function Workout() {
               Workout 케이스
             </button>
             <button
-              onClick={() => { setMainTab('ecl'); if (!eclData) loadEclData(); }}
+              onClick={() => { setMainTab('ecl'); if (eclStatus === 'idle') loadEclData(); }}
               className={`py-3 text-sm font-medium border-b-2 transition-colors ${
                 mainTab === 'ecl'
                   ? 'border-blue-600 text-blue-600'
@@ -228,8 +232,10 @@ export default function Workout() {
 
         {mainTab === 'ecl' ? (
           <div className="p-6">
-            {!eclData ? (
-              <div className="text-center py-12 text-gray-400">로딩 중...</div>
+            {eclStatus === 'loading' || eclStatus === 'idle' ? (
+              <SectionSkeleton rows={4} />
+            ) : eclStatus === 'error' || !eclData ? (
+              <SectionError onRetry={loadEclData} />
             ) : (
               <div className="space-y-5">
                 {/* ECL 요약 KPI */}

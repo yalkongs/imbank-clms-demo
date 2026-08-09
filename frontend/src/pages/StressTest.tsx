@@ -8,7 +8,7 @@ import {
   Play,
   SlidersHorizontal
 } from 'lucide-react';
-import { Card, StatCard, Badge, GroupedBarChart, COLORS } from '../components';
+import { Card, StatCard, Badge, GroupedBarChart, COLORS, PageLoader } from '../components';
 import { stressTestApi } from '../utils/api';
 import { formatAmount, formatPercent } from '../utils/format';
 
@@ -22,6 +22,8 @@ export default function StressTest() {
   const [custom, setCustom] = useState({ pd_mult: 1.5, lgd_mult: 1.2, property_shock: -10, rate_bp: 100 });
   const [customResult, setCustomResult] = useState<any>(null);
   const [customBusy, setCustomBusy] = useState(false);
+  // 시나리오 방식 선택 - 입력(시나리오 선택·조립)은 상단 한 곳에 모은다
+  const [mode, setMode] = useState<'preset' | 'custom'>('preset');
 
   const runCustom = () => {
     setCustomBusy(true);
@@ -77,11 +79,7 @@ export default function StressTest() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
+    return <PageLoader label="시나리오를 불러오는 중" />;
   }
 
   const selectedScenarioData = scenarios.find(s => s.scenario_id === selectedScenario);
@@ -105,14 +103,16 @@ export default function StressTest() {
           <h1 className="text-2xl font-bold text-gray-900 whitespace-nowrap">스트레스 테스트</h1>
           <p className="text-sm text-gray-500 mt-1">시나리오 기반 포트폴리오 충격 분석</p>
         </div>
-        <button
-          onClick={runStressTest}
-          disabled={!selectedScenario || resultLoading}
-          className="btn btn-primary"
-        >
-          <Play size={16} className="mr-2" />
-          선택 시나리오 재계산
-        </button>
+        {mode === 'preset' && (
+          <button
+            onClick={runStressTest}
+            disabled={!selectedScenario || resultLoading}
+            className="btn btn-primary"
+          >
+            <Play size={16} className="mr-2" />
+            선택 시나리오 재계산
+          </button>
+        )}
       </div>
 
       {/* 스트레스완충자본 - 테스트 결과가 자본 요구량으로 이어진다 */}
@@ -143,6 +143,21 @@ export default function StressTest() {
         </div>
       )}
 
+      {/* 시나리오 방식 선택 - 사전정의 카드 vs 직접 조립 */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1 w-fit">
+        {([['preset', '사전정의 시나리오'], ['custom', '사용자 정의 시나리오']] as const).map(([m, label]) => (
+          <button key={m} onClick={() => setMode(m)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              mode === m ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}>
+            {m === 'custom' && <SlidersHorizontal size={13} className="inline mr-1.5 -mt-0.5" />}
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === 'preset' && (
+      <>
       {/* 시나리오 선택 */}
       <div className="grid grid-cols-5 gap-4">
         {scenarios.map(scenario => (
@@ -404,8 +419,11 @@ export default function StressTest() {
           )}
         </>
       )}
+      </>
+      )}
 
       {/* 사용자 정의 시나리오 플레이그라운드 - 고정 5개 시나리오를 넘어 충격을 직접 조립 */}
+      {mode === 'custom' && (
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -414,7 +432,7 @@ export default function StressTest() {
               사용자 정의 시나리오
             </h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              위 고정 시나리오와 별개로, 충격을 직접 조립해 포트폴리오 전체 파급을 봅니다 (PoC 근사 산식)
+              사전정의 시나리오와 별개로, 충격을 직접 조립해 포트폴리오 전체 파급을 봅니다 (PoC 근사 산식)
             </p>
           </div>
           <button onClick={runCustom} disabled={customBusy}
@@ -476,6 +494,7 @@ export default function StressTest() {
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }
