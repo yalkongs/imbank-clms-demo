@@ -242,7 +242,7 @@ def _build_draft(d: dict) -> dict:
     hurdle = float(get_rule_params("RULE_RAROC_HURDLE", {"hurdle_pct": 12})
                    .get("hurdle_pct", 12))
     lgd = 0.35 if coll_total > 0 else 0.45
-    raroc = calculate_raroc(amount=amount, rate=rate, ftp_rate=0.03,
+    raroc = calculate_raroc(amount=amount, rate=rate, ftp_rate=0.028,
                             pd=pd_val, lgd=lgd, tenor_years=max(tenor / 12, 0.5))
     raroc_pct = float(raroc.get("raroc", 0)) * 100   # 소수 → %
     pd_note = "" if rating else " · 등급 미보유로 BB 등급 가정 PD"

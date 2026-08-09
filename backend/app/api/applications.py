@@ -743,7 +743,7 @@ def simulate_application(
         ORDER BY effective_date DESC LIMIT 1
     """), {"tenor": min(sim_tenor, 60)}).fetchone()
 
-    ftp_rate = ftp[0] if ftp else 0.035
+    ftp_rate = ftp[0] if ftp else 0.028
 
     # RAROC 계산
     raroc_result = calculate_raroc(

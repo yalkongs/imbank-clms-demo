@@ -10,9 +10,11 @@ from sqlalchemy import text
 VALID_REGIONS = {'CAPITAL', 'DAEGU_GB', 'BUSAN_GN'}
 
 # RAROC 계산용 비용률 상수 (calculations.py calculate_raroc()와 일관)
-FUNDING_RATE = 0.043   # 조달비용 4.3% (기본 3.5% + FTP 0.8%)
+# 2026-08 금리 현실화: 여신금리 6.04% → 4.70% 조정에 맞춰 조달원가도
+# FTP 테이블 스케일과 동일 사이클로 하향 (실측 수신금리 2.10% 참조)
+FUNDING_RATE = 0.030   # 조달비용 3.0% (FTP 현실화 반영)
 OPEX_RATE = 0.005      # 운영비 0.5%
-COST_RATE = FUNDING_RATE + OPEX_RATE  # 4.8%
+COST_RATE = FUNDING_RATE + OPEX_RATE  # 3.5%
 
 
 def get_industry_portfolio(db: Session, region: str = None):

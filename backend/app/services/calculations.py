@@ -156,7 +156,7 @@ def calculate_raroc(
 def calculate_pricing(
     pd: float,
     lgd: float,
-    base_rate: float = 0.035,
+    base_rate: float = 0.027,   # CD91 근사 (금리 현실화 반영)
     ftp_spread: float = 0.005,
     opex_spread: float = 0.002,
     target_margin: float = 0.01,

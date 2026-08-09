@@ -53,7 +53,7 @@ def get_dashboard_summary(region: str = Query(None), db: Session = Depends(get_d
     # 포트폴리오 RAROC = (총이자수익 - 총비용 - 총EL) / (총RWA * 10.5%)
     avg_raroc = db.execute(text(f"""
         SELECT CASE WHEN SUM(rp.rwa) * 0.105 > 0
-            THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.048 - SUM(rp.expected_loss))
+            THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.035 - SUM(rp.expected_loss))
                  / (SUM(rp.rwa) * 0.105)
             ELSE 0 END
         FROM facility f
@@ -192,7 +192,7 @@ def get_kpis(region: str = Query(None), db: Session = Depends(get_db)):
     # 포트폴리오 RAROC - 지역 필터 (summary와 동일한 산출식 사용)
     portfolio_raroc = db.execute(text(f"""
         SELECT CASE WHEN SUM(rp.rwa) * 0.105 > 0
-            THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.048 - SUM(rp.expected_loss))
+            THEN (SUM(f.outstanding_amount * f.final_rate) - SUM(f.outstanding_amount) * 0.035 - SUM(rp.expected_loss))
                  / (SUM(rp.rwa) * 0.105)
             ELSE 0 END
         FROM facility f

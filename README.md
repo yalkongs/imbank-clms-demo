@@ -210,9 +210,9 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 화�
 
 ```
 개별 건: RAROC = (A×r - A×FTP - A×0.005 - PD×LGD×A) / (RWA × 10.5%)
-포트폴리오: RAROC = (Σ(Oi×ri) - ΣOi×0.048 - ΣELi) / (ΣRWA×0.105)
+포트폴리오: RAROC = (Σ(Oi×ri) - ΣOi×0.035 - ΣELi) / (ΣRWA×0.105)
 
-비용률: 조달(FTP 테너별) + 운영(0.5%) — 포트폴리오 총비용률 4.8%
+비용률: 조달(FTP 테너별) + 운영(0.5%) — 포트폴리오 총비용률 3.5% (2026-08 금리 현실화)
 경제적자본: EC = RWA × 10.5% (BIS 8% + 보전완충 2.5%)
 허들레이트: 15% (규정 레지스터 RULE_RAROC_HURDLE 정본)
 ```
@@ -220,7 +220,7 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 화�
 ### 가격결정 (Pricing)
 
 ```
-r_final = r_base(3.5%) + FTP spread(0.5%) + Credit spread + Opex(0.2%) + Margin(1.0%)
+r_final = r_base(2.7%) + FTP spread(0.5%) + Credit spread + Opex(0.2%) + Margin(1.0%)
         + Strategy adj + Collateral adj
 
 Credit spread = EL spread + UL spread
@@ -650,9 +650,9 @@ cd database && python3 generate_ews_leading_data.py
 
 | 상수 | 값 | 설명 |
 |------|-----|------|
-| 조달비용률 (FUNDING_RATE) | 4.3% | 기본 FTP + 가산 |
+| 조달비용률 (FUNDING_RATE) | 3.0% | FTP 현실화 반영 (실측 수신금리 2.10% 참조) |
 | 운영비율 (OPEX_RATE) | 0.5% | |
-| 총비용률 (COST_RATE) | 4.8% | 포트폴리오 대시보드 적용 |
+| 총비용률 (COST_RATE) | 3.5% | 포트폴리오 대시보드 적용 |
 | 경제적 자본비율 | 10.5% | BIS 8% + 보전완충 2.5% |
 | 허들레이트 | 15% | 규정 레지스터 RULE_RAROC_HURDLE 정본 |
 
@@ -723,6 +723,8 @@ cd database && python3 generate_ews_leading_data.py
 - 차주 699 → 1,999개사(업종 40종·담보 7종), 총여신 36.7조 (실측 기업여신 37.0조 대비 -0.8%)
 - 자기자본 5.5조 · RWA 38조 · BIS 14.47% (종전 2.6배 과대를 실제 규모로 조정)
 - 연체율 0.94% (실측 1.0% 정합)
+- 여신금리 현실화: 잔액가중 6.04% → 4.70% (실측 4.36% 대비 기업 프리미엄 반영),
+  FTP·프라이싱·조달원가 동반 조정으로 포트폴리오 RAROC 16.6% 유지
 
 **성능**
 - 응답 gzip(-87%) · 인덱스 14개 · TTL 캐시로 주요 화면 7.7초 → 0.3초
