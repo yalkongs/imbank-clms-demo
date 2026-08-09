@@ -88,25 +88,29 @@ export default function DevJourneyModal({ onClose }: { onClose: () => void }) {
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-xl border border-gray-200 p-5">
-                <p className="text-xs font-semibold text-gray-400 mb-3">전통 개발 (외주 SI 기준 추정)</p>
+                <p className="text-xs font-semibold text-gray-400 mb-3">전통 개발 (금융 SI 기준 추정)</p>
                 <div className="space-y-2.5">
                   <div className="flex justify-between items-baseline">
                     <span className="text-sm text-gray-500">투입 인력</span>
-                    <span className="text-lg font-bold text-gray-800">5명 내외</span>
+                    <span className="text-lg font-bold text-gray-800">8~10명</span>
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-sm text-gray-500">개발 기간</span>
-                    <span className="text-lg font-bold text-gray-800">6~9개월</span>
+                    <span className="text-lg font-bold text-gray-800">12~18개월</span>
                   </div>
                   <div className="flex justify-between items-baseline">
                     <span className="text-sm text-gray-500">투입 공수</span>
-                    <span className="text-lg font-bold text-gray-800">30~45인월</span>
+                    <span className="text-lg font-bold text-gray-800">100~150인월</span>
                   </div>
                   <div className="flex justify-between items-baseline border-t border-gray-100 pt-2.5">
                     <span className="text-sm text-gray-500">환산 비용</span>
-                    <span className="text-xl font-bold text-red-600">약 3.6~5.4억원</span>
+                    <span className="text-xl font-bold text-red-600">약 15~22억원</span>
                   </div>
                 </div>
+                <p className="mt-3 text-[11px] text-gray-400 leading-relaxed">
+                  여신 업무 전문가 · Basel/IFRS9 리스크 계량 전문가 · 금융 SI 개발자 등
+                  희소한 전문 인력으로 구성 - 인력 확보 자체가 병목이며 단가도 일반 SI 대비 높다
+                </p>
               </div>
               <div className="rounded-xl border-2 border-[#00BFA5]/40 bg-[#00BFA5]/[0.04] p-5">
                 <p className="text-xs font-semibold text-[#00897B] mb-3">바이브 코딩 (이 프로젝트 실적)</p>
@@ -131,14 +135,15 @@ export default function DevJourneyModal({ onClose }: { onClose: () => void }) {
               </div>
             </div>
             <p className="mt-4 text-center text-sm font-bold text-gray-800">
-              비용 기준 약 <span className="text-[#00897B] text-lg">수백분의 1</span>,
-              기간 기준 약 <span className="text-[#00897B] text-lg">15분의 1</span>
+              비용 기준 약 <span className="text-[#00897B] text-lg">수천분의 1</span>,
+              달력 기준 약 <span className="text-[#00897B] text-lg">30분의 1</span> 기간
             </p>
             <p className="mt-3 text-[11px] text-gray-400 leading-relaxed">
-              산정 근거: 고전적 COCOMO(organic) 모형으로는 44 KLOC ≈ 127인월(10.6인년)이나, 현대
-              프레임워크 생산성을 반영해 보수적으로 30~45인월로 추정. 비용은 SW기술자 평균임금 기반
-              외주 인월 단가 약 1,200만원 적용. 요구 정련·품질 수준이 동일하다는 가정의 단순 비교이며,
-              운영계 전환 시 필요한 보안·연계·감리 비용은 양쪽 모두 제외한 수치입니다.
+              산정 근거: COCOMO(organic) 모형 기준 44 KLOC ≈ 127인월(10.6인년)로, 도메인 전문성
+              (Basel 자본규제·감독규정·IFRS9·여신 실무)이 필수라 생산성 할인 없이 100~150인월로 추정.
+              비용은 금융 도메인 특급·고급 기술자 인월 단가 약 1,500만원 적용. 요구 정련·품질 수준이
+              동일하다는 가정의 단순 비교이며, 운영계 전환 시 필요한 보안·연계·감리 비용은
+              양쪽 모두 제외한 수치입니다.
             </p>
           </div>
 
