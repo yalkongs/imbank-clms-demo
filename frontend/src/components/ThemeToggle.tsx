@@ -1,8 +1,8 @@
 import React from 'react';
-import { Palette } from 'lucide-react';
+import { Palette, Moon } from 'lucide-react';
 import { useTheme } from '../context/ThemeProvider';
 
-/** Classic ↔ Gradient Mesh 세그먼트 토글 (헤더용) */
+/** Classic · Gradient Mesh · Dark 세그먼트 토글 (헤더용) */
 export default function ThemeToggle() {
   const { theme, setTheme } = useTheme();
 
@@ -24,6 +24,15 @@ export default function ThemeToggle() {
       >
         <Palette size={13} />
         Mesh
+      </button>
+      <button
+        onClick={() => setTheme('dark')}
+        className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+          theme === 'dark' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+        }`}
+      >
+        <Moon size={13} />
+        Dark
       </button>
     </div>
   );

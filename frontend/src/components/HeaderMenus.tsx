@@ -143,6 +143,7 @@ export function SettingsMenu({ asOfLabel }: { asOfLabel?: string }) {
   const themes: { key: Theme; label: string; desc: string }[] = [
     { key: 'classic', label: 'Classic',       desc: '깔끔한 플랫 UI' },
     { key: 'mesh',    label: 'Gradient Mesh', desc: '민트·라임 메시 배경' },
+    { key: 'dark',    label: 'Dark',          desc: '어두운 배경의 다크 모드' },
   ];
 
   return (

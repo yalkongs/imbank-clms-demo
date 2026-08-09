@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 
-export type Theme = 'classic' | 'mesh';
+export type Theme = 'classic' | 'mesh' | 'dark';
 
 /** 시연용 역할 페르소나 - 결재함의 전결 레벨과 헤더 표시가 바뀐다 */
 export type Role = 'REVIEWER' | 'DEPT_HEAD' | 'EXECUTIVE';
@@ -38,7 +38,7 @@ const DEFAULT_THEME: Theme = 'mesh';
 function readTheme(): Theme {
   try {
     const v = localStorage.getItem(THEME_KEY);
-    if (v === 'mesh' || v === 'classic') return v;
+    if (v === 'mesh' || v === 'classic' || v === 'dark') return v;
     return DEFAULT_THEME;
   } catch {
     return DEFAULT_THEME;

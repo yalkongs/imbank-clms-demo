@@ -122,6 +122,10 @@ export default function OnboardingModal({ onClose, onDevJourney }: {
                 value="mesh" label="Gradient Mesh" desc="민트·라임 메시 배경"
                 selected={theme === 'mesh'} onSelect={setTheme} previewClass="mini-mesh"
               />
+              <ThemeCard
+                value="dark" label="Dark" desc="어두운 배경의 다크 모드"
+                selected={theme === 'dark'} onSelect={setTheme} previewClass="mini-dark"
+              />
             </div>
             <p className="text-xs text-gray-400 mt-2">
               테마는 우측 상단 설정(⚙)에서 언제든 바꿀 수 있습니다.
@@ -136,10 +140,10 @@ export default function OnboardingModal({ onClose, onDevJourney }: {
             <p className="text-[11px] font-semibold text-gray-400 tracking-wider mb-2">구축 규모</p>
             <div className="grid grid-cols-4 gap-3 text-center">
               {[
-                { n: '26',     l: '화면' },
-                { n: '215',    l: 'API' },
-                { n: '84',     l: 'DB 테이블' },
-                { n: '3,700',  l: '여신' },
+                { n: '42',     l: '화면' },
+                { n: '242',    l: 'API' },
+                { n: '95',     l: 'DB 테이블' },
+                { n: '3,734',  l: '여신' },
               ].map(s => (
                 <div key={s.l}>
                   <p className="text-base font-bold text-gray-900 tabular leading-tight">{s.n}</p>
@@ -157,7 +161,7 @@ export default function OnboardingModal({ onClose, onDevJourney }: {
         {/* 푸터 */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-400">v1.0.0 · PoC · © 2026 yalkongs</span>
+            <span className="text-xs text-gray-400">v2.0.0 · PoC · © 2026 yalkongs</span>
             {onDevJourney && (
               <button
                 onClick={onDevJourney}

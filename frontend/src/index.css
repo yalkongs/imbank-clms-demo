@@ -401,6 +401,129 @@ body {
 .mini-flat {
   background: #f1f5f4;
 }
+.mini-dark {
+  background:
+    radial-gradient(60% 60% at 25% 25%, rgba(0, 199, 169, 0.30), transparent 60%),
+    radial-gradient(55% 55% at 80% 75%, rgba(83, 225, 229, 0.14), transparent 60%),
+    #121a17;
+}
+
+/* --- Dark 테마 ---
+   Mesh 와 같은 방식: 컴포넌트 로직 변경 없이 data-theme 속성 + 클래스 재정의로 전환.
+   코드베이스가 bg-white / bg-gray-* / text-gray-* / border-gray-* 를 일관되게 쓰므로
+   그 유틸리티 조합을 어두운 팔레트(민트 틴트 그레이)로 재매핑한다. */
+[data-theme="dark"] { color-scheme: dark; }
+[data-theme="dark"] body { background: #0e1412; color: #d9dfdc; }
+[data-theme="dark"] .app-root { background: #0e1412 !important; }
+[data-theme="dark"] .app-sidebar,
+[data-theme="dark"] .app-header {
+  background: #131b18 !important;
+  border-color: #232d28 !important;
+}
+/* 사이드바 로고(흰 배경 JPG 시그니처)는 흰 패널로 감싼 것처럼 보이게 */
+[data-theme="dark"] .app-sidebar img,
+[data-theme="dark"] .modal-in img[alt="iM뱅크"] {
+  background: #ffffff;
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+/* 표면 */
+[data-theme="dark"] .bg-white { background-color: #161f1b !important; }
+[data-theme="dark"] .bg-gray-50 { background-color: #101815 !important; }
+[data-theme="dark"] .bg-gray-100 { background-color: #1d2723 !important; }
+[data-theme="dark"] .bg-gray-200 { background-color: #26312c !important; }
+[data-theme="dark"] .hover\:bg-gray-50:hover { background-color: #1a2420 !important; }
+[data-theme="dark"] .hover\:bg-gray-100:hover,
+[data-theme="dark"] .hover\:bg-gray-200:hover { background-color: #26312c !important; }
+/* 활성 필터 칩(짙은 배경) - 다크에서는 민트로 반전해 눈에 띄게 */
+[data-theme="dark"] .bg-gray-900 { background-color: #00897B !important; }
+[data-theme="dark"] .border-gray-900 { border-color: #00897B !important; }
+
+/* 텍스트 */
+[data-theme="dark"] .text-gray-900 { color: #edf1ef !important; }
+[data-theme="dark"] .text-gray-800 { color: #dee4e1 !important; }
+[data-theme="dark"] .text-gray-700 { color: #c4cdc9 !important; }
+[data-theme="dark"] .text-gray-600 { color: #a4afaa !important; }
+[data-theme="dark"] .text-gray-500 { color: #8a958f !important; }
+[data-theme="dark"] .text-gray-400 { color: #707c76 !important; }
+[data-theme="dark"] .text-gray-300 { color: #576059 !important; }
+
+/* 보더 - Tailwind preflight 기본 보더색까지 어둡게 */
+[data-theme="dark"] *,
+[data-theme="dark"] ::before,
+[data-theme="dark"] ::after { border-color: #26312c; }
+[data-theme="dark"] .border-gray-100,
+[data-theme="dark"] .border-gray-50 { border-color: #1f2925 !important; }
+[data-theme="dark"] .border-gray-200 { border-color: #26312c !important; }
+[data-theme="dark"] .border-gray-300 { border-color: #333f39 !important; }
+
+/* 상태 틴트 배지 - 라이트 파스텔 배경을 반투명 다크 틴트로, 짙은 글자색을 밝게 */
+[data-theme="dark"] .bg-red-50 { background-color: rgba(239, 68, 68, 0.13) !important; }
+[data-theme="dark"] .bg-red-100, [data-theme="dark"] .bg-red-200 { background-color: rgba(239, 68, 68, 0.22) !important; }
+[data-theme="dark"] .text-red-700, [data-theme="dark"] .text-red-800, [data-theme="dark"] .text-red-900 { color: #fca5a5 !important; }
+[data-theme="dark"] .text-red-600 { color: #f87171 !important; }
+[data-theme="dark"] .bg-orange-50 { background-color: rgba(249, 115, 22, 0.13) !important; }
+[data-theme="dark"] .bg-orange-100 { background-color: rgba(249, 115, 22, 0.22) !important; }
+[data-theme="dark"] .text-orange-700, [data-theme="dark"] .text-orange-800 { color: #fdba74 !important; }
+[data-theme="dark"] .bg-amber-50 { background-color: rgba(245, 158, 11, 0.13) !important; }
+[data-theme="dark"] .bg-amber-100 { background-color: rgba(245, 158, 11, 0.22) !important; }
+[data-theme="dark"] .text-amber-700, [data-theme="dark"] .text-amber-800, [data-theme="dark"] .text-amber-900 { color: #fcd34d !important; }
+[data-theme="dark"] .bg-yellow-50 { background-color: rgba(234, 179, 8, 0.13) !important; }
+[data-theme="dark"] .bg-yellow-100 { background-color: rgba(234, 179, 8, 0.22) !important; }
+[data-theme="dark"] .text-yellow-700, [data-theme="dark"] .text-yellow-800 { color: #fde047 !important; }
+[data-theme="dark"] .bg-green-50 { background-color: rgba(34, 197, 94, 0.13) !important; }
+[data-theme="dark"] .bg-green-100 { background-color: rgba(34, 197, 94, 0.22) !important; }
+[data-theme="dark"] .text-green-700, [data-theme="dark"] .text-green-800 { color: #86efac !important; }
+[data-theme="dark"] .text-green-600 { color: #4ade80 !important; }
+[data-theme="dark"] .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.13) !important; }
+[data-theme="dark"] .text-emerald-700 { color: #6ee7b7 !important; }
+/* blue 는 tailwind.config 에서 iM 민트 스케일로 리매핑되어 있다 */
+[data-theme="dark"] .bg-blue-50 { background-color: rgba(0, 199, 169, 0.12) !important; }
+[data-theme="dark"] .bg-blue-100 { background-color: rgba(0, 199, 169, 0.20) !important; }
+[data-theme="dark"] .text-blue-700, [data-theme="dark"] .text-blue-800 { color: #57d7c2 !important; }
+[data-theme="dark"] .text-blue-600 { color: #35cdb5 !important; }
+[data-theme="dark"] .bg-purple-50 { background-color: rgba(168, 85, 247, 0.13) !important; }
+[data-theme="dark"] .bg-purple-100 { background-color: rgba(168, 85, 247, 0.22) !important; }
+[data-theme="dark"] .text-purple-700, [data-theme="dark"] .text-purple-800 { color: #d8b4fe !important; }
+
+/* 입력 요소 */
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background-color: #101815;
+  color: #dee4e1;
+  border-color: #333f39;
+}
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder { color: #707c76; }
+
+/* Recharts */
+[data-theme="dark"] .recharts-text { fill: #8a958f !important; }
+[data-theme="dark"] .recharts-cartesian-grid line { stroke: #26312c !important; }
+[data-theme="dark"] .recharts-cartesian-axis-line,
+[data-theme="dark"] .recharts-cartesian-axis-tick-line { stroke: #333f39 !important; }
+[data-theme="dark"] .recharts-default-tooltip {
+  background-color: #1a2420 !important;
+  border-color: #333f39 !important;
+}
+[data-theme="dark"] .recharts-tooltip-label,
+[data-theme="dark"] .recharts-tooltip-item-list * { color: #dee4e1 !important; }
+
+/* 스켈레톤 셔머 */
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg, #1a2420 25%, #232e29 45%, #1a2420 65%);
+  background-size: 200% 100%;
+}
+
+/* 표 줄무늬(bg-gray-50/60 등 투명도 변형) */
+[data-theme="dark"] .bg-gray-50\/60,
+[data-theme="dark"] .bg-gray-50\/40 { background-color: rgba(255, 255, 255, 0.03) !important; }
+[data-theme="dark"] .bg-red-50\/40 { background-color: rgba(239, 68, 68, 0.10) !important; }
+
+/* 모달·팝오버 그림자 보정 */
+[data-theme="dark"] .shadow-xl,
+[data-theme="dark"] .shadow-2xl { box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6) !important; }
 
 /* 포트폴리오 맵 - 타임 슬라이더 포인트 이동 보간 + 고위험(NPL) 펄스 */
 .pm-dot { transition: cx 0.45s ease, cy 0.45s ease, fill-opacity 0.2s ease; }
