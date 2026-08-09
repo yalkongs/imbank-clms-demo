@@ -5,7 +5,7 @@ import { Search, Lock } from 'lucide-react';
 import { Card, PageLoader } from '../components';
 import { formatAmount } from '../utils/format';
 
-/** 여신철 대장 - 승인·심사·종결 건을 검색해 여신철로 진입한다 */
+/** 전자 여신철 조회 - 취급 건별 심사·승인 기록을 검색해 여신철로 진입한다 */
 export default function CaseLedger() {
   const [data, setData] = useState<any>(null);
   const [q, setQ] = useState('');
@@ -26,9 +26,9 @@ export default function CaseLedger() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">여신철 대장</h1>
+        <h1 className="text-2xl font-bold text-gray-900">전자 여신철 조회</h1>
         <p className="text-sm text-gray-500 mt-1">
-          의사결정 증거 패키지 검색 - 🔒 는 승인 시점 스냅샷이 봉인된 건입니다
+          여신 취급 건별 심사·승인 기록 조회 - 🔒 표시는 승인 당시 심사자료가 확정·보존된 건입니다
         </p>
       </div>
 
@@ -48,7 +48,7 @@ export default function CaseLedger() {
               <th className="py-2 text-center">상태</th>
               <th className="py-2 text-center">결재</th>
               <th className="py-2 text-center">예외</th>
-              <th className="py-2 text-center">봉인</th>
+              <th className="py-2 text-center">기록 확정</th>
               <th className="py-2 text-center">여신철</th>
             </tr>
           </thead>

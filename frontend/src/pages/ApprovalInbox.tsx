@@ -73,7 +73,7 @@ export default function ApprovalInbox() {
             {data?.my_limit ? formatAmount(data.my_limit, 'billion') : '무제한'} ·
             결재 가능 {formatNumber(data?.actionable || 0)}건 / 전체 {formatNumber(data?.items?.length || 0)}건
           </p>
-          <RouterLink to="/credit-cases" className="inline-block mt-1 text-xs text-blue-600 hover:underline">📁 여신철 대장 열기 →</RouterLink>
+          <RouterLink to="/credit-cases" className="inline-block mt-1 text-xs text-blue-600 hover:underline">📁 전자 여신철 조회 →</RouterLink>
         </div>
         <p className="text-xs text-gray-400">역할은 우측 상단 아바타에서 전환</p>
       </div>

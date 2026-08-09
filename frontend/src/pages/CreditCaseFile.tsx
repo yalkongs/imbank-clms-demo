@@ -11,7 +11,7 @@ import { formatAmount, formatPercent } from '../utils/format';
 /**
  * 전자 여신철 (Credit Case File)
  * --------------------------------
- * "왜 승인했는가"를 사후에 재현하는 의사결정 증거 패키지.
+ * "왜 승인했는가"를 사후에 재현하는 심사·승인 기록 (여신철).
  * 신청→자료 근거(기준일·출처)→모델 산출(버전)→승인 체인(전결)→정책 예외→
  * 실행→사후관리를 시간 순서의 단일 화면으로 보여준다.
  */
@@ -84,7 +84,7 @@ export default function CreditCaseFile() {
             <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-semibold">{app.application_id}</span>
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            의사결정 증거 패키지 - 자료·모델 산출은 신청일 이전(as-of) 자료로 재구성, 사후관리는 현재 기준 (기준일 {data.as_of})
+            심사·승인의 근거자료와 결재 경과를 승인 당시 기준으로 재현합니다 - 사후관리 항목만 현재 기준 (기준일 {data.as_of})
           </p>
         </div>
       </div>
@@ -94,22 +94,22 @@ export default function CreditCaseFile() {
           <div className="flex items-start justify-between flex-wrap gap-3">
             <div>
               <p className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                🔒 승인 시점 봉인 스냅샷
+                🔒 승인 당시 확정 기록 (원본 보존)
                 {data.snapshot.backfilled && (
-                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px]">이력 재구성(백필)</span>
+                  <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-[10px]">과거 승인건 소급 등재</span>
                 )}
               </p>
               <p className="text-xs text-gray-400 mt-0.5">
-                봉인일 {String(data.snapshot.sealed_at).slice(0, 10)} · SHA-256 {String(data.snapshot.hash).slice(0, 16)}… ·
-                이후 자료가 갱신되어도 이 기록은 불변입니다
+                확정일 {String(data.snapshot.sealed_at).slice(0, 10)} · 무결성 검증값 {String(data.snapshot.hash).slice(0, 16)}… ·
+                이후 자료가 갱신되어도 이 기록은 변경되지 않습니다
               </p>
             </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
             {[
-              ['봉인 등급', data.snapshot.input?.rating?.final_grade || '산출 전',
+              ['승인 당시 등급', data.snapshot.input?.rating?.final_grade || '산출 전',
                data.snapshot.input?.rating ? `${data.snapshot.input.rating.model_id} · ${data.snapshot.input.rating.rating_date}` : ''],
-              ['봉인 재무', data.snapshot.input?.financial_statement ? `FY${data.snapshot.input.financial_statement.fiscal_year}` : '-',
+              ['승인 당시 재무', data.snapshot.input?.financial_statement ? `FY${data.snapshot.input.financial_statement.fiscal_year}` : '-',
                data.snapshot.input?.financial_statement?.source || ''],
               ['동일차주 소진', data.snapshot.input?.borrower_scope?.vs_capital_pct != null
                 ? `${data.snapshot.input.borrower_scope.vs_capital_pct}%` : '그룹 없음',
@@ -127,7 +127,7 @@ export default function CreditCaseFile() {
         </Card>
       )}
 
-      <Card title="현재 기준 재구성 보기" subtitle="아래 섹션은 현재 DB 에서 as-of 원칙으로 재구성한 참고 화면입니다">
+      <Card title="현재 기준 조회 (참고)" subtitle="아래는 현행 자료를 신청일 기준으로 정리한 참고 화면입니다 - 정본은 위의 확정 기록입니다">
         <div className="pt-2">
           {/* ① 신청 */}
           <Section icon={<FileText size={14} />} title="① 신청"
