@@ -436,6 +436,14 @@ body {
 [data-theme="dark"] .hover\:bg-gray-50:hover { background-color: #1a2420 !important; }
 [data-theme="dark"] .hover\:bg-gray-100:hover,
 [data-theme="dark"] .hover\:bg-gray-200:hover { background-color: #26312c !important; }
+/* 리스트 행 hover 로 쓰이는 라이트 틴트 변형 - 다크에서는 반투명 틴트로 */
+[data-theme="dark"] .hover\:bg-blue-50:hover { background-color: rgba(0, 199, 169, 0.10) !important; }
+[data-theme="dark"] .hover\:bg-blue-100:hover { background-color: rgba(0, 199, 169, 0.16) !important; }
+[data-theme="dark"] .hover\:bg-green-50:hover,
+[data-theme="dark"] .hover\:bg-green-100:hover { background-color: rgba(34, 197, 94, 0.12) !important; }
+[data-theme="dark"] .hover\:bg-orange-50:hover { background-color: rgba(249, 115, 22, 0.12) !important; }
+[data-theme="dark"] .hover\:bg-purple-50:hover { background-color: rgba(168, 85, 247, 0.12) !important; }
+[data-theme="dark"] .hover\:bg-red-100:hover { background-color: rgba(239, 68, 68, 0.16) !important; }
 /* 활성 필터 칩(짙은 배경) - 다크에서는 민트로 반전해 눈에 띄게 */
 [data-theme="dark"] .bg-gray-900 { background-color: #00897B !important; }
 [data-theme="dark"] .border-gray-900 { border-color: #00897B !important; }
@@ -486,6 +494,10 @@ body {
 [data-theme="dark"] .bg-purple-50 { background-color: rgba(168, 85, 247, 0.13) !important; }
 [data-theme="dark"] .bg-purple-100 { background-color: rgba(168, 85, 247, 0.22) !important; }
 [data-theme="dark"] .text-purple-700, [data-theme="dark"] .text-purple-800 { color: #d8b4fe !important; }
+[data-theme="dark"] .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.13) !important; }
+[data-theme="dark"] .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.22) !important; }
+[data-theme="dark"] .text-indigo-900 { color: #c7d2fe !important; }
+[data-theme="dark"] .text-yellow-900 { color: #fde68a !important; }
 
 /* 입력 요소 */
 [data-theme="dark"] input,
