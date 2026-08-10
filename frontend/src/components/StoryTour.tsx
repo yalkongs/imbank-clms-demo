@@ -62,9 +62,11 @@ interface Props {
   step: number;
   onStep: (n: number) => void;
   onExit: () => void;
+  /** 개발 여정 팝업 열기 - 투어 카드 하단 링크에서 진입 */
+  onDevJourney?: () => void;
 }
 
-export default function StoryTour({ step, onStep, onExit }: Props) {
+export default function StoryTour({ step, onStep, onExit, onDevJourney }: Props) {
   const navigate = useNavigate();
   const cur = TOUR_STEPS[step];
 
@@ -122,13 +124,21 @@ export default function StoryTour({ step, onStep, onExit }: Props) {
           )}
 
           <div className="flex items-center justify-between mt-5">
-            <div className="flex gap-1.5">
-              {TOUR_STEPS.map((_, i) => (
-                <span key={i}
-                      className={`h-2 rounded-full transition-all ${
-                        i === step ? 'w-6 bg-[#00BFA5]' : i < step ? 'w-2 bg-[#00BFA5]/40' : 'w-2 bg-gray-200'
-                      }`} />
-              ))}
+            <div className="flex items-center gap-3">
+              <div className="flex gap-1.5">
+                {TOUR_STEPS.map((_, i) => (
+                  <span key={i}
+                        className={`h-2 rounded-full transition-all ${
+                          i === step ? 'w-6 bg-[#00BFA5]' : i < step ? 'w-2 bg-[#00BFA5]/40' : 'w-2 bg-gray-200'
+                        }`} />
+                ))}
+              </div>
+              {onDevJourney && (
+                <button onClick={onDevJourney}
+                  className="text-xs font-medium text-[#00897B] hover:text-[#00BFA5] hover:underline">
+                  ✨ 개발 여정
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button

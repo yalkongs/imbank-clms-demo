@@ -194,7 +194,8 @@ export default function Layout() {
       <CommandPalette />
       {tourStep !== null && (
         <StoryTour step={tourStep} onStep={setTourStep}
-          onExit={() => { setTourStep(null); setTourEndNotice(true); }} />
+          onExit={() => { setTourStep(null); setTourEndNotice(true); }}
+          onDevJourney={() => setShowDevJourney(true)} />
       )}
       {tourEndNotice && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[65] px-4 py-2.5 bg-gray-900/90 text-white text-sm rounded-full shadow-lg">
