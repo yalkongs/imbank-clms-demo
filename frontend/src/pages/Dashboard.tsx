@@ -265,7 +265,8 @@ export default function Dashboard() {
           title="EWS 알림"
           className="col-span-2"
           headerAction={
-            <span className="text-sm text-blue-600 cursor-pointer hover:underline">전체보기</span>
+            <button onClick={() => navigate('/ews-advanced')}
+              className="text-sm text-blue-600 cursor-pointer hover:underline">전체보기 →</button>
           }
         >
           {alerts.length > 0 ? (

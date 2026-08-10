@@ -7,7 +7,8 @@ import {
   ShoppingCart,
   AlertTriangle,
   Users,
-  Award
+  Award,
+  ChevronRight
 } from 'lucide-react';
 import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton, RegionFilter } from '../components';
 import { customerProfitabilityApi } from '../utils/api';
@@ -192,6 +193,7 @@ export default function CustomerProfitability() {
                 <th className="px-3 py-2 text-right">CLV</th>
                 <th className="px-3 py-2 text-center">세그먼트</th>
                 <th className="px-3 py-2 text-center">이탈위험</th>
+                <th className="w-8"></th>
               </tr>
             </thead>
             <tbody>
@@ -238,6 +240,7 @@ export default function CustomerProfitability() {
                       />
                     </div>
                   </td>
+                  <td className="px-2 py-2 text-right"><ChevronRight size={14} className="row-chevron inline" /></td>
                 </tr>
               ))}
             </tbody>

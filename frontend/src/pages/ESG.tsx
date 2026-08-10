@@ -7,7 +7,8 @@ import {
   AlertTriangle,
   BarChart3,
   Droplet,
-  Users
+  Users,
+  ChevronRight
 } from 'lucide-react';
 import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton, RegionFilter } from '../components';
 import { esgApi } from '../utils/api';
@@ -199,6 +200,7 @@ export default function ESG() {
                 <th className="px-3 py-2 text-right">탄소집약도</th>
                 <th className="px-3 py-2 text-center">ESG 추세</th>
                 <th className="px-3 py-2 text-center">PD 조정</th>
+                <th className="w-8"></th>
               </tr>
             </thead>
             <tbody>
@@ -256,6 +258,7 @@ export default function ESG() {
                       {(a.pd_adjustment || 0) > 0 ? '+' : ''}{((a.pd_adjustment || 0) * 100).toFixed(2)}%
                     </span>
                   </td>
+                  <td className="px-2 py-2 text-right"><ChevronRight size={14} className="row-chevron inline" /></td>
                 </tr>
               ))}
             </tbody>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import { ChevronRight } from 'lucide-react';
 import { Card, PageLoader } from '../components';
 import { formatAmount, formatPercent } from '../utils/format';
 
@@ -72,6 +73,7 @@ export default function BorrowerScope() {
                 <th className="py-2 text-right">신용공여 합산</th>
                 <th className="py-2 text-right">자기자본 대비</th>
                 <th className="py-2">한도 소진</th>
+                <th className="w-6"></th>
               </tr>
             </thead>
             <tbody>
@@ -101,6 +103,7 @@ export default function BorrowerScope() {
                     </div>
                     <p className="text-[10px] text-gray-400 mt-0.5">규제 25% 기준</p>
                   </td>
+                  <td className="py-2.5 text-right"><ChevronRight size={14} className="row-chevron inline" /></td>
                 </tr>
               ))}
             </tbody>

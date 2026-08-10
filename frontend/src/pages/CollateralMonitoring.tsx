@@ -530,7 +530,7 @@ export default function CollateralMonitoring() {
                           onClick={() => { setCustSortBy('margin'); setCustPage(1); }}>
                         담보여력 {custSortBy === 'margin' && '▼'}
                       </th>
-                      <th className="px-3 py-2 text-center">상세</th>
+                      <th className="w-8"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -560,9 +560,7 @@ export default function CollateralMonitoring() {
                         <td className={`px-3 py-2 text-right ${c.total_margin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {formatAmount(c.total_margin, 'billion')}
                         </td>
-                        <td className="px-3 py-2 text-center">
-                          <Eye size={16} className="text-blue-500 mx-auto" />
-                        </td>
+                        <td className="px-2 py-2 text-right"><ChevronRight size={14} className="row-chevron inline" /></td>
                       </tr>
                     ))}
                   </tbody>

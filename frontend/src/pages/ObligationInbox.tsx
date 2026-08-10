@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
-import { Inbox, Clock, ArrowUpRight } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Inbox, Clock, ArrowUpRight, ChevronRight } from 'lucide-react';
 import { Card, StatCard, PageLoader } from '../components';
 
 /**
@@ -19,6 +19,7 @@ const TYPE_COLORS: Record<string, string> = {
 };
 
 export default function ObligationInbox() {
+  const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
   const [filter, setFilter] = useState('');
 
@@ -72,12 +73,14 @@ export default function ObligationInbox() {
               <th className="py-2 text-center">기한</th>
               <th className="py-2 text-center">상태</th>
               <th className="py-2 text-center">이동</th>
+              <th className="w-6"></th>
             </tr>
           </thead>
           <tbody>
             {items.map((i: any, idx: number) => (
               <tr key={`${i.type}-${i.ref_id}-${idx}`}
-                className={`border-b border-gray-50 ${i.overdue ? 'bg-red-50/40' : ''}`}>
+                onClick={() => navigate(i.link)}
+                className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50 ${i.overdue ? 'bg-red-50/40' : ''}`}>
                 <td className="py-2">
                   <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${TYPE_COLORS[i.type_ko] || 'bg-gray-100 text-gray-600'}`}>
                     {i.type_ko}
@@ -97,9 +100,10 @@ export default function ObligationInbox() {
                     <span className="text-[11px] text-gray-400">대기</span>
                   )}
                 </td>
-                <td className="py-2 text-center">
-                  <Link to={i.link} className="text-xs text-blue-600 hover:underline">처리 →</Link>
+                <td className="py-2 text-center" onClick={e => e.stopPropagation()}>
+                  <Link to={i.link} className="text-xs text-blue-600 hover:underline">처리</Link>
                 </td>
+                <td className="py-2 pr-1 text-right"><ChevronRight size={14} className="row-chevron inline" /></td>
               </tr>
             ))}
           </tbody>

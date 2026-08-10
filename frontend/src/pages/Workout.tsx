@@ -8,7 +8,8 @@ import {
   XCircle,
   TrendingUp,
   FileText,
-  X
+  X,
+  ChevronRight
 } from 'lucide-react';
 import { Card, StatCard, GroupedBarChart, DonutChart, COLORS, FeatureModal, HelpButton, RegionFilter, SectionSkeleton, SectionError, AsyncStatus } from '../components';
 import { workoutApi, workoutEclApi } from '../utils/api';
@@ -340,6 +341,7 @@ export default function Workout() {
                 <th className="px-3 py-2 text-center">예상회수율</th>
                 <th className="px-3 py-2 text-left">현재전략</th>
                 <th className="px-3 py-2 text-left">담당자</th>
+                <th className="w-8"></th>
               </tr>
             </thead>
             <tbody>
@@ -385,6 +387,7 @@ export default function Workout() {
                   </td>
                   <td className="px-3 py-2">{c.strategy}</td>
                   <td className="px-3 py-2 text-gray-600">{c.assigned_workout_officer}</td>
+                  <td className="px-2 py-2 text-right"><ChevronRight size={14} className="row-chevron inline" /></td>
                 </tr>
               ))}
             </tbody>

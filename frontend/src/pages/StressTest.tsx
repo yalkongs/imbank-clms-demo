@@ -336,7 +336,7 @@ export default function StressTest() {
                 </thead>
                 <tbody>
                   {results.by_industry?.map((ind: any, index: number) => (
-                    <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                    <tr key={index} className="border-b border-gray-100">
                       <td className="px-4 py-3 font-medium text-gray-900">{ind.industry_name}</td>
                       <td className="px-4 py-3 text-right font-mono">
                         {formatAmount(ind.base_rwa, 'billion')}

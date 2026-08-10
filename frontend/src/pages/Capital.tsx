@@ -409,7 +409,7 @@ export default function Capital() {
               </thead>
               <tbody>
                 {efficiency?.by_industry?.map((seg: any, index: number) => (
-                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={index} className="border-b border-gray-100">
                     <td className="px-4 py-3 font-medium text-gray-900">{seg.segment}</td>
                     <td className="px-4 py-3 text-right font-mono">
                       {formatAmount(seg.exposure, 'billion')}
@@ -455,7 +455,7 @@ export default function Capital() {
               </thead>
               <tbody>
                 {efficiency?.by_rating?.map((seg: any, index: number) => (
-                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr key={index} className="border-b border-gray-100">
                     <td className="px-4 py-3 font-medium text-gray-900">{seg.segment}</td>
                     <td className="px-4 py-3 text-right font-mono">
                       {formatAmount(seg.exposure, 'billion')}

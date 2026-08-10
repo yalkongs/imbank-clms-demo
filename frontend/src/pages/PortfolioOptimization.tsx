@@ -5,7 +5,8 @@ import {
   Target,
   BarChart3,
   PieChart,
-  ArrowRight
+  ArrowRight,
+  ChevronRight,
 } from 'lucide-react';
 import { Card, StatCard, GroupedBarChart, DonutChart, TrendChart, COLORS, FeatureModal, HelpButton, RegionFilter } from '../components';
 import { portfolioOptimizationApi } from '../utils/api';
@@ -299,7 +300,10 @@ export default function PortfolioOptimization() {
                 onClick={() => loadRunDetail(run.run_id)}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-gray-900">{run.run_date}</span>
+                  <span className="font-medium text-gray-900 inline-flex items-center gap-1">
+                    {run.run_date}
+                    <ChevronRight size={13} className="row-chevron" />
+                  </span>
                   <span className={`px-2 py-0.5 rounded text-xs ${
                     run.status === 'COMPLETED' ? 'bg-green-100 text-green-700' :
                     run.status === 'RUNNING' ? 'bg-blue-100 text-blue-700' :

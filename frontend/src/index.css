@@ -557,6 +557,26 @@ body {
   0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; }
 }
 
+/* 리스트 상호작용 표준
+   - 상세로 이동 가능한 행: 우측 끝 › (row-chevron) 상시 표시, hover 시 강조
+   - 펼침(아코디언) 행: ChevronDown/Up (기존 유지)
+   - 정보성 행: hover 배경 없음 */
+.row-chevron {
+  color: #c2cbc6;
+  flex: none;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+tr:hover .row-chevron,
+.row-hover:hover .row-chevron,
+[class*="cursor-pointer"]:hover .row-chevron {
+  color: #00897B;
+  transform: translateX(2px);
+}
+[data-theme="dark"] .row-chevron { color: #4a554f; }
+[data-theme="dark"] tr:hover .row-chevron,
+[data-theme="dark"] .row-hover:hover .row-chevron,
+[data-theme="dark"] [class*="cursor-pointer"]:hover .row-chevron { color: #35cdb5; }
+
 /* 섹션 로딩 스켈레톤 - 콘텐츠 골격을 먼저 보여 대기 체감을 줄인다 */
 .skeleton {
   border-radius: 8px;

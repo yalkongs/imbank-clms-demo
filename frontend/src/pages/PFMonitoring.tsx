@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Building, AlertTriangle, Scale, Landmark } from 'lucide-react';
+import { Building, AlertTriangle, Scale, Landmark, ChevronRight } from 'lucide-react';
 import { Card, StatCard, RegionFilter } from '../components';
 import { COLORS, TrendChart } from '../components/Charts';
 import { formatAmount, formatPercent, formatNumber } from '../utils/format';
@@ -180,6 +180,7 @@ export default function PFMonitoring() {
                   <th className="py-2 pr-4 text-right">분양률</th>
                   <th className="py-2 pr-4 text-right">괴리</th>
                   <th className="py-2">상태</th>
+                  <th className="w-6"></th>
                 </tr>
               </thead>
               <tbody>
@@ -213,6 +214,7 @@ export default function PFMonitoring() {
                         <span className="inline-block px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">정상</span>
                       )}
                     </td>
+                    <td className="py-2.5 text-right"><ChevronRight size={14} className="row-chevron inline" /></td>
                   </tr>
                 ))}
               </tbody>

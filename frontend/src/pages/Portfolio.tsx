@@ -6,7 +6,8 @@ import {
   AlertTriangle,
   Users,
   Building2,
-  BarChart3
+  BarChart3,
+  ChevronRight,
 } from 'lucide-react';
 import { Card, StatCard, Table, CellFormatters, DonutChart, GroupedBarChart, COLORS, RegionFilter, TrendChart } from '../components';
 import { portfolioApi } from '../utils/api';
@@ -162,7 +163,10 @@ export default function Portfolio() {
                   onClick={() => loadIndustryDetail(ind.industry_code)}
                 >
                   <td className="px-3 py-2 font-medium text-gray-900">
-                    {ind.industry_name}
+                    <span className="inline-flex items-center gap-1">
+                      {ind.industry_name}
+                      <ChevronRight size={13} className="row-chevron" />
+                    </span>
                   </td>
                   {grades.map(grade => {
                     const strategy = ind.strategies?.[grade] || 'MAINTAIN';
@@ -365,7 +369,7 @@ export default function Portfolio() {
                     const minVal = Math.min(...vals.filter(v => v > 0));
 
                     return (
-                      <tr key={ind.industry_code} className="border-b hover:bg-gray-50">
+                      <tr key={ind.industry_code} className="border-b">
                         <td className="px-3 py-2 font-medium text-gray-900">{ind.industry_name}</td>
                         {regions.map((rgn, idx) => {
                           const data = ind.regions[rgn] || {};

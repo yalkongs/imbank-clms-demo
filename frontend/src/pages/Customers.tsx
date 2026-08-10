@@ -385,16 +385,17 @@ export default function Customers() {
                   </div>
                 </th>
                 <th className="px-4 py-3 text-center font-semibold text-gray-700 bg-gray-50">여신건수</th>
-                <th className="px-4 py-3 text-center font-semibold text-gray-700 bg-gray-50">상세</th>
+                <th className="w-8 bg-gray-50"></th>
               </tr>
             </thead>
             <tbody>
               {customers.map((customer) => (
                 <tr
                   key={customer.customer_id}
-                  className={`border-b border-gray-100 hover:bg-gray-50 ${
+                  className={`border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
                     selectedCustomer === customer.customer_id ? 'bg-blue-50' : ''
                   }`}
+                  onClick={() => loadCustomerDetail(customer.customer_id)}
                 >
                   <td className="px-4 py-3 font-mono text-gray-600">{customer.customer_id}</td>
                   <td className="px-4 py-3 font-medium text-gray-900">{customer.customer_name}</td>
@@ -420,14 +421,7 @@ export default function Customers() {
                     {formatAmount(customer.total_exposure, 'billion')}
                   </td>
                   <td className="px-4 py-3 text-center">{customer.facility_count}건</td>
-                  <td className="px-4 py-3 text-center">
-                    <button
-                      onClick={() => loadCustomerDetail(customer.customer_id)}
-                      className="px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
-                    >
-                      상세
-                    </button>
-                  </td>
+                  <td className="px-2 py-3 text-right"><ChevronRight size={14} className="row-chevron inline" /></td>
                 </tr>
               ))}
             </tbody>

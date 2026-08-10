@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronUp, ChevronDown } from 'lucide-react';
+import { ChevronUp, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface Column<T> {
   key: string;
@@ -81,6 +81,8 @@ export default function Table<T extends Record<string, any>>({
                 </div>
               </th>
             ))}
+            {/* 행 이동 가능 표시(›) 컬럼 - 리스트 상호작용 표준 */}
+            {onRowClick && <th className="w-8 bg-gray-50 border-b border-gray-200"></th>}
           </tr>
         </thead>
         <tbody>
@@ -100,6 +102,11 @@ export default function Table<T extends Record<string, any>>({
                     {col.render ? col.render(row[col.key], row, index) : row[col.key]}
                   </td>
                 ))}
+                {onRowClick && (
+                  <td className="px-2 py-3 text-right">
+                    <ChevronRight size={14} className="row-chevron inline" />
+                  </td>
+                )}
               </tr>
             );
           })}
