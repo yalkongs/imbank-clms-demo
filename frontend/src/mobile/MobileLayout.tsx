@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Home, Stamp, AlertTriangle, ListChecks, LayoutGrid, X, LogOut } from 'lucide-react';
+import { Home, Stamp, AlertTriangle, ListChecks, LayoutGrid, X, LogOut, Menu, Search, TrendingDown, BookLock, Monitor } from 'lucide-react';
+import { navGroups } from '../components/Layout';
 import { getAuth, setAuth } from '../utils/api';
 
 /**
@@ -28,6 +29,7 @@ export default function MobileLayout() {
   const [pin, setPin] = useState('');
   const [err, setErr] = useState('');
   const [asOf, setAsOf] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     axios.get('/api/system/as-of').then(r => setAsOf(r.data.label_ko)).catch(() => {});
@@ -61,13 +63,20 @@ export default function MobileLayout() {
 
   return (
     <div className="min-h-dvh bg-gray-50 flex flex-col" style={{ paddingBottom: 'calc(3.75rem + env(safe-area-inset-bottom))' }}>
-      {/* 상단 바 */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200 px-4 h-12 flex items-center justify-between">
-        <button onClick={() => navigate('/m')} className="flex items-center gap-2">
-          <img src="/brand/im-symbol.jpg" alt="iM" className="h-6 w-6 rounded" />
-          <span className="text-sm font-bold text-gray-900">CLMS</span>
-          <span className="text-[10px] text-gray-400">{asOf}</span>
-        </button>
+      {/* 상단 바 - 고정 */}
+      <header className="fixed top-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-b border-gray-200 px-2.5 h-12 flex items-center justify-between"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setMenuOpen(true)} aria-label="전체 메뉴"
+            className="p-2 text-gray-600 active:bg-gray-100 rounded-lg">
+            <Menu size={21} />
+          </button>
+          <button onClick={() => navigate('/m')} className="flex items-center gap-2">
+            <img src="/brand/im-symbol.jpg" alt="iM" className="h-6 w-6 rounded" />
+            <span className="text-sm font-bold text-gray-900">CLMS</span>
+            <span className="text-[10px] text-gray-400">{asOf}</span>
+          </button>
+        </div>
         {auth ? (
           <button onClick={logout}
             className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-full text-xs font-medium text-gray-700">
@@ -82,8 +91,9 @@ export default function MobileLayout() {
         )}
       </header>
 
-      {/* 본문 */}
-      <main className="flex-1 p-3.5 space-y-3.5">
+      {/* 본문 (고정 헤더 높이만큼 여백) */}
+      <main className="flex-1 p-3.5 space-y-3.5"
+        style={{ paddingTop: 'calc(3rem + 0.875rem + env(safe-area-inset-top))' }}>
         <Outlet context={{ auth, openLogin }} />
       </main>
 
@@ -100,6 +110,67 @@ export default function MobileLayout() {
           </NavLink>
         ))}
       </nav>
+
+      {/* 전체 메뉴 드로어 */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-50 bg-black/45" onClick={() => setMenuOpen(false)}>
+          <div className="absolute left-0 top-0 bottom-0 w-[80vw] max-w-[310px] bg-white shadow-2xl
+                          overflow-y-auto overscroll-contain"
+            style={{ paddingTop: 'env(safe-area-inset-top)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 h-12 border-b border-gray-100">
+              <span className="text-sm font-bold text-gray-900">전체 메뉴</span>
+              <button onClick={() => setMenuOpen(false)} className="p-1.5 text-gray-400" aria-label="닫기">
+                <X size={19} />
+              </button>
+            </div>
+
+            <div onClick={() => setMenuOpen(false)}>
+              <p className="px-4 pt-3 pb-1 text-[10px] font-bold text-gray-400 tracking-wider">모바일 화면</p>
+              {[
+                { to: '/m', label: '홈', icon: Home },
+                { to: '/m/approval', label: '결재함', icon: Stamp },
+                { to: '/m/alerts', label: 'EWS 경보', icon: AlertTriangle },
+                { to: '/m/obligations', label: '의무관리함', icon: ListChecks },
+                { to: '/m/customers', label: '고객 조회', icon: Search },
+                { to: '/m/delinquency', label: '연체 현황', icon: TrendingDown },
+                { to: '/m/cases', label: '전자 여신철', icon: BookLock },
+              ].map(({ to, label, icon: Icon }) => (
+                <NavLink key={to} to={to} end={to === '/m'}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 px-4 py-2.5 text-sm ${
+                      isActive ? 'text-[#00897B] font-semibold bg-[#00C7A9]/5' : 'text-gray-700'}`}>
+                  <Icon size={17} className="text-gray-400" /> {label}
+                </NavLink>
+              ))}
+
+              <p className="px-4 pt-4 pb-1 text-[10px] font-bold text-gray-400 tracking-wider">
+                전체 화면 <span className="font-normal">(조회 가능 · 상세 분석은 PC 권장)</span>
+              </p>
+              {navGroups.map(group => (
+                <div key={group.title}>
+                  <p className="px-4 pt-2 pb-0.5 text-[10px] text-gray-300 font-semibold">{group.title}</p>
+                  {group.items.map(item => (
+                    <NavLink key={item.path} to={item.path}
+                      className="flex items-center gap-3 px-4 py-2 text-[13px] text-gray-600">
+                      <span className="text-gray-300 [&>svg]:w-4 [&>svg]:h-4">{item.icon}</span>
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              ))}
+
+              <div className="p-4 mt-2 border-t border-gray-100">
+                <button
+                  onClick={() => { try { localStorage.setItem('clms-view-mode', 'desktop'); } catch { /* 무시 */ } navigate('/'); }}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold text-gray-700">
+                  <Monitor size={15} /> PC 화면으로 보기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 로그인 시트 */}
       {loginOpen && (
