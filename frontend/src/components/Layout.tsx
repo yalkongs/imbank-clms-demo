@@ -130,8 +130,13 @@ export default function Layout() {
   // (사용자 지정 동작 - 소개 → 고지 → 대시보드 카운트업 진입 경험을
   //  어느 화면에서 새로고침해도 동일하게 유지한다)
   const [showOnboarding, setShowOnboarding] = useState(() => !bootConsumed && window.innerWidth >= 768);
-  // 개발 여정 대형 팝업 - 소개 팝업에서 진입한다
+  // 개발 여정 대형 팝업 - 소개 팝업에서 진입하거나, 첫 방문 필수 코스로 표시
   const [showDevJourney, setShowDevJourney] = useState(false);
+  const [devJourneyForced, setDevJourneyForced] = useState(false);
+  // 첫 방문 여부 (개발 여정 필수 코스를 이미 봤는가)
+  const [journeySeen] = useState(() => {
+    try { return localStorage.getItem('clms-devjourney-seen') === '1'; } catch { return true; }
+  });
   // 모바일(Tier 2): 데스크탑 화면을 폰에서 열었을 때 사이드바를 오버레이로 토글
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // 모의 데이터 고지 - 소개 팝업이 닫힌 직후 1회 표시하고 명시적 확인을 받는다.
@@ -182,12 +187,37 @@ export default function Layout() {
     // 테마 선택은 계속 저장한다 - 팝업 표시 여부와는 무관하다.
     setOnboarded(true);
     if (startTour) setPendingTour(true);
+
+    // 첫 방문 필수 코스: 소개 → [개발 여정] → 고지 → 대시보드/투어.
+    // 어떻게 만들어졌는지(바이브 코딩)를 반드시 보고 지나가게 한다.
+    let seen = journeySeen;
+    try { seen = localStorage.getItem('clms-devjourney-seen') === '1'; } catch { /* 무시 */ }
+    if (!seen) {
+      setDevJourneyForced(true);
+      setShowDevJourney(true);
+      return;   // 모의 데이터 고지는 개발 여정을 닫은 뒤 이어진다
+    }
+
     if (!mockNoticeDone) {
       // 카운트업은 고지까지 닫힌 뒤 시작해야 하므로 introOpen 을 유지한다
       setShowMockNotice(true);
     } else {
       setIntroOpen(false);
       if (startTour) setTourStep(0);
+    }
+  };
+
+  // 개발 여정 닫기 - 필수 코스였다면 다음 단계(고지 → 대시보드/투어)로 이어간다
+  const closeDevJourney = () => {
+    setShowDevJourney(false);
+    if (!devJourneyForced) return;
+    setDevJourneyForced(false);
+    try { localStorage.setItem('clms-devjourney-seen', '1'); } catch { /* 무시 */ }
+    if (!mockNoticeDone) {
+      setShowMockNotice(true);
+    } else {
+      setIntroOpen(false);
+      if (pendingTour) { setPendingTour(false); setTourStep(0); }
     }
   };
 
@@ -203,9 +233,9 @@ export default function Layout() {
 
   return (
     <div className={`app-root flex h-screen bg-gray-50 ${sidebarOpen ? 'sidebar-open' : ''}`}>
-      {showOnboarding && <OnboardingModal onClose={closeOnboarding} onDevJourney={() => setShowDevJourney(true)} />}
+      {showOnboarding && <OnboardingModal onClose={closeOnboarding} onDevJourney={() => setShowDevJourney(true)} journeyNext={!journeySeen} />}
       {showMockNotice && <MockDataNotice onConfirm={confirmMockNotice} />}
-      {showDevJourney && <DevJourneyModal onClose={() => setShowDevJourney(false)} />}
+      {showDevJourney && <DevJourneyModal forced={devJourneyForced} onClose={closeDevJourney} />}
       <TopProgressBar />
       <CommandPalette />
       {tourStep !== null && (

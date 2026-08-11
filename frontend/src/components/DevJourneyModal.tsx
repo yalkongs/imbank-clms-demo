@@ -39,7 +39,11 @@ const MILESTONES = [
   { period: '8월', title: '제3자 검증 루프', body: '외부 AI 리뷰(QA 92/100, 감사 관점 리뷰 2건)의 지적을 받아 당일 검증·수정·배포 - 지적 → 반영 평균 반나절.' },
 ];
 
-export default function DevJourneyModal({ onClose }: { onClose: () => void }) {
+export default function DevJourneyModal({ onClose, forced }: {
+  onClose: () => void;
+  /** 첫 방문 필수 코스 모드 - 하단 CTA 로 다음 단계 진행 */
+  forced?: boolean;
+}) {
   return (
     <div className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4">
       <div className="modal-in bg-gray-50 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[92vh] overflow-hidden flex flex-col">
@@ -52,7 +56,9 @@ export default function DevJourneyModal({ onClose }: { onClose: () => void }) {
             <div>
               <h3 className="text-base font-bold text-gray-900">개발 여정</h3>
               <p className="text-xs text-gray-500">
-                이 시스템이 만들어진 과정 - AI 페어 코딩(바이브 코딩) 실측 기록
+                {forced
+                  ? '첫 방문을 환영합니다 - 시스템을 보기 전에, 이것이 어떻게 만들어졌는지 1분만 봐 주세요'
+                  : '이 시스템이 만들어진 과정 - AI 페어 코딩(바이브 코딩) 실측 기록'}
               </p>
             </div>
           </div>
@@ -214,10 +220,36 @@ export default function DevJourneyModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
+          {/* GitHub - 전 과정이 공개 커밋 이력으로 남아 있다 */}
+          <a href="https://github.com/yalkongs/imbank-clms-demo" target="_blank" rel="noreferrer"
+            className="block bg-gray-900 rounded-xl p-4 text-white active:opacity-90">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <svg viewBox="0 0 16 16" width="24" height="24" fill="currentColor" aria-hidden="true">
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+                <div>
+                  <p className="text-sm font-bold">전체 소스와 개발 이력이 GitHub에 공개되어 있습니다</p>
+                  <p className="text-[11px] opacity-70">github.com/yalkongs/imbank-clms-demo - 커밋 하나하나가 이 여정의 증거입니다</p>
+                </div>
+              </div>
+              <span className="text-xs opacity-70 flex-none">열기 →</span>
+            </div>
+          </a>
+
           <p className="text-[11px] text-gray-400 text-center pb-1">
             수치 기준: git 이력 · OpenAPI 명세 · DB 실측 (2026-08-09) · 본 시스템은 모의 데이터 기반 PoC 입니다
           </p>
         </div>
+
+        {/* 첫 방문 필수 코스 - 다음 단계로 */}
+        {forced && (
+          <div className="flex-none px-6 py-4 bg-white border-t border-gray-200">
+            <button onClick={onClose} className="btn-accent w-full py-3 text-sm">
+              확인했습니다 - 시스템 시작하기 →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

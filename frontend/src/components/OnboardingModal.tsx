@@ -48,9 +48,11 @@ function ThemeCard({
   );
 }
 
-export default function OnboardingModal({ onClose, onDevJourney }: {
+export default function OnboardingModal({ onClose, onDevJourney, journeyNext }: {
   onClose: (startTour?: boolean) => void;
   onDevJourney?: () => void;
+  /** 첫 방문 - 닫으면 개발 여정이 필수 코스로 이어짐을 안내 */
+  journeyNext?: boolean;
 }) {
   const { theme, setTheme } = useTheme();
 
@@ -184,7 +186,7 @@ export default function OnboardingModal({ onClose, onDevJourney }: {
               onClick={() => onClose()}
               className="btn-accent px-5 text-sm"
             >
-              시작하기
+              {journeyNext ? '다음: 개발 여정 →' : '시작하기'}
             </button>
           </div>
         </div>
