@@ -661,7 +661,29 @@ tr:hover .row-chevron,
 
   /* 차트·모달 폭 대응 */
   .recharts-responsive-container { max-width: 100%; }
-  .fixed.inset-0 [class*="max-w-"] { max-height: 92dvh; }
+
+  /* 모달: 화면보다 길면 위가 잘리던 문제 - 상단 정렬 + 패널 내부 스크롤 */
+  .fixed.inset-0.items-center { align-items: flex-start !important; }
+  .fixed.inset-0 :not(.absolute)[class*="max-w-"] {
+    max-height: calc(100dvh - 4.5rem - env(safe-area-inset-top));
+    overflow-y: auto;
+    margin-top: calc(0.5rem + env(safe-area-inset-top));
+  }
+
+  /* 한글 세로 꺾임(한 글자씩 줄바꿈) 방지 - 어절 단위 유지 */
+  body { word-break: keep-all; }
+  th { white-space: nowrap; }
+  .app-main td, .fixed.inset-0 td {
+    white-space: nowrap;
+    max-width: 65vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 탭 행·모달 내 표도 가로 스크롤 */
+  .app-main .flex.border-b, .fixed.inset-0 .flex.border-b { overflow-x: auto; }
+  .fixed.inset-0 div:has(> table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .fixed.inset-0 table { min-width: 540px; }
 
   /* 터치 스크롤 관성 */
   .app-main, .overflow-y-auto { -webkit-overflow-scrolling: touch; }
