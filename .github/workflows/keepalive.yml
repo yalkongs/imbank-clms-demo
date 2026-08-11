@@ -13,7 +13,7 @@
 # concurrency 가 이전 실행을 취소하므로 실행 목록의 'cancelled' 는 오류가 아니다.
 #
 # 무료 플랜 월 750 인스턴스시간 한도 안에서 동작한다 (14시간/일 × 31일 = 434시간).
-# 배포 URL 이 바뀌면 아래 RENDER_URL 만 수정.
+# 배포 URL 이 바뀌면 아래 RENDER_URLS 만 수정.
 
 name: keepalive
 
@@ -38,11 +38,13 @@ jobs:
     steps:
       - name: Ping /health every 60s for 20 minutes
         run: |
-          RENDER_URL="https://imbank-clms-demo.onrender.com"
+          RENDER_URLS="https://imbank-clms-demo.onrender.com https://imbank-clms.onrender.com"
           END=$(( SECONDS + 1200 ))
           while [ $SECONDS -lt $END ]; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$RENDER_URL/health" || echo "000")
-            echo "$(date -u +%H:%M:%S) health -> $code"
+            for u in $RENDER_URLS; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$u/health" || echo "000")
+              echo "$(date -u +%H:%M:%S) $u -> $code"
+            done
             sleep 60
           done
 

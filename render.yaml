@@ -17,3 +17,16 @@ services:
       #   value: "true"
       - key: PYTHON_VERSION
         value: "3.13.4"
+
+  # 짧은 URL 별칭 - 같은 코드·구성으로 하나 더 띄운다 (imbank-clms.onrender.com)
+  - type: web
+    name: imbank-clms
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd backend && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.4"
