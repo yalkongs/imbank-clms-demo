@@ -626,8 +626,17 @@ tr:hover .row-chevron,
   .gap-6 { gap: 0.75rem !important; }
   .gap-4 { gap: 0.625rem !important; }
 
-  /* 본문 여백·타이포 축소 */
-  .app-main { padding: 0.875rem !important; }
+  /* 본문 여백·타이포 축소 (+ 하단 탭바 높이만큼 바닥 여백) */
+  .app-main {
+    padding: 0.875rem !important;
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom)) !important;
+  }
+  /* 페이지 헤더(제목 + 필터/버튼 행)는 줄바꿈 허용 - 제목이 세로로 꺾이는 것 방지 */
+  .app-main :is(.space-y-6, .space-y-5, .space-y-4) > .flex.items-center.justify-between {
+    flex-wrap: wrap;
+    row-gap: 0.625rem;
+  }
+  .app-main h1 { white-space: nowrap; }
   .app-main h1 { font-size: 1.25rem !important; }
   .app-main .text-2xl { font-size: 1.25rem !important; }
   .app-main .text-3xl { font-size: 1.5rem !important; }

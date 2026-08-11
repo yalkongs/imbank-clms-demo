@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   Menu,
+  LayoutGrid,
   LayoutDashboard,
   FileText,
   PiggyBank,
@@ -248,6 +249,24 @@ export default function Layout() {
           스토리 투어가 종료되어 대시보드로 이동했습니다
         </div>
       )}
+
+      {/* 모바일 하단 탭바 - 데스크탑 화면(Tier 2)을 폰에서 볼 때도 모바일 동선 유지 */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-[60] bg-white border-t border-gray-200 flex"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
+        {[
+          { to: '/m', label: '홈', icon: Home },
+          { to: '/m/approval', label: '결재', icon: Stamp },
+          { to: '/m/alerts', label: '경보', icon: AlertTriangle },
+          { to: '/m/obligations', label: '의무', icon: ListChecks },
+          { to: '/m/more', label: '전체', icon: LayoutGrid },
+        ].map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 h-[3.75rem] text-[10px] font-medium text-gray-400">
+            <Icon size={20} />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
 
       {/* 사이드바 오버레이 백드롭 (모바일 전용) */}
       {sidebarOpen && (
