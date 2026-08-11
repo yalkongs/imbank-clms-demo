@@ -21,6 +21,7 @@ import uuid
 import math
 
 from ..core.database import get_db
+from ..core.auth import get_current_user, User
 
 router = APIRouter(prefix="/api/automation", tags=["Automation Bridge"])
 
@@ -237,11 +238,13 @@ def get_pending_actions(
 @router.post("/execute/{action_id}")
 def execute_action(
     action_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     자동화 액션 실행
     - 액션 유형별 실제 처리 수행 후 status EXECUTED로 변경
+    - 시설 상태를 바꾸는 액션(한도동결·재분류)은 부서장 이상 전결권 필요
     """
     action = db.execute(
         text("""
@@ -258,6 +261,10 @@ def execute_action(
         raise HTTPException(status_code=400, detail=f"이미 처리됨: {action[5]}")
 
     cid = action[3]; fid = action[4]; atype = action[2]
+
+    if atype in ("FREEZE_LIMIT", "RECLASSIFY") and \
+            current_user.approval_level not in ("DEPT_HEAD", "EXECUTIVE", "COMMITTEE"):
+        raise HTTPException(403, f"{atype} 실행은 부서장 이상 전결권자만 가능합니다")
     result_summary = None
 
     # ── 액션 유형별 처리 ─────────────────────────────────────────────

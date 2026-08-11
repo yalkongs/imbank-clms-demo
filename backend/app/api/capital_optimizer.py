@@ -207,7 +207,8 @@ def get_allocation_optimization(region: str = Query(None), db: Session = Depends
     # 허들레이트
     hurdle = db.execute(text("""
         SELECT hurdle_raroc, target_raroc FROM hurdle_rate
-        WHERE segment_type IS NULL LIMIT 1
+        WHERE segment_type IS NULL
+        ORDER BY effective_date DESC LIMIT 1
     """)).fetchone()
 
     hurdle_rate = hurdle[0] if hurdle else 0.15  # 폴백 정본: RULE_RAROC_HURDLE

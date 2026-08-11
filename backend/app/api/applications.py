@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
 import math
+import uuid
 from datetime import datetime
 from ..core.database import get_db
 from ..core.audit import record_audit
@@ -324,6 +325,7 @@ def get_approval_inbox(
         LEFT JOIN (SELECT application_id, final_grade FROM credit_rating_result) g
           ON la.application_id = g.application_id
         WHERE la.status IN ('REVIEWING', 'SCREENING', 'RECEIVED')
+          AND la.current_stage != 'RECEIVED'
         ORDER BY la.requested_amount DESC
         LIMIT 40
     """)).fetchall()
@@ -846,9 +848,20 @@ def update_stage(
     comments: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    """심사 단계 변경"""
+    """심사 단계 변경 - 앞으로는 한 단계씩만(건너뛰기 불가), 뒤로는 회송 허용"""
     if new_stage not in REVIEW_STAGES:
         raise HTTPException(status_code=400, detail="Invalid stage")
+
+    cur = db.execute(text(
+        "SELECT current_stage FROM loan_application WHERE application_id = :app_id"
+    ), {"app_id": application_id}).fetchone()
+    if not cur:
+        raise HTTPException(status_code=404, detail="Application not found")
+    cur_order = REVIEW_STAGES.get(cur[0], {}).get("order", 1)
+    new_order = REVIEW_STAGES[new_stage]["order"]
+    if new_order > cur_order + 1:
+        raise HTTPException(422, f"단계 건너뛰기 불가: {REVIEW_STAGES.get(cur[0], {}).get('name', cur[0])} "
+                                 f"→ {REVIEW_STAGES[new_stage]['name']} (선행 단계를 먼저 완료해야 합니다)")
 
     db.execute(text("""
         UPDATE loan_application
@@ -890,12 +903,16 @@ def approve_application(
 
     # 신청 정보 확인
     app = db.execute(text("""
-        SELECT requested_amount, status FROM loan_application
+        SELECT requested_amount, status, current_stage FROM loan_application
         WHERE application_id = :app_id
     """), {"app_id": application_id}).fetchone()
 
     if not app:
         raise HTTPException(status_code=404, detail="Application not found")
+
+    # 심사 미착수(접수 단계) 건은 결재할 수 없다 - 선행 심사 없는 즉시 승인 차단
+    if decision in ("APPROVE", "CONDITIONAL") and app[2] == "RECEIVED":
+        raise HTTPException(422, "접수 상태 건은 심사 착수(서류검토 이후) 후 결재할 수 있습니다")
 
     # 중복 결재·직무분리: 같은 사용자가 이 신청에 이미 결재했다면 다시 결재할 수 없다
     dup = db.execute(text("""
@@ -962,7 +979,7 @@ def approve_application(
         raise HTTPException(409, "이미 처리 완료된 신청입니다 (중복 결재 방지)")
 
     # 승인 이력 추가
-    approval_id = f"APPR_{application_id}_{AS_OF_DATE.strftime('%Y%m%d%H%M%S')}"
+    approval_id = f"APPR_{application_id}_{uuid.uuid4().hex[:8].upper()}"
     db.execute(text("""
         INSERT INTO approval_history
         (approval_id, application_id, approval_level, approver_name, decision, conditions, comments, decided_at)

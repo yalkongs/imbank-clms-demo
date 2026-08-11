@@ -2,17 +2,21 @@
 
 **Credit Lifecycle Management System**
 
-기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템입니다.
-Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 화면 · 242개 API · 95개 DB 테이블 ·
-자동 테스트 172개**로 구성되며, 실제 iM뱅크 공시 규모에 맞춘 모의 포트폴리오
-(차주 1,999개사 · 총여신 36.7조 · 자기자본 5.5조 · BIS 14.5%)를 탑재합니다.
+기업여신의 심사·포트폴리오·모니터링·회수를 통합적으로 분석·시연하는 PoC 시스템입니다.
+Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **37개 사용자 화면 · 242개 API 경로 · 95개 업무 테이블 ·
+자동 테스트 177개(175 통과·2 건너뜀)**로 구성되며, iM뱅크 공시 규모를 참고한 모의 포트폴리오
+(고객 2,160개사 · 총여신 36.7조 · 자기자본 5.5조 · BIS 14.5%)를 탑재합니다.
 
 **▶ 라이브: https://imbank-clms-demo.onrender.com** (무료 인스턴스라 첫 접속 시 수십 초 걸릴 수 있음)
+
+**은행 파일럿 준비도와 추가 요구기능:** [2026-08-11 은행 요구기능 갭 연구 및 실행 권고](docs/BANK_REQUIRED_CAPABILITIES_RESEARCH_2026-08-11.md)
+
+> 현재 공개 배포는 분석·의사결정 PoC입니다. 실제 여신 승인·실행 권한이 있는 은행 운영시스템으로 사용하지 않습니다.
 
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.13-green)
 ![React](https://img.shields.io/badge/react-18.2-blue)
-![Tests](https://img.shields.io/badge/tests-172_passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-175_passed%20%7C%202_skipped-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **체험 계정** (헤더 우측 로그인 → 계정 선택, PIN 힌트 표시):
@@ -37,6 +41,7 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 화�
 - [배포](#배포)
 - [API 엔드포인트](#api-엔드포인트)
 - [데이터 모델](#데이터-모델)
+- [은행 요구기능 연구](docs/BANK_REQUIRED_CAPABILITIES_RESEARCH_2026-08-11.md)
 - [시스템 상수 및 가정치](#시스템-상수-및-가정치)
 - [변경 이력](#변경-이력)
 - [라이선스](#라이선스)
@@ -49,19 +54,19 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 화�
 
 | 영역 | 내용 |
 |------|------|
-| **리스크 기반 의사결정** | PD·LGD·EAD 모델 기반 과학적 심사, RAROC 가격결정, AI 심사의견서 초안 |
+| **리스크 기반 의사결정** | PD·LGD·EAD 모델 기반 심사 시뮬레이션, RAROC 가격결정, 규칙 기반 심사의견서 초안 |
 | **자본 효율성 최적화** | IRB RWA 산출, 포트폴리오 최적화, 리밸런싱 추천 |
-| **규제 준수** | Basel III 자본비율, 은행법 §35 법정 3한도, 스트레스 테스트, 모델 검증(MRM) |
-| **내부통제** | 서버 결정 전결권·직무분리(Maker-Checker), 승인 시점 심사자료 봉인(SHA-256), 감사추적, 규정 레지스터 |
+| **규제 분석** | Basel III 자본비율, 은행법 §35 법정 3한도 조회·시뮬레이션, 스트레스 테스트, 모델 검증(MRM) |
+| **내부통제** | 서버 결정 전결권·동일인 중복결재 차단, 승인 시점 심사자료 봉인(SHA-256), 핵심 승인 감사추적, 규정 레지스터 *(다단계 Maker-Checker는 후속 과제)* |
 | **선제적 리스크 관리** | 5채널 선행지표 EWS(조치 상태기계 포함), 동적한도, ESG 연동 |
-| **통합 모니터링** | 42개 화면, 포트폴리오 맵(what-if 드래그·타임슬라이더), 의무관리함, 지역별 필터 |
+| **통합 모니터링** | 37개 사용자 화면, 포트폴리오 맵(what-if 드래그·타임슬라이더), 의무관리함, 지역별 필터 |
 
 ### 시스템 범위
 
 ```
 전략계층: 대시보드 · 자본관리 · 포트폴리오 전략 · 스트레스 테스트 · 자본 최적화
 전술계층: 한도관리 · 동적한도 · 여신심사 · 결재함 · 가격결정(What-if)
-운영계층: 고객관리 · 여신실행 · 담보관리 · 연체관리 · 부실채권(Workout) · 금리인하요구권
+운영계층: 고객관리 · 시설/실행현황 · 담보관리 · 연체관리 · 부실채권(Workout) · 금리인하요구권
 통제계층: 전자 여신철 · 의무관리함 · 업무보고서(PDF) · 감사추적 · 규정 레지스터
 분석계층: 조기경보(EWS) · 포트폴리오 맵 · 모델관리(MRM) · 고객수익성 · ESG · ALM · PF 사업장
 ```
@@ -77,7 +82,7 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 화�
 - **지역별 필터링** (수도권/대구경북/부산경남)
 
 ### 2. 여신심사 (Applications)
-- 신청서 접수 → 서류심사 → 신용분석 → 심사위원회 → 최종승인 단계 관리
+- 신청서 접수 → 서류심사 → 신용분석 → 심사위원회 → 최종승인 단계 현황·수동 변경 *(정식 FSM은 후속 과제)*
 - What-if 시뮬레이션: 금리·만기 변경에 따른 RAROC 즉시 산출
 - FTP 테너별 조달금리 자동 적용, 등급-PD 매핑(16단계)
 
@@ -182,7 +187,7 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 화�
 | **포용금융 이행** | 중신용·개인사업자 공급 실적 vs 목표, 세그먼트 건전성 병기 |
 | **보고·감사** | 업무보고서(PDF 다운로드), 전결규정, 감사추적, 정책예외, 규정 레지스터(효력일 관리) |
 
-여기에 **AI 심사의견서 초안**(여신신청 상세에서 데이터 기반 7개 섹션 문안 자동 생성 + PDF),
+여기에 **규칙 기반 심사의견서 초안**(여신신청 상세에서 데이터 기반 7개 섹션 문안 자동 생성 + PDF),
 **스토리 투어**(한 기업의 생애주기 악화 경로 7단계 안내), **개발 여정**(소개 팝업에서 진입)이 더해집니다.
 
 ---
@@ -214,7 +219,7 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 화�
 
 비용률: 조달(FTP 테너별) + 운영(0.5%) — 포트폴리오 총비용률 3.5% (2026-08 금리 현실화)
 경제적자본: EC = RWA × 10.5% (BIS 8% + 보전완충 2.5%)
-허들레이트: 15% (규정 레지스터 RULE_RAROC_HURDLE 정본)
+허들레이트: 기본 15% (규정 레지스터 정본, hurdle_rate 테이블·코드 상수 정렬 완료 - 규모별 13~17% 차등)
 ```
 
 ### 가격결정 (Pricing)
@@ -225,7 +230,7 @@ r_final = r_base(2.7%) + FTP spread(0.5%) + Credit spread + Opex(0.2%) + Margin(
 
 Credit spread = EL spread + UL spread
   EL spread = PD × LGD
-  UL spread = EL spread × 0.5 × Hurdle rate(15%)
+  UL spread = EL spread × 0.5 × 적용 Hurdle rate
 ```
 
 ### 스트레스 테스트
@@ -291,13 +296,13 @@ Stage 3  신용손상 발생 (부록A)                      → 개별 평가
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                     Frontend (React 18 + TypeScript)          │
-│  19 Pages · RegionFilter · Recharts · Tailwind CSS · Vite    │
+│  37 User Views · RegionFilter · Recharts · Tailwind · Vite    │
 ├──────────────────────────────────────────────────────────────┤
 │                     Backend (FastAPI + SQLAlchemy)             │
-│  18 API Routers · 133 Endpoints · calculations.py (수리엔진)  │
+│  38 API Routers · 242 Paths · calculations.py (수리엔진)      │
 ├──────────────────────────────────────────────────────────────┤
 │                     Database (SQLite)                          │
-│  49 Tables · ~1,010 Customers · 3 Regions · ~45,800 EWS rows │
+│  95 Business Tables · 2,160 Customers · 3 Regions             │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -309,7 +314,7 @@ Stage 3  신용손상 발생 (부록A)                      → 개별 평가
 imbank-clms-demo/
 ├── backend/
 │   ├── app/
-│   │   ├── api/                    # API 엔드포인트 (18개 모듈)
+│   │   ├── api/                    # API 모듈 39개 (라우터 38 + helper 1, 아래는 대표 파일)
 │   │   │   ├── dashboard.py        # 전략 대시보드
 │   │   │   ├── applications.py     # 여신심사
 │   │   │   ├── capital.py          # 자본관리
@@ -345,7 +350,7 @@ imbank-clms-demo/
 │   │   │   ├── index.ts            # Card, StatCard, Badge, Table, Modal
 │   │   │   ├── Layout.tsx
 │   │   │   └── RegionFilter.tsx
-│   │   ├── pages/                  # 19개 페이지
+│   │   ├── pages/                  # 사용자 화면 37개 · 페이지 컴포넌트 41개
 │   │   │   ├── Dashboard.tsx
 │   │   │   ├── Applications.tsx
 │   │   │   ├── Capital.tsx
@@ -381,7 +386,7 @@ imbank-clms-demo/
 │
 ├── database/
 │   ├── imbank_demo.db              # SQLite 데이터베이스
-│   ├── schema.sql                  # 스키마 정의 (49 tables)
+│   ├── schema.sql                  # 핵심 스키마 (적용 DB는 마이그레이션·확장 포함 95개)
 │   ├── schema_ews_leading.sql      # EWS 선행지표 스키마
 │   ├── generate_extension_data.py  # 확장 데이터 생성
 │   └── generate_ews_leading_data.py # EWS 선행지표 데이터 생성
@@ -463,7 +468,7 @@ lsof -ti:3000 | xargs kill 2>/dev/null
 
 ```
 단일 uvicorn 프로세스
-  ├─ /api/*   FastAPI 라우터 39개 (242 엔드포인트)
+  ├─ /api/*   FastAPI 라우터 38개 (242 path / 243 operation)
   └─ /*       사전 빌드된 SPA (frontend/dist) 를 StaticFiles + FileResponse 로 서빙
 ```
 
@@ -506,7 +511,7 @@ git add frontend/dist && git commit
 
 ## API 엔드포인트
 
-총 **242개** 엔드포인트 (OpenAPI 기준 · 아래는 대표 모듈 발췌). 대부분 `?region=CAPITAL|DAEGU_GB|BUSAN_GN` 파라미터 지원.
+총 **242개 경로 / 243개 operation** (OpenAPI 기준 · 아래는 대표 모듈 발췌). 대부분 `?region=CAPITAL|DAEGU_GB|BUSAN_GN` 파라미터 지원.
 
 ### Dashboard (5)
 | Method | Endpoint | 설명 |
@@ -602,32 +607,31 @@ git add frontend/dist && git commit
 
 ## 데이터 모델
 
-### 테이블 분류 (49개)
+### 테이블 분류 (업무 테이블 95개)
 
-| 계층 | 테이블 수 | 주요 테이블 |
-|------|----------|------------|
-| **마스터** | 5 | customer(18col), borrower_group, industry_master |
-| **운영** | 7 | facility(17col), loan_application(20col), risk_parameter(13col), credit_rating_result |
-| **전술** | 6 | ftp_rate, pricing_result(23col), credit_spread, macro_indicator |
-| **전략** | 9 | capital_position(13col), stress_scenario, limit_definition, portfolio_strategy |
-| **기반** | 8 | model_registry, model_performance_log(15col), portfolio_summary, audit_log |
-| **EWS 확장** | 6 | ews_transaction_behavior, ews_public_registry, ews_market_signal, ews_news_sentiment, ews_supply_chain_temporal, ews_composite_score |
-| **기타 확장** | 8 | dynamic_limit_rule, customer_profitability(27col), collateral_valuation_history, optimal_allocation |
+| 계층 | 주요 테이블 |
+|------|------------|
+| **고객·그룹·담보** | customer, borrower_group, borrower_group_member, collateral, group_guarantee |
+| **신청·승인·실행** | loan_application, approval_history, decision_snapshot, facility, limit_reservation |
+| **등급·가격·자본** | risk_parameter, credit_rating_result, pricing_result, hurdle_rate, capital_position |
+| **한도·신용공여** | limit_definition, limit_exposure, credit_exposure_ledger, portfolio_strategy |
+| **EWS·사후관리** | ews_alert, ews_action, covenant, delinquency_record, notification_log, workout_case |
+| **회계·모델·통제** | ecl_calculation, asset_classification, model_registry, rule_register, audit_log |
+| **확장분석** | stress_scenario, customer_profitability, esg_assessment, alm_scenario_result, pf_project |
 
 ### 데이터 규모
 
 | 구분 | 건수 |
 |------|-----:|
-| 고객 | ~1,010 |
-| 여신 (facility) | ~1,200 |
-| 리스크 파라미터 | ~1,500 |
-| EWS 거래행태 시계열 | ~12,120 |
-| EWS 시장신호 | ~3,636 |
-| EWS 뉴스감성 | ~17,170 |
-| EWS 공급망 시계열 | ~11,976 |
-| EWS 공적정보 이벤트 | ~900 |
-| 모델 성능 로그 | ~125 |
-| **합계** | **~50,000+** |
+| 고객 | 2,160 |
+| 여신신청 | 3,794 |
+| 여신 (facility) | 3,734 |
+| 신용공여 원장 | 7,541 |
+| 승인 이력 | 157 |
+| 감사로그 | 23 |
+
+현재 운영 준비도, 통제 공백, 추가 기능의 시스템 경계와 인수기준은
+[은행 요구기능 갭 연구](docs/BANK_REQUIRED_CAPABILITIES_RESEARCH_2026-08-11.md)를 참조하십시오.
 
 ### 데이터 재생성
 
@@ -654,7 +658,7 @@ cd database && python3 generate_ews_leading_data.py
 | 운영비율 (OPEX_RATE) | 0.5% | |
 | 총비용률 (COST_RATE) | 3.5% | 포트폴리오 대시보드 적용 |
 | 경제적 자본비율 | 10.5% | BIS 8% + 보전완충 2.5% |
-| 허들레이트 | 15% | 규정 레지스터 RULE_RAROC_HURDLE 정본 |
+| 허들레이트 | 10·12·14·15% 혼재 | 현재 정합성 결함. 운영 사용 전 유효일자 기준 단일 정책으로 통합 필요 |
 
 ### FTP 금리 커브 (KRW, 2026-02)
 
@@ -705,22 +709,23 @@ cd database && python3 generate_ews_leading_data.py
 
 **내부통제·업무 완결성 (제3자 감사형 리뷰 2건 반영)**
 - HMAC 토큰 인증 + 역할 4계정, 쓰기 API 인증 강제 (익명 쓰기 401)
-- 전결권 서버 결정 · 직무분리(동일인 중복결재 409) · 전결권 우회 차단
+- 전결권 서버 결정 · 동일인 중복결재 차단(409) · 전결권 우회 차단
   (승인금액은 (0, 신청금액] 검증, 전결 판정은 신청금액 기준) · 승인조건 영속화
 - 승인 시점 심사자료 봉인: canonical JSON + SHA-256, 과거 승인건 소급 등재 66건
-- 신용공여 원장(credit_exposure_ledger, CCF 적용) + 은행법 §35 법정 3한도 상시 감시
+- 신용공여 원장(credit_exposure_ledger, CCF 적용) + 은행법 §35 법정 3한도 조회·경보 PoC
+  *(승인·실행 거래 반영형 상시통제는 후속 과제)*
 - EWS 조치 상태기계(순서 가드·기한초과 자동 상향보고) · 금리인하요구권 SLA 상태기계
-- 규정 레지스터 15건(효력일·버전·파라미터), 통합 의무관리함(5원천 95건)
-- DB 마이그레이션 체계(schema_migrations) + 규제 시나리오 회귀 테스트, 총 172개 테스트 + CI
+- 규정 레지스터 15건(효력일·버전·파라미터 등록·조회), 통합 의무관리함(5원천 95건)
+- DB 마이그레이션 체계(schema_migrations) + 규제 시나리오 회귀 테스트, 총 172개(171 통과·1 건너뜀) + CI
 
 **화면·UX**
 - 포트폴리오 맵 신설(what-if 드래그·타임슬라이더·누적 파급·CSV), 스토리 투어 7단계
-- AI 심사의견서 자동 초안(JSON+PDF), 개발 여정 팝업
+- 규칙 기반 심사의견서 자동 초안(JSON+PDF), 개발 여정 팝업
 - 로딩 UX 표준화(스켈레톤·오류·빈 데이터 3상태 분리), Roll Rate 전이 이력 실측화
 - 업무보고서 11개 섹션 + 서버 PDF(fpdf2·Pretendard), 조 단위 금액 표기
 
 **데이터 현실화 (iM뱅크 공시·실측 대조)**
-- 차주 699 → 1,999개사(업종 40종·담보 7종), 총여신 36.7조 (실측 기업여신 37.0조 대비 -0.8%)
+- 고객 699 → 2,160개사(업종 40종·담보 7종), 총여신 36.7조 (실측 기업여신 37.0조 대비 -0.8%)
 - 자기자본 5.5조 · RWA 38조 · BIS 14.47% (종전 2.6배 과대를 실제 규모로 조정)
 - 연체율 0.94% (실측 1.0% 정합)
 - 여신금리 현실화: 잔액가중 6.04% → 4.70% (실측 4.36% 대비 기업 프리미엄 반영),

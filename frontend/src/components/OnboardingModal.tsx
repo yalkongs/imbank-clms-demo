@@ -140,7 +140,7 @@ export default function OnboardingModal({ onClose, onDevJourney }: {
             <p className="text-[11px] font-semibold text-gray-400 tracking-wider mb-2">구축 규모</p>
             <div className="grid grid-cols-4 gap-3 text-center">
               {[
-                { n: '42',     l: '화면' },
+                { n: '37',     l: '화면' },
                 { n: '242',    l: 'API' },
                 { n: '95',     l: 'DB 테이블' },
                 { n: '3,734',  l: '여신' },

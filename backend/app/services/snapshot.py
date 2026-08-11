@@ -95,7 +95,9 @@ def build_and_seal_snapshot(db: Session, application_id: str, *,
         "limit_check": {
             "requested_amount": req_amt,
             "regulatory_25pct": capital * 0.25,
-            "within_limit": (group_total or 0) <= capital * 0.25 if capital else None,
+            "group_total_incl_new": (group_total or 0) + (req_amt or 0),
+            "within_limit": ((group_total or 0) + (req_amt or 0)) <= capital * 0.25
+                            if capital else None,
         },
     }
     output_data = {

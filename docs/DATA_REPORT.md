@@ -4,6 +4,8 @@
 **버전**: 1.0.0
 **작성자**: AI Assistant (Claude)
 
+> **문서 상태:** 2024-01-30 테스트 데이터의 역사적 스냅샷입니다. 현재 DB 규모와 운영 준비도는 [README](../README.md)와 [2026-08-11 은행 요구기능 갭 연구](BANK_REQUIRED_CAPABILITIES_RESEARCH_2026-08-11.md)를 기준으로 보십시오.
+
 ---
 
 ## 1. 개요

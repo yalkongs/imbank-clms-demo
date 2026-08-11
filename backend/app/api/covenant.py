@@ -10,6 +10,7 @@ from typing import Optional
 from datetime import date, timedelta
 from ..core.database import get_db
 from ..core.config import AS_OF_DATE
+from ..core.auth import get_current_user, User
 from ..services.calculations import check_covenant_compliance
 
 router = APIRouter(prefix="/api/covenants", tags=["Covenant Management"])
@@ -439,15 +440,20 @@ def get_covenant_history(
 def apply_waiver(
     covenant_id: str,
     reason: str = Query(..., description="웨이버 사유"),
-    approved_by: str = Query(..., description="승인자"),
+    approved_by: str = Query(None, description="(deprecated) 서버가 인증 사용자로 결정"),
     waiver_period_days: int = Query(90, description="유예 기간 (일)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     코베넌트 웨이버(일시 유예) 신청
-    - 위반 상태의 코베넌트에 한해 적용
-    - waiver_count 증가 (반복 웨이버 모니터링)
+    - 위반 상태의 코베넌트에 한해 적용, waiver_count 증가 (반복 웨이버 모니터링)
+    - 승인자는 클라이언트 파라미터가 아니라 인증 사용자로 기록하며,
+      예외 승인 성격이므로 부서장 이상의 전결권을 요구한다
     """
+    if current_user.approval_level not in ("DEPT_HEAD", "EXECUTIVE", "COMMITTEE"):
+        raise HTTPException(403, "코베넌트 웨이버는 부서장 이상 전결권자만 승인할 수 있습니다")
+    approved_by = current_user.name
     cov = db.execute(text("""
         SELECT covenant_id, covenant_name, status, waiver_count
         FROM covenant WHERE covenant_id = :cid

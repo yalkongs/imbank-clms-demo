@@ -375,7 +375,7 @@ export const covenantApi = {
     api.get('/covenants/breach-status', { params: region ? { region } : undefined }),
   getHistory: (covenantId: string) =>
     api.get(`/covenants/history/${covenantId}`),
-  applyWaiver: (covenantId: string, params: { reason: string; approved_by: string; waiver_period_days?: number }) =>
+  applyWaiver: (covenantId: string, params: { reason: string; waiver_period_days?: number }) =>
     api.post(`/covenants/waiver/${covenantId}`, null, { params }),
 };
 

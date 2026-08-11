@@ -16,10 +16,10 @@ import { StatCard } from './index';
 const STATS = [
   { title: '개발 활동일', value: '13일', subtitle: '2026.1.30 ~ 8.9 (여가 시간)', icon: <GitCommit size={22} />, color: 'blue' as const },
   { title: '커밋', value: '92회', subtitle: '훅 검증 통과 후 자동 배포', icon: <Code2 size={22} />, color: 'blue' as const },
-  { title: '화면', value: '42개', subtitle: 'React 18 + Vite SPA', icon: <Monitor size={22} />, color: 'green' as const },
+  { title: '사용자 화면', value: '37개', subtitle: '직접 23 + 허브·EWS 탭 14', icon: <Monitor size={22} />, color: 'green' as const },
   { title: 'API 엔드포인트', value: '242개', subtitle: 'FastAPI 39개 모듈', icon: <Network size={22} />, color: 'green' as const },
   { title: 'DB 테이블', value: '95개', subtitle: '고객 2,160 · 여신 3,734건 (모의)', icon: <Database size={22} />, color: 'yellow' as const },
-  { title: '자동 테스트', value: '172개', subtitle: '규제 시나리오 회귀 포함', icon: <FlaskConical size={22} />, color: 'yellow' as const },
+  { title: '자동 테스트', value: '177개', subtitle: '규제 시나리오 회귀 포함', icon: <FlaskConical size={22} />, color: 'yellow' as const },
   { title: '코드', value: '4.4만 줄', subtitle: '프론트 2.3만 + 백엔드 2.1만', icon: <Code2 size={22} />, color: 'red' as const },
   { title: '운영 배포', value: '상시', subtitle: 'push → 빌드 → 배포 전자동', icon: <Rocket size={22} />, color: 'red' as const },
 ];
@@ -27,7 +27,7 @@ const STATS = [
 const LOOP = [
   { icon: <Bot size={18} />, title: '① 대화로 요구 전달', body: '"연체 Roll Rate가 계속 로딩 중이다. 점검하라" - 업무 언어 그대로. 명세서·티켓 없이 대화가 곧 요구사항이다.' },
   { icon: <Code2 size={18} />, title: '② AI가 원인 진단·구현', body: 'AI가 코드·DB를 직접 조사해 원인(전이 관측 데이터 부재 + 상태 설계 결함)을 찾고, 스키마 추가부터 화면 수정까지 일괄 구현한다.' },
-  { icon: <FlaskConical size={18} />, title: '③ 자동 검증', body: '커밋 전 훅이 프론트를 빌드하고, 172개 테스트(전결권 우회·법정한도·봉인 불변성 등 규제 시나리오 포함)가 회귀를 차단한다.' },
+  { icon: <FlaskConical size={18} />, title: '③ 자동 검증', body: '커밋 전 훅이 프론트를 빌드하고, 177개 테스트(전결권 우회·단계 건너뛰기·법정한도·봉인 불변성 등 규제 시나리오 포함)가 회귀를 차단한다.' },
   { icon: <Rocket size={18} />, title: '④ 자동 배포·확인', body: 'push 하면 Render가 자동 배포한다. AI가 라이브 응답을 재검증한 뒤에야 "반영 완료"를 보고한다.' },
 ];
 
@@ -84,7 +84,7 @@ export default function DevJourneyModal({ onClose }: { onClose: () => void }) {
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <h3 className="text-base font-bold text-gray-900 mb-1">같은 것을 사람이 만들었다면?</h3>
             <p className="text-xs text-gray-400 mb-5">
-              코드 4.4만 줄 · 화면 42개 · API 242개 규모를 통상적 SI 산정 방식으로 환산한 비교
+              코드 4.4만 줄 · 사용자 화면 37개 · API 242개 규모를 통상적 SI 산정 방식으로 환산한 비교
             </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="rounded-xl border border-gray-200 p-5">

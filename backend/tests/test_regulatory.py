@@ -27,6 +27,7 @@ def _find_pending_app(db, max_eok=40):
     return db.execute(text("""
         SELECT application_id FROM loan_application la
         WHERE la.status IN ('REVIEWING','RECEIVED','SCREENING')
+          AND la.current_stage NOT IN ('RECEIVED')
           AND la.requested_amount < :amt
           AND NOT EXISTS (SELECT 1 FROM approval_history ah
                           WHERE ah.application_id = la.application_id)
@@ -39,7 +40,8 @@ def test_authority_exceeded_is_blocked():
     db = SessionLocal()
     row = db.execute(text("""
         SELECT application_id FROM loan_application
-        WHERE status IN ('REVIEWING','RECEIVED') AND requested_amount > 100e8 LIMIT 1
+        WHERE status IN ('REVIEWING','RECEIVED') AND requested_amount > 100e8
+          AND current_stage != 'RECEIVED' LIMIT 1
     """)).fetchone()
     if not row:
         pytest.skip("대형 심사 건 없음")
@@ -49,13 +51,89 @@ def test_authority_exceeded_is_blocked():
     assert r.status_code == 403, f"전결권 초과가 차단되지 않음: {r.status_code}"
 
 
+def test_approve_blocked_before_review_started():
+    """Gate 0: 접수(RECEIVED) 단계 건은 심사 착수 전이라 결재 불가 → 422"""
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT application_id FROM loan_application
+        WHERE status IN ('REVIEWING','RECEIVED') AND current_stage = 'RECEIVED'
+        LIMIT 1
+    """)).fetchone()
+    if not row:
+        pytest.skip("접수 단계 표본 없음")
+    r = client.post(f"/api/applications/{row[0]}/approve",
+                    params={"decision": "APPROVE"},
+                    headers=_login("lee.jeonmu", "3333"))
+    assert r.status_code == 422, f"심사 미착수 즉시승인이 차단되지 않음: {r.status_code}"
+
+
+def test_stage_jump_is_blocked():
+    """Gate 0: 단계 건너뛰기(2단계 이상 전진) → 422"""
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT application_id FROM loan_application
+        WHERE current_stage IN ('RECEIVED','DOC_REVIEW')
+          AND status IN ('REVIEWING','RECEIVED') LIMIT 1
+    """)).fetchone()
+    if not row:
+        pytest.skip("초기 단계 표본 없음")
+    r = client.post(f"/api/applications/{row[0]}/stage",
+                    params={"new_stage": "FINAL_REVIEW"},
+                    headers=_login("kim.yeosin", "1234"))
+    assert r.status_code == 422, f"단계 건너뛰기가 차단되지 않음: {r.status_code}"
+
+
+def test_conditional_then_final_approval_no_id_conflict():
+    """Gate 0: 조건부 승인 뒤 다른 승인자의 최종승인이 ID 충돌(500) 없이 성공"""
+    db = SessionLocal()
+    row = _find_pending_app(db)
+    if not row:
+        pytest.skip("승인 가능 표본 없음")
+    aid = row[0]
+    r1 = client.post(f"/api/applications/{aid}/approve",
+                     params={"decision": "CONDITIONAL", "conditions": "담보 보완 조건"},
+                     headers=_login("kim.yeosin", "1234"))
+    assert r1.status_code == 200, r1.text[:200]
+    r2 = client.post(f"/api/applications/{aid}/approve",
+                     params={"decision": "APPROVE"},
+                     headers=_login("park.bujang", "2222"))
+    assert r2.status_code == 200, f"조건부 후 최종승인 실패(구 ID 충돌 결함): {r2.status_code} {r2.text[:150]}"
+
+
+def test_waiver_requires_dept_head():
+    """Gate 0: 코베넌트 웨이버는 부서장 이상 - 담당자(STAFF) 시도 → 403"""
+    db = SessionLocal()
+    row = db.execute(text("SELECT covenant_id FROM covenant LIMIT 1")).fetchone()
+    if not row:
+        pytest.skip("코베넌트 없음")
+    r = client.post(f"/api/covenants/waiver/{row[0]}",
+                    params={"reason": "테스트 사유"},
+                    headers=_login("kim.simsa", "1111"))
+    assert r.status_code == 403, f"STAFF 웨이버 승인이 차단되지 않음: {r.status_code}"
+
+
+def test_freeze_limit_requires_dept_head():
+    """Gate 0: 한도동결(FREEZE_LIMIT) 실행은 부서장 이상 - 담당자 시도 → 403"""
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT action_id FROM automation_action
+        WHERE action_type = 'FREEZE_LIMIT' AND action_status = 'PENDING' LIMIT 1
+    """)).fetchone()
+    if not row:
+        pytest.skip("PENDING 한도동결 액션 없음")
+    r = client.post(f"/api/automation/execute/{row[0]}",
+                    headers=_login("kim.simsa", "1111"))
+    assert r.status_code == 403, f"STAFF 한도동결 실행이 차단되지 않음: {r.status_code}"
+
+
 def test_authority_bypass_via_approved_amount_is_blocked():
     """전결권 우회: 담당자가 대형 건에 approved_amount=1 을 보내도 403
     (전결권은 신청금액 기준 - AGY 검토 P0-1 재현 시나리오 고정)"""
     db = SessionLocal()
     row = db.execute(text("""
         SELECT application_id FROM loan_application
-        WHERE status IN ('REVIEWING','RECEIVED') AND requested_amount > 100e8 LIMIT 1
+        WHERE status IN ('REVIEWING','RECEIVED') AND requested_amount > 100e8
+          AND current_stage != 'RECEIVED' LIMIT 1
     """)).fetchone()
     if not row:
         pytest.skip("대형 심사 건 없음")

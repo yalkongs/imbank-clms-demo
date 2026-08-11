@@ -197,6 +197,7 @@ def test_approver_is_server_decided():
     row = db.execute(text("""
         SELECT la.application_id FROM loan_application la
         WHERE la.status IN ('REVIEWING','RECEIVED','SCREENING')
+          AND la.current_stage NOT IN ('RECEIVED')
           AND la.requested_amount < 50e8
           AND NOT EXISTS (SELECT 1 FROM approval_history ah
                           WHERE ah.application_id = la.application_id)

@@ -115,17 +115,17 @@ export default function Covenant() {
   };
 
   const submitWaiver = async () => {
-    if (!waiverTarget || !waiverForm.reason || !waiverForm.approved_by) return;
+    if (!waiverTarget || !waiverForm.reason) return;
     setWaiverLoading(true);
     try {
       await covenantApi.applyWaiver(waiverTarget.covenant_id, {
         reason: waiverForm.reason,
-        approved_by: waiverForm.approved_by,
         waiver_period_days: waiverForm.days,
       });
       setShowWaiverModal(false);
       loadData();
-    } catch (e) {
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || '웨이버 처리 실패');
       console.error('Waiver error:', e);
     } finally {
       setWaiverLoading(false);
@@ -398,15 +398,9 @@ export default function Covenant() {
                   placeholder="일시적 유동성 위기, 경기 요인 등 구체적 사유를 입력하세요"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">승인자 <span className="text-red-500">*</span></label>
-                <input
-                  value={waiverForm.approved_by}
-                  onChange={e => setWaiverForm(f => ({ ...f, approved_by: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"
-                  placeholder="여신심사부장"
-                />
-              </div>
+              <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">
+                승인자는 로그인 사용자로 기록됩니다 - 웨이버는 <b>부서장 이상</b> 전결권이 필요합니다
+              </p>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">유예 기간</label>
                 <select
