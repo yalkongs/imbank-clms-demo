@@ -7,7 +7,10 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **37개 사�
 자동 테스트 177개(175 통과·2 건너뜀)**로 구성되며, iM뱅크 공시 규모를 참고한 모의 포트폴리오
 (고객 2,160개사 · 총여신 36.7조 · 자기자본 5.5조 · BIS 14.5%)를 탑재합니다.
 
-**▶ 라이브: https://imbank-clms-demo.onrender.com** (무료 인스턴스라 첫 접속 시 수십 초 걸릴 수 있음)
+**▶ 라이브: https://imbank-clms.onrender.com**  (예비: https://imbank-clms-demo.onrender.com)
+
+- 무료 인스턴스라 첫 접속 시 수십 초 걸릴 수 있습니다. 휴대폰 접속 시 모바일 전용 화면이 자동 표시됩니다.
+- 두 주소는 같은 코드가 배포된 독립 인스턴스입니다 (master 푸시 시 양쪽 모두 자동 배포).
 
 **은행 파일럿 준비도와 추가 요구기능:** [2026-08-11 은행 요구기능 갭 연구 및 실행 권고](docs/BANK_REQUIRED_CAPABILITIES_RESEARCH_2026-08-11.md)
 
