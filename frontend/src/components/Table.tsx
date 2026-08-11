@@ -60,7 +60,38 @@ export default function Table<T extends Record<string, any>>({
   };
 
   return (
-    <div className="overflow-x-auto">
+    <>
+    {/* Tier 2: 모바일에서는 표를 카드 리스트로 변환 (데스크탑은 기존 표 유지) */}
+    <div className="md:hidden space-y-2">
+      {data.map((row, index) => {
+        const isSelected = selectedKey && selectedValue && row[selectedKey] === selectedValue;
+        const [first, ...rest] = columns;
+        return (
+          <div key={index}
+            onClick={() => onRowClick?.(row)}
+            className={`rounded-xl border p-3.5 ${isSelected ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-white'} ${onRowClick ? 'active:bg-gray-50' : ''}`}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-semibold text-gray-900">
+                {first.render ? first.render(row[first.key], row, index) : row[first.key]}
+              </span>
+              {onRowClick && <ChevronRight size={15} className="row-chevron" />}
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+              {rest.map(col => (
+                <div key={col.key} className="flex items-baseline justify-between gap-2 min-w-0">
+                  <span className="text-[11px] text-gray-400 flex-none">{col.header}</span>
+                  <span className="text-xs text-gray-700 truncate text-right">
+                    {col.render ? col.render(row[col.key], row, index) : row[col.key]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    <div className="overflow-x-auto hidden md:block">
       <table className="w-full text-sm">
         <thead>
           <tr>
@@ -113,6 +144,7 @@ export default function Table<T extends Record<string, any>>({
         </tbody>
       </table>
     </div>
+    </>
   );
 }
 

@@ -603,3 +603,50 @@ tr:hover .row-chevron,
 @media (prefers-reduced-motion: reduce) {
   .skeleton { animation: none; }
 }
+
+/* ============================================================
+   Tier 2 - 모바일 기반 계층 (767px 이하에서만 적용, 데스크탑 무영향)
+   다크모드와 같은 전략: 페이지 코드 수정 없이 유틸리티 클래스 재정의로
+   전 화면을 '사용 가능' 품질로 만든다.
+   ============================================================ */
+@media (max-width: 767px) {
+  /* 다열 그리드 → 2열/1열 스택 */
+  .grid-cols-3, .grid-cols-4, .grid-cols-5, .grid-cols-6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .grid-cols-2 { grid-template-columns: minmax(0, 1fr) !important; }
+  .col-span-3, .col-span-4 { grid-column: 1 / -1 !important; }
+  .gap-6 { gap: 0.75rem !important; }
+  .gap-4 { gap: 0.625rem !important; }
+
+  /* 본문 여백·타이포 축소 */
+  .app-main { padding: 0.875rem !important; }
+  .app-main h1 { font-size: 1.25rem !important; }
+  .app-main .text-2xl { font-size: 1.25rem !important; }
+  .app-main .text-3xl { font-size: 1.5rem !important; }
+
+  /* 표: 부모 컨테이너 가로 스크롤 (셀 뭉개짐 방지) */
+  .app-main div:has(> table) { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .app-main table { min-width: 540px; }
+
+  /* 데스크탑 사이드바 → 슬라이드 오버레이 (햄버거로 토글) */
+  .app-sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; z-index: 70;
+    width: 78vw; max-width: 300px;
+    transform: translateX(-105%);
+    transition: transform 0.25s ease;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.25);
+  }
+  .sidebar-open .app-sidebar { transform: translateX(0); }
+
+  /* 데스크탑 헤더: 시스템명 중심으로 축소 */
+  .app-header { padding-left: 0.875rem !important; padding-right: 0.875rem !important; }
+  .app-header .hide-on-mobile { display: none !important; }
+
+  /* 차트·모달 폭 대응 */
+  .recharts-responsive-container { max-width: 100%; }
+  .fixed.inset-0 [class*="max-w-"] { max-height: 92dvh; }
+
+  /* 터치 스크롤 관성 */
+  .app-main, .overflow-y-auto { -webkit-overflow-scrolling: touch; }
+}

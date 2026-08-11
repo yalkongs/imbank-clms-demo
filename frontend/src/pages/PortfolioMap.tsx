@@ -507,6 +507,11 @@ export default function PortfolioMap() {
   return (
     <div className="space-y-6">
       <FeatureModal isOpen={infoOpen} onClose={() => setInfoOpen(false)} feature={MAP_FEATURE} />
+      {/* Tier 3: 드래그 what-if 는 넓은 화면 전제 - 모바일에는 안내만 */}
+      <div className="md:hidden bg-amber-50 border border-amber-200 rounded-lg px-3.5 py-2.5 text-[11px] text-amber-800">
+        포트폴리오 맵의 드래그 모의조정·타임슬라이더는 PC 화면에 최적화되어 있습니다.
+        모바일에서는 조회 위주로 이용해 주세요.
+      </div>
       {/* 헤더 */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>

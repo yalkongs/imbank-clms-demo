@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
+  Menu,
   LayoutDashboard,
   FileText,
   PiggyBank,
@@ -118,14 +119,21 @@ export const navGroups: NavGroup[] = [
   },
 ];
 
+// 브라우저 새로고침(스크립트 재로드)과 SPA 내 재마운트를 구분하는 세션 플래그.
+// '/m 에서 데스크탑 화면으로 이동' 시 소개 팝업·대시보드 리다이렉트가 다시
+// 발동하면 Tier 2 진입이 불가능해진다.
+let bootConsumed = false;
+
 export default function Layout() {
   const { setOnboarded, setIntroOpen } = useTheme();
   // 접속·새로고침 때마다 소개 팝업을 먼저 띄우고 대시보드에서 시작한다
   // (사용자 지정 동작 - 소개 → 고지 → 대시보드 카운트업 진입 경험을
   //  어느 화면에서 새로고침해도 동일하게 유지한다)
-  const [showOnboarding, setShowOnboarding] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(() => !bootConsumed && window.innerWidth >= 768);
   // 개발 여정 대형 팝업 - 소개 팝업에서 진입한다
   const [showDevJourney, setShowDevJourney] = useState(false);
+  // 모바일(Tier 2): 데스크탑 화면을 폰에서 열었을 때 사이드바를 오버레이로 토글
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   // 모의 데이터 고지 - 소개 팝업이 닫힌 직후 1회 표시하고 명시적 확인을 받는다.
   // (ⓘ 로 소개를 다시 열었다 닫을 때는 반복하지 않는다)
   const [showMockNotice, setShowMockNotice] = useState(false);
@@ -146,11 +154,19 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 접속·새로고침 시에는 항상 대시보드에서 시작한다. (마운트 1회만 실행)
+  // 접속·새로고침 시에는 항상 대시보드에서 시작한다. (스크립트 로드 후 최초 1회만 -
+  // 모바일 화면에서 돌아온 재마운트에서는 열려던 화면을 유지한다)
   useEffect(() => {
-    if (location.pathname !== '/') {
+    if (!bootConsumed && location.pathname !== '/') {
       navigate('/', { replace: true });
     }
+    bootConsumed = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 모바일 진입은 소개 팝업을 건너뛰므로 카운트업 게이트도 즉시 해제
+  useEffect(() => {
+    if (window.innerWidth < 768) setIntroOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -186,7 +202,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="app-root flex h-screen bg-gray-50">
+    <div className={`app-root flex h-screen bg-gray-50 ${sidebarOpen ? 'sidebar-open' : ''}`}>
       {showOnboarding && <OnboardingModal onClose={closeOnboarding} onDevJourney={() => setShowDevJourney(true)} />}
       {showMockNotice && <MockDataNotice onConfirm={confirmMockNotice} />}
       {showDevJourney && <DevJourneyModal onClose={() => setShowDevJourney(false)} />}
@@ -203,6 +219,12 @@ export default function Layout() {
         </div>
       )}
 
+      {/* 사이드바 오버레이 백드롭 (모바일 전용) */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-[65] bg-black/40"
+          onClick={() => setSidebarOpen(false)} />
+      )}
+
       {/* 사이드바 */}
       <aside className="app-sidebar w-64 bg-white border-r border-gray-200 flex flex-col">
         {/* 로고 영역 - 공식 가로형 국문 시그니처 (iM Financial Design System).
@@ -216,7 +238,7 @@ export default function Layout() {
         </div>
 
         {/* 네비게이션 */}
-        <nav className="flex-1 py-4 overflow-y-auto">
+        <nav className="flex-1 py-4 overflow-y-auto" onClick={() => setSidebarOpen(false)}>
           {navGroups.map((group) => (
             <div key={group.title} className="mb-4">
               <h3 className="px-6 mb-1 text-xs font-semibold text-gray-400 uppercase tracking-wider">
@@ -261,10 +283,18 @@ export default function Layout() {
         {/* 헤더 */}
         <header className="app-header relative z-40 h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
           <div className="flex items-center space-x-4">
-            <h2 className="text-xl font-semibold text-gray-900">종합 기업여신 관리시스템</h2>
-            <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+            <button onClick={() => setSidebarOpen(v => !v)} aria-label="메뉴"
+              className="md:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg">
+              <Menu size={22} />
+            </button>
+            <h2 className="text-xl font-semibold text-gray-900 truncate">종합 기업여신 관리시스템</h2>
+            <span className="hide-on-mobile px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
               {asOfLabel}
             </span>
+            <button onClick={() => { try { localStorage.setItem('clms-view-mode', 'mobile'); } catch {} navigate('/m'); }}
+              className="md:hidden flex-none px-2 py-1 bg-[#00C7A9]/10 text-[#00897B] text-xs rounded-full font-semibold">
+              모바일 홈
+            </button>
           </div>
 
           <div className="flex items-center space-x-4">
@@ -273,7 +303,7 @@ export default function Layout() {
             <button
               onClick={() => { setShowOnboarding(true); setIntroOpen(true); }}
               aria-label="시스템 소개 다시 보기"
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+              className="hide-on-mobile p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
             >
               <Info size={20} />
             </button>
@@ -282,7 +312,7 @@ export default function Layout() {
             <button
               onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
               aria-label="검색"
-              className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+              className="hide-on-mobile p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
             >
               <Search size={20} />
             </button>
