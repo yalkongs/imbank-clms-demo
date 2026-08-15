@@ -869,7 +869,9 @@ def build():
         p.multi_cell(175, 5, ref)
         p.ln(1)
 
-    out = os.path.join(os.path.dirname(__file__), "CLMS_Data_Paper.pdf")
+    # 스크립트는 tools/ 로 옮겼지만 산출물은 종전대로 리포 루트에 둔다
+    _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    out = os.path.join(_ROOT, "CLMS_Data_Paper.pdf")
     p.output(out)
     print(f"PDF saved: {out} ({p.page_no()} pages)")
 

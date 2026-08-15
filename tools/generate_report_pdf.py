@@ -1010,7 +1010,9 @@ def build_report():
     # ═══════════════════════════════════════════════
     # Save
     # ═══════════════════════════════════════════════
-    output_path = os.path.join(os.path.dirname(__file__), "CLMS_Technical_Report.pdf")
+    # 스크립트는 tools/ 로 옮겼지만 산출물은 종전대로 리포 루트에 둔다
+    _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    output_path = os.path.join(_ROOT, "CLMS_Technical_Report.pdf")
     pdf.output(output_path)
     print(f"PDF saved: {output_path}")
     print(f"Pages: {pdf.page_no()}")
