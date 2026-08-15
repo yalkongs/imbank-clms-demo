@@ -1136,8 +1136,20 @@ def approve_application(
 
     # 승인과 동시에 업종 한도를 예약한다 - 심사와 한도관리의 연결 고리.
     # (limit_reservation 은 그간 어떤 흐름에서도 쓰이지 않던 빈 테이블이었다)
-    if decision in ("APPROVE", "CONDITIONAL"):
-        try:
+    #
+    # 예약 금액은 신청 1건당 1회분만 잡혀야 한다. 종전에는 결재할 때마다
+    # limit_exposure 에 전액을 가산해, 조건부승인 → 최종승인 2단계를 밟으면
+    # 예약이 정확히 2배로 부풀었다(실측 확인). 직전 예약분과의 차액만 반영한다.
+    reservation_id = f"RSV_{application_id}"
+    try:
+        prior = db.execute(text("""
+            SELECT limit_id, reserved_amount FROM limit_reservation
+            WHERE reservation_id = :rid AND status = 'ACTIVE'
+        """), {"rid": reservation_id}).fetchone()
+        prior_limit = prior[0] if prior else None
+        prior_reserved = float(prior[1] or 0) if prior else 0.0
+
+        if decision in ("APPROVE", "CONDITIONAL"):
             ind = db.execute(text("""
                 SELECT c.industry_name FROM loan_application la
                 JOIN customer c ON la.customer_id = c.customer_id
@@ -1156,21 +1168,44 @@ def approve_application(
                         VALUES (:rid, :lid, :app_id, :amt, :dt,
                                 date(:dt, '+30 day'), 'ACTIVE')
                     """), {
-                        "rid": f"RSV_{application_id}",
+                        "rid": reservation_id,
                         "lid": lim[0], "app_id": application_id,
                         "amt": final_amount,
                         "dt": AS_OF_DATE.strftime('%Y-%m-%d'),
                     })
-                    db.execute(text("""
-                        UPDATE limit_exposure
-                        SET reserved_amount = COALESCE(reserved_amount, 0) + :amt
-                        WHERE limit_id = :lid
-                    """), {"amt": final_amount, "lid": lim[0]})
-        except HTTPException:
-            raise
-        except Exception as e:
-            db.rollback()
-            raise HTTPException(500, f"한도 예약 실패로 승인을 중단했습니다 (원자성 보장): {e}")
+                    # 앞 단계 예약이 있으면 차액만, 없으면 전액을 가산한다
+                    delta = final_amount - (prior_reserved if prior_limit == lim[0] else 0.0)
+                    if delta:
+                        db.execute(text("""
+                            UPDATE limit_exposure
+                            SET reserved_amount = COALESCE(reserved_amount, 0) + :amt
+                            WHERE limit_id = :lid
+                        """), {"amt": delta, "lid": lim[0]})
+                    # 업종이 바뀌어 다른 한도로 옮겨온 경우 이전 한도의 예약을 푼다
+                    if prior_limit and prior_limit != lim[0] and prior_reserved:
+                        db.execute(text("""
+                            UPDATE limit_exposure
+                            SET reserved_amount = MAX(COALESCE(reserved_amount, 0) - :amt, 0)
+                            WHERE limit_id = :lid
+                        """), {"amt": prior_reserved, "lid": prior_limit})
+
+        elif prior_limit and prior_reserved:
+            # 조건부승인 뒤 반려된 건의 예약을 해제한다. 종전에는 예약이 ACTIVE 로
+            # 남아 한도 소진이 영구히 부풀어 있었다.
+            db.execute(text("""
+                UPDATE limit_reservation SET status = 'RELEASED'
+                WHERE reservation_id = :rid
+            """), {"rid": reservation_id})
+            db.execute(text("""
+                UPDATE limit_exposure
+                SET reserved_amount = MAX(COALESCE(reserved_amount, 0) - :amt, 0)
+                WHERE limit_id = :lid
+            """), {"amt": prior_reserved, "lid": prior_limit})
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"한도 예약 실패로 승인을 중단했습니다 (원자성 보장): {e}")
 
     # 승인 확정 시 판단 근거를 불변 스냅샷으로 봉인 (같은 트랜잭션)
     if decision in ("APPROVE", "CONDITIONAL"):

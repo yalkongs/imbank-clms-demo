@@ -410,6 +410,102 @@ def test_approved_terms_survive_final_approval():
     assert got["approved_tenor"] == 36
 
 
+def _fresh(sql, params):
+    """짧은 수명 세션으로 최신 커밋 상태를 읽는다.
+
+    세션을 열어 둔 채 재조회하면 그 세션의 읽기 트랜잭션이 API 쪽 쓰기와
+    SQLite 잠금 경합을 일으킨다(전체 실행이 2초 → 92초로 늘어났다).
+    """
+    s = SessionLocal()
+    try:
+        return s.execute(text(sql), params).fetchone()
+    finally:
+        s.rollback()
+        s.close()
+
+
+def _industry_limit_id(aid):
+    row = _fresh("""
+        SELECT ld.limit_id FROM loan_application la
+        JOIN customer c ON la.customer_id = c.customer_id
+        JOIN limit_definition ld ON ld.limit_name = c.industry_name || ' 산업한도'
+        WHERE la.application_id = :a
+    """, {"a": aid})
+    return row[0] if row else None
+
+
+def _reserved(lid):
+    row = _fresh(
+        "SELECT reserved_amount FROM limit_exposure WHERE limit_id = :l", {"l": lid})
+    return float(row[0] or 0) if row else 0.0
+
+
+def test_limit_reservation_not_double_counted():
+    """2단계 결재에서 한도 예약이 1회분만 잡힌다.
+
+    종전에는 결재할 때마다 limit_exposure 에 전액을 가산해, 조건부승인 →
+    최종승인을 거치면 예약이 정확히 2배로 부풀었다.
+    """
+    db = SessionLocal()
+    row = _find_pending_app(db)
+    if not row:
+        pytest.skip("승인 가능 표본 없음")
+    db.close()
+    aid = row[0]
+    lid = _industry_limit_id(aid)
+    if not lid:
+        pytest.skip("업종 한도가 연결되지 않은 표본")
+    amount = float(_fresh(
+        "SELECT requested_amount FROM loan_application WHERE application_id = :a",
+        {"a": aid})[0])
+
+    before = _reserved(lid)
+    r1 = client.post(f"/api/applications/{aid}/approve",
+                     params={"decision": "CONDITIONAL",
+                             "conditions_json": '[{"code":"CP01"}]'},
+                     headers=_login("kim.yeosin", "1234"))
+    assert r1.status_code == 200, r1.text[:200]
+    r2 = client.post(f"/api/applications/{aid}/approve",
+                     params={"decision": "APPROVE"},
+                     headers=_login("park.bujang", "2222"))
+    assert r2.status_code == 200, r2.text[:200]
+
+    grew = _reserved(lid) - before
+    assert abs(grew - amount) < 1, (
+        f"한도 예약이 {grew / amount:.2f}배로 반영됨 (1회분이어야 함)")
+
+
+def test_reservation_released_on_reject_after_conditional():
+    """조건부승인 뒤 반려되면 잡아 둔 한도 예약이 해제된다."""
+    db = SessionLocal()
+    row = _find_pending_app(db)
+    if not row:
+        pytest.skip("승인 가능 표본 없음")
+    db.close()
+    aid = row[0]
+    lid = _industry_limit_id(aid)
+    if not lid:
+        pytest.skip("업종 한도가 연결되지 않은 표본")
+
+    before = _reserved(lid)
+    client.post(f"/api/applications/{aid}/approve",
+                params={"decision": "CONDITIONAL",
+                        "conditions_json": '[{"code":"CP01"}]'},
+                headers=_login("kim.yeosin", "1234"))
+    assert _reserved(lid) > before, "조건부승인 시 예약이 잡히지 않음"
+
+    r = client.post(f"/api/applications/{aid}/approve",
+                    params={"decision": "REJECT"},
+                    headers=_login("park.bujang", "2222"))
+    assert r.status_code == 200, r.text[:200]
+    assert abs(_reserved(lid) - before) < 1, "반려 후에도 한도 예약이 남아 있음"
+
+    status = _fresh(
+        "SELECT status FROM limit_reservation WHERE reservation_id = :r",
+        {"r": f"RSV_{aid}"})
+    assert status and status[0] == "RELEASED", f"예약 상태가 해제되지 않음: {status}"
+
+
 def test_conditional_application_stays_in_approval_inbox():
     """조건부승인 건은 결재함에 남아 상위 결재자가 최종승인할 수 있다.
 
