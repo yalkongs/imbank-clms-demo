@@ -279,3 +279,164 @@ def test_obligation_inbox_aggregates():
     assert d["total"] > 0
     assert set(d["by_type"].keys()) >= {"정책 예외 재검토", "EWS 조치", "금리인하요구"}
     assert d["overdue"] == sum(1 for i in d["items"] if i["overdue"]) or d["total"] > 200
+
+
+# ---------------------------------------------------------------------------
+# 구조화 승인조건 (conditions_json)
+# 승인조건이 자유 텍스트로만 남아 실사용을 검증할 수 없던 공백을 닫는다.
+# ---------------------------------------------------------------------------
+
+def test_condition_templates_are_served():
+    """조건 카탈로그: 선행(CP)·후속(CS) 조건이 코드 체계로 제공된다"""
+    d = client.get("/api/applications/condition-templates").json()
+    codes = {i["code"] for i in d["items"]}
+    assert {"CP01", "FC01", "IC01"} <= codes, f"표준 조건 코드 누락: {codes}"
+    assert {i["type"] for i in d["items"]} == {"CP", "CS"}
+
+
+def test_approval_conditions_persist_and_are_readable():
+    """승인조건 왕복: 결재 시 저장한 구조화 조건이 조회 API 로 그대로 읽힌다"""
+    db = SessionLocal()
+    row = _find_pending_app(db)
+    if not row:
+        pytest.skip("승인 가능 표본 없음")
+    aid = row[0]
+    r = client.post(f"/api/applications/{aid}/approve",
+                    params={"decision": "CONDITIONAL",
+                            "conditions_json": '[{"code":"CP01"},'
+                                               '{"code":"IC01","due_days":60}]'},
+                    headers=_login("kim.yeosin", "1234"))
+    assert r.status_code == 200, r.text[:200]
+    assert [c["code"] for c in r.json()["conditions"]] == ["CP01", "IC01"]
+
+    detail = client.get(f"/api/applications/{aid}").json()
+    latest = detail["approval_history"][0]
+    saved = {c["code"]: c for c in latest["conditions_structured"]}
+    assert saved["CP01"]["type"] == "CP" and saved["IC01"]["type"] == "CS"
+    assert saved["IC01"]["due_days"] == 60, "이행기한이 보존되지 않음"
+    # 자유 텍스트 자리에도 요약이 남아 기존 화면이 그대로 읽는다
+    assert "분기 재무제표 제출" in (latest["conditions"] or "")
+
+    # 전자 여신철에서도 같은 조건이 조립된다
+    case = client.get(f"/api/credit-case/{aid}").json()
+    assert any(c["code"] == "CP01"
+               for a in case["approvals"] for c in a["conditions_structured"])
+
+
+def test_approval_condition_label_is_server_owned():
+    """조건 위조 차단: 클라이언트가 보낸 label·type 은 무시하고 카탈로그 값을 쓴다"""
+    db = SessionLocal()
+    row = _find_pending_app(db)
+    if not row:
+        pytest.skip("승인 가능 표본 없음")
+    r = client.post(f"/api/applications/{row[0]}/approve",
+                    params={"decision": "CONDITIONAL",
+                            "conditions_json": '[{"code":"CP01","label":"조건 없음",'
+                                               '"type":"CS"}]'},
+                    headers=_login("kim.yeosin", "1234"))
+    assert r.status_code == 200, r.text[:200]
+    saved = r.json()["conditions"][0]
+    assert saved["label"] == "담보 근저당권 설정 완료", f"위조 label 이 저장됨: {saved}"
+    assert saved["type"] == "CP"
+
+
+@pytest.mark.parametrize("bad_json,reason", [
+    ("{not json", "JSON 파싱 불가"),
+    ('{"code":"CP01"}', "배열 아님"),
+    ('[{"code":"ZZ99"}]', "카탈로그에 없는 코드"),
+    ('[{"code":"CP01","due_days":9999}]', "이행기한 범위 초과"),
+])
+def test_malformed_approval_conditions_are_rejected(bad_json, reason):
+    """조건 형식 검증: 잘못된 승인조건은 422 로 막고 승인을 성립시키지 않는다"""
+    db = SessionLocal()
+    row = _find_pending_app(db)
+    if not row:
+        pytest.skip("승인 가능 표본 없음")
+    r = client.post(f"/api/applications/{row[0]}/approve",
+                    params={"decision": "CONDITIONAL", "conditions_json": bad_json},
+                    headers=_login("kim.yeosin", "1234"))
+    assert r.status_code == 422, f"{reason} 이 차단되지 않음: {r.status_code}"
+
+
+def test_conditions_require_conditional_decision():
+    """조건-결재유형 정합: 조건을 달면서 무조건부 승인(APPROVE)은 422"""
+    db = SessionLocal()
+    row = _find_pending_app(db)
+    if not row:
+        pytest.skip("승인 가능 표본 없음")
+    r = client.post(f"/api/applications/{row[0]}/approve",
+                    params={"decision": "APPROVE",
+                            "conditions_json": '[{"code":"CP01"}]'},
+                    headers=_login("kim.yeosin", "1234"))
+    assert r.status_code == 422, f"조건부여+무조건승인이 차단되지 않음: {r.status_code}"
+
+
+def test_approved_terms_survive_final_approval():
+    """다단계 결재에서 앞 단계가 정한 승인금액·금리·기간이 유실되지 않는다.
+
+    종전에는 최종승인이 미지정 값을 NULL 로 덮어써, 팀장이 조건부승인에서 정한
+    감액·금리가 부서장 최종승인 시점에 사라졌다.
+    """
+    db = SessionLocal()
+    row = _find_pending_app(db)
+    if not row:
+        pytest.skip("승인 가능 표본 없음")
+    aid = row[0]
+    requested = db.execute(text(
+        "SELECT requested_amount FROM loan_application WHERE application_id = :a"
+    ), {"a": aid}).fetchone()[0]
+    cut_amount = round(float(requested) * 0.8, 2)
+
+    r1 = client.post(f"/api/applications/{aid}/approve",
+                     params={"decision": "CONDITIONAL",
+                             "approved_amount": cut_amount,
+                             "approved_rate": 0.047, "approved_tenor": 36,
+                             "conditions_json": '[{"code":"CP03"}]'},
+                     headers=_login("kim.yeosin", "1234"))
+    assert r1.status_code == 200, r1.text[:200]
+
+    # 최종 결재자는 조건 충족만 확인하고 금액·금리를 다시 보내지 않는다
+    r2 = client.post(f"/api/applications/{aid}/approve",
+                     params={"decision": "APPROVE"},
+                     headers=_login("park.bujang", "2222"))
+    assert r2.status_code == 200, r2.text[:200]
+    assert r2.json()["approved_rate"] == 0.047, "승인금리가 최종승인에서 유실됨"
+    assert r2.json()["approved_tenor"] == 36, "승인기간이 최종승인에서 유실됨"
+    assert abs(r2.json()["approved_amount"] - cut_amount) < 1, "감액승인이 신청금액으로 되돌아감"
+
+    # 조회 API 로도 승인 결과가 노출된다
+    got = client.get(f"/api/applications/{aid}").json()["application"]
+    assert got["approved_rate"] == 0.047
+    assert got["approved_tenor"] == 36
+
+
+def test_conditional_application_stays_in_approval_inbox():
+    """조건부승인 건은 결재함에 남아 상위 결재자가 최종승인할 수 있다.
+
+    종전 결재함 쿼리는 CONDITIONAL 을 제외해, 조건부승인 즉시 목록에서 사라지고
+    2차 결재자가 그 건을 볼 수 없었다.
+    """
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT application_id, requested_amount FROM loan_application la
+        WHERE la.status IN ('REVIEWING','SCREENING')
+          AND la.current_stage NOT IN ('RECEIVED')
+          AND la.requested_amount BETWEEN 100e8 AND 900e8
+          AND NOT EXISTS (SELECT 1 FROM approval_history ah
+                          WHERE ah.application_id = la.application_id)
+        ORDER BY la.requested_amount DESC LIMIT 1
+    """)).fetchone()
+    if not row:
+        pytest.skip("결재함 상위 노출 표본 없음")
+    aid = row[0]
+    exec_hdr = _login("lee.jeonmu", "3333")
+    r1 = client.post(f"/api/applications/{aid}/approve",
+                     params={"decision": "CONDITIONAL",
+                             "conditions_json": '[{"code":"CP02"}]'},
+                     headers=exec_hdr)
+    assert r1.status_code == 200, r1.text[:200]
+
+    inbox = client.get("/api/applications/approval-inbox", headers=exec_hdr).json()
+    entry = next((i for i in inbox["items"] if i["application_id"] == aid), None)
+    assert entry is not None, "조건부승인 건이 결재함에서 사라짐 - 2차 결재 불가"
+    assert entry["status"] == "CONDITIONAL"

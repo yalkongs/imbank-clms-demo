@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
+import json
 import math
 import uuid
 from datetime import datetime
@@ -61,6 +62,95 @@ def load_approval_authority(db) -> dict:
     except Exception:
         pass
     return _AUTHORITY_FALLBACK
+
+
+# 표준 승인조건 카탈로그.
+# 선행조건(CP, Conditions Precedent)은 실행 전에 충족돼야 하고,
+# 후속조건(CS, Conditions Subsequent)은 실행 후 이행 의무로 남는다.
+# FC/IC 코드는 covenant 테이블의 covenant_code 체계와 일치시켜, 승인조건이
+# 실행 후 코베넌트 모니터링으로 이어지는 경로를 유지한다.
+APPROVAL_CONDITION_CATALOG = {
+    "CP01": {"label": "담보 근저당권 설정 완료", "type": "CP", "due_days": 0},
+    "CP02": {"label": "대표이사 연대보증 징구", "type": "CP", "due_days": 0},
+    "CP03": {"label": "선순위 채무 상환 확인", "type": "CP", "due_days": 0},
+    "CP04": {"label": "법인등기부·사업자등록증 최신본 징구", "type": "CP", "due_days": 0},
+    "CP05": {"label": "담보물 화재보험 가입 및 질권 설정", "type": "CP", "due_days": 0},
+    "FC01": {"label": "부채비율 유지", "type": "CS", "due_days": 90},
+    "FC02": {"label": "DSCR 유지", "type": "CS", "due_days": 90},
+    "FC03": {"label": "이자보상배율 유지", "type": "CS", "due_days": 90},
+    "IC01": {"label": "분기 재무제표 제출", "type": "CS", "due_days": 90},
+    "CS01": {"label": "자금용도 증빙 제출", "type": "CS", "due_days": 30},
+    "CS02": {"label": "추가 차입 시 사전 동의", "type": "CS", "due_days": 365},
+}
+
+_CONDITION_TYPE_KO = {"CP": "선행", "CS": "후속"}
+_MAX_CONDITIONS = 20
+
+
+def parse_approval_conditions(raw: Optional[str]) -> list[dict]:
+    """클라이언트가 보낸 승인조건 JSON 을 카탈로그 기준으로 검증·정규화한다.
+
+    클라이언트 문자열을 그대로 저장하지 않고 카탈로그의 label·type 으로 다시
+    구성해 저장한다. 조건명을 임의로 바꿔 보내 승인조건을 위조하는 것을 막는다.
+    """
+    if raw is None or not str(raw).strip():
+        return []
+    try:
+        items = json.loads(raw)
+    except (ValueError, TypeError):
+        raise HTTPException(422, "승인조건 형식이 올바르지 않습니다 (JSON 배열이어야 합니다)")
+    if not isinstance(items, list):
+        raise HTTPException(422, "승인조건은 JSON 배열이어야 합니다")
+    if len(items) > _MAX_CONDITIONS:
+        raise HTTPException(422, f"승인조건은 최대 {_MAX_CONDITIONS}건까지 지정할 수 있습니다")
+
+    normalized: list[dict] = []
+    seen: set[str] = set()
+    for item in items:
+        if isinstance(item, str):
+            item = {"code": item}
+        if not isinstance(item, dict):
+            raise HTTPException(422, "승인조건 항목은 객체 또는 조건코드 문자열이어야 합니다")
+        code = str(item.get("code") or "").strip().upper()
+        spec = APPROVAL_CONDITION_CATALOG.get(code)
+        if spec is None:
+            raise HTTPException(422, f"알 수 없는 승인조건 코드: {code or '(누락)'}")
+        if code in seen:
+            continue
+        seen.add(code)
+
+        due_days = item.get("due_days", spec["due_days"])
+        try:
+            due_days = int(due_days)
+        except (ValueError, TypeError):
+            raise HTTPException(422, f"승인조건 {code} 의 이행기한이 숫자가 아닙니다")
+        if not 0 <= due_days <= 1825:
+            raise HTTPException(422, f"승인조건 {code} 의 이행기한은 0~1825일 범위여야 합니다")
+
+        note = str(item.get("note") or "").strip()[:200]
+        entry = {"code": code, "label": spec["label"], "type": spec["type"],
+                 "due_days": due_days}
+        if note:
+            entry["note"] = note
+        normalized.append(entry)
+
+    normalized.sort(key=lambda c: (c["type"] != "CP", c["code"]))
+    return normalized
+
+
+def summarize_approval_conditions(items: list[dict]) -> str:
+    """구조화 조건을 사람이 읽는 한 줄 요약으로 만든다.
+
+    기존 화면·API 가 자유 텍스트 conditions 를 그대로 보여주므로, 구조화 조건만
+    지정한 경우에도 같은 자리에서 읽히도록 요약을 생성해 둔다.
+    """
+    parts = []
+    for c in items:
+        kind = _CONDITION_TYPE_KO.get(c["type"], c["type"])
+        due = f"·{c['due_days']}일" if c["due_days"] else ""
+        note = f"({c['note']})" if c.get("note") else ""
+        parts.append(f"[{kind}{due}] {c['label']}{note}")
+    return " / ".join(parts)
 
 
 @router.get("")
@@ -324,7 +414,7 @@ def get_approval_inbox(
         JOIN customer c ON la.customer_id = c.customer_id
         LEFT JOIN (SELECT application_id, final_grade FROM credit_rating_result) g
           ON la.application_id = g.application_id
-        WHERE la.status IN ('REVIEWING', 'SCREENING', 'RECEIVED')
+        WHERE la.status IN ('REVIEWING', 'SCREENING', 'RECEIVED', 'CONDITIONAL')
           AND la.current_stage != 'RECEIVED'
         ORDER BY la.requested_amount DESC
         LIMIT 40
@@ -354,6 +444,25 @@ def get_approval_inbox(
     }
 
 
+@router.get("/condition-templates")
+def get_condition_templates():
+    """표준 승인조건 카탈로그 - 결재 화면의 조건 체크리스트 원본.
+
+    조건명을 클라이언트가 임의로 만들지 않고 이 목록에서만 고르게 해서
+    승인조건이 코드 체계로 관리되도록 한다.
+    """
+    return {
+        "items": [
+            {"code": code, **spec, "type_name": _CONDITION_TYPE_KO[spec["type"]]}
+            for code, spec in APPROVAL_CONDITION_CATALOG.items()
+        ],
+        "types": [
+            {"code": "CP", "name": "선행조건", "desc": "실행 전 충족 필요"},
+            {"code": "CS", "name": "후속조건", "desc": "실행 후 이행 의무"},
+        ],
+    }
+
+
 @router.get("/{application_id}")
 def get_application_detail(application_id: str, db: Session = Depends(get_db)):
     """여신신청 상세 조회 - 종합 심사 정보"""
@@ -367,7 +476,8 @@ def get_application_detail(application_id: str, db: Session = Depends(get_db)):
             a.purpose_code, a.purpose_detail, a.collateral_type,
             a.collateral_value, a.guarantee_type, a.status,
             a.current_stage, a.priority, a.assigned_to,
-            a.branch_code, a.created_at, a.updated_at
+            a.branch_code, a.created_at, a.updated_at,
+            a.approved_amount, a.approved_rate, a.approved_tenor
         FROM loan_application a
         WHERE a.application_id = :app_id
     """), {"app_id": application_id}).fetchone()
@@ -489,7 +599,7 @@ def get_application_detail(application_id: str, db: Session = Depends(get_db)):
     # 승인 이력
     approval_history = db.execute(text("""
         SELECT approval_id, approval_level, approver_name, decision,
-               conditions, comments, decided_at
+               conditions, comments, decided_at, conditions_json
         FROM approval_history
         WHERE application_id = :app_id
         ORDER BY decided_at DESC
@@ -525,7 +635,11 @@ def get_application_detail(application_id: str, db: Session = Depends(get_db)):
             "stage_name": REVIEW_STAGES.get(app[15], {}).get("name", app[15]),
             "priority": app[16],
             "assigned_to": app[17],
-            "branch_code": app[18]
+            "branch_code": app[18],
+            # 승인 결과 - 조회에 노출되지 않아 승인조건의 실사용을 확인할 수 없었다
+            "approved_amount": app[21],
+            "approved_rate": app[22],
+            "approved_tenor": app[23]
         },
         "customer": {
             "customer_id": customer[0] if customer else None,
@@ -663,7 +777,9 @@ def get_application_detail(application_id: str, db: Session = Depends(get_db)):
                 "decision": h[3],
                 "conditions": h[4],
                 "comments": h[5],
-                "decided_at": str(h[6]) if h[6] else None
+                "decided_at": str(h[6]) if h[6] else None,
+                # 구조화 승인조건 - 저장 시 카탈로그로 정규화된 값이라 그대로 신뢰한다
+                "conditions_structured": json.loads(h[7]) if h[7] else []
             }
             for h in approval_history
         ],
@@ -885,6 +1001,7 @@ def approve_application(
     approval_level: Optional[str] = None,   # deprecated - 서버가 인증 사용자로 결정
     approver_name: Optional[str] = None,    # deprecated - 서버가 인증 사용자로 결정
     conditions: Optional[str] = None,
+    conditions_json: Optional[str] = None,
     comments: Optional[str] = None,
     approved_amount: Optional[float] = None,
     approved_rate: Optional[float] = None,
@@ -903,7 +1020,9 @@ def approve_application(
 
     # 신청 정보 확인
     app = db.execute(text("""
-        SELECT requested_amount, status, current_stage FROM loan_application
+        SELECT requested_amount, status, current_stage,
+               approved_amount, approved_rate, approved_tenor
+        FROM loan_application
         WHERE application_id = :app_id
     """), {"app_id": application_id}).fetchone()
 
@@ -936,6 +1055,14 @@ def approve_application(
     if approved_tenor is not None and not 0 < approved_tenor <= 600:
         raise HTTPException(422, "승인기간이 유효 범위(1~600개월)를 벗어났습니다")
 
+    # 구조화 승인조건 - 카탈로그 코드만 허용하고 label·type 은 서버가 다시 채운다
+    structured_conditions = parse_approval_conditions(conditions_json)
+    if structured_conditions and decision != "CONDITIONAL":
+        raise HTTPException(422, "승인조건을 지정한 결재는 조건부승인(CONDITIONAL)이어야 합니다")
+    # 조건 요약을 자유 텍스트 자리에도 남긴다 - 기존 조회 화면이 그대로 읽는다
+    if structured_conditions and not (conditions or "").strip():
+        conditions = summarize_approval_conditions(structured_conditions)
+
     # 전결권 검증 - 심사 대상은 신청 건 전체이므로 전결권은 '신청금액' 기준이다.
     # (종전에는 클라이언트가 보낸 approved_amount 기준이라 1원 감액승인으로
     #  전결권을 우회할 수 있었다)
@@ -959,8 +1086,16 @@ def approve_application(
         "CONDITIONAL" if decision == "CONDITIONAL" else "REJECTED"
     )
 
-    # 승인조건 영속화 - 미지정 시 신청 조건을 그대로 승인한 것으로 기록
-    final_amount = approved_amount if approved_amount is not None else requested_amount
+    # 승인조건 영속화.
+    # 다단계 결재에서 이번 결재가 값을 지정하지 않았다면 앞 단계(조건부승인)에서
+    # 정한 승인금액·금리·기간을 유지한다. 종전에는 미지정 값을 NULL 로 덮어써서,
+    # 팀장이 정한 감액·금리가 부서장의 최종승인 시점에 사라졌다.
+    prior_amount, prior_rate, prior_tenor = app[3], app[4], app[5]
+    final_amount = (approved_amount if approved_amount is not None
+                    else (prior_amount if prior_amount is not None else requested_amount))
+    final_rate = approved_rate if approved_rate is not None else prior_rate
+    final_tenor = approved_tenor if approved_tenor is not None else prior_tenor
+    is_reject = new_status == "REJECTED"
     updated = db.execute(text("""
         UPDATE loan_application
         SET status = :status,
@@ -972,8 +1107,9 @@ def approve_application(
         WHERE application_id = :app_id
           AND status NOT IN ('APPROVED', 'REJECTED', 'WITHDRAWN')
     """), {"status": new_status, "app_id": application_id,
-           "appr_amt": final_amount if new_status != "REJECTED" else None,
-           "appr_rate": approved_rate, "appr_tenor": approved_tenor})
+           "appr_amt": None if is_reject else final_amount,
+           "appr_rate": None if is_reject else final_rate,
+           "appr_tenor": None if is_reject else final_tenor})
     if updated.rowcount == 0:
         db.rollback()
         raise HTTPException(409, "이미 처리 완료된 신청입니다 (중복 결재 방지)")
@@ -982,8 +1118,10 @@ def approve_application(
     approval_id = f"APPR_{application_id}_{uuid.uuid4().hex[:8].upper()}"
     db.execute(text("""
         INSERT INTO approval_history
-        (approval_id, application_id, approval_level, approver_name, decision, conditions, comments, decided_at)
-        VALUES (:appr_id, :app_id, :level, :approver, :decision, :conditions, :comments, CURRENT_TIMESTAMP)
+        (approval_id, application_id, approval_level, approver_name, decision,
+         conditions, conditions_json, comments, decided_at)
+        VALUES (:appr_id, :app_id, :level, :approver, :decision,
+                :conditions, :cond_json, :comments, CURRENT_TIMESTAMP)
     """), {
         "appr_id": approval_id,
         "app_id": application_id,
@@ -991,6 +1129,8 @@ def approve_application(
         "approver": approver_name or "시스템",
         "decision": decision,
         "conditions": conditions,
+        "cond_json": json.dumps(structured_conditions, ensure_ascii=False)
+                     if structured_conditions else None,
         "comments": comments
     })
 
@@ -1050,7 +1190,8 @@ def approve_application(
             db, f"LOAN_{decision}", "loan_application", application_id,
             before={"status": app[1]},
             after={"status": new_status, "approved_amount": approved_amount,
-                   "approval_level": approval_level, "approver": approver_name},
+                   "approval_level": approval_level, "approver": approver_name,
+                   "conditions": [c["code"] for c in structured_conditions]},
             user_id=approver_name, user_dept=current_user.dept, critical=True,
         )
         db.commit()
@@ -1064,9 +1205,11 @@ def approve_application(
         "status": "success",
         "new_status": new_status,
         "approval_id": approval_id,
-        "approved_amount": final_amount if new_status != "REJECTED" else None,
-        "approved_rate": approved_rate,
-        "approved_tenor": approved_tenor
+        "approved_amount": None if is_reject else final_amount,
+        "approved_rate": None if is_reject else final_rate,
+        "approved_tenor": None if is_reject else final_tenor,
+        "conditions": structured_conditions,
+        "conditions_summary": conditions,
     }
 
 

@@ -6,10 +6,14 @@ database/migrations/*.sql 을 파일명 순서로 적용하고 schema_migrations
 - 멱등: 이미 적용된 파일은 건너뛴다 (DDL 도 IF NOT EXISTS 원칙)
 - 앱 기동 시(lifespan)에도 호출되어 새 배포 환경에서 스키마가 자동 보장된다
 """
+import os
 import sqlite3
 from pathlib import Path
 
-DB = Path(__file__).parent / "imbank_demo.db"
+# 앱과 같은 DB 를 본다 - app/core/database.py 도 CLMS_DB_PATH 를 우선한다.
+# 종전에는 이 기본값이 앱 설정과 분리돼 있어, 앱이 다른 DB 를 보는 환경에서도
+# 마이그레이션은 database/imbank_demo.db 에 적용됐다(코드·스키마 불일치).
+DB = Path(os.getenv("CLMS_DB_PATH") or Path(__file__).parent / "imbank_demo.db")
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 

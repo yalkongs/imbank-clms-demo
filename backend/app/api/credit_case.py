@@ -11,6 +11,7 @@ PoC 최소 조각. 데이터는 기존 테이블에서 조립하며 새 원장�
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import text
+import json
 
 from ..core.database import get_db
 from ..core.config import AS_OF_STR
@@ -168,7 +169,8 @@ def get_case_file(application_id: str, db: Session = Depends(get_db)):
 
     # 승인 체인 (전결)
     approvals = db.execute(text("""
-        SELECT approval_level, approver_name, decision, conditions, comments, decided_at
+        SELECT approval_level, approver_name, decision, conditions, comments, decided_at,
+               conditions_json
         FROM approval_history WHERE application_id = :aid ORDER BY decided_at
     """), {"aid": application_id}).fetchall()
 
@@ -282,7 +284,9 @@ def get_case_file(application_id: str, db: Session = Depends(get_db)):
         },
         "approvals": [
             {"level": a[0], "approver": a[1], "decision": a[2],
-             "conditions": a[3], "comments": a[4], "decided_at": a[5]}
+             "conditions": a[3], "comments": a[4], "decided_at": a[5],
+             # 구조화 승인조건 - 승인 시 카탈로그로 정규화해 저장한 값
+             "conditions_structured": json.loads(a[6]) if a[6] else []}
             for a in approvals
         ],
         "exceptions": [

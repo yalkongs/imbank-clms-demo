@@ -25,6 +25,16 @@ const LEVEL_KO: Record<string, string> = {
   EXECUTIVE: '임원', COMMITTEE: '여신위원회',
 };
 
+// 결재 API 는 APPROVE/CONDITIONAL/REJECT 로 기록하고 시드에는 APPROVED 도 남아 있다.
+// 종전에는 APPROVED 외 전부를 반려로 칠해 조건부승인이 빨간 배지로 보였다.
+const DECISION_STYLE: Record<string, { ko: string; cls: string }> = {
+  APPROVE:     { ko: '승인',     cls: 'bg-green-100 text-green-700' },
+  APPROVED:    { ko: '승인',     cls: 'bg-green-100 text-green-700' },
+  CONDITIONAL: { ko: '조건부승인', cls: 'bg-blue-100 text-blue-700' },
+  REJECT:      { ko: '반려',     cls: 'bg-red-100 text-red-700' },
+  REJECTED:    { ko: '반려',     cls: 'bg-red-100 text-red-700' },
+};
+
 function Section({ icon, title, badge, children }: {
   icon: React.ReactNode; title: string; badge?: React.ReactNode; children: React.ReactNode;
 }) {
@@ -233,16 +243,36 @@ export default function CreditCaseFile() {
             {approvals.length === 0 ? (
               <p className="text-sm text-gray-400">결재 이력 없음</p>
             ) : (
-              <div className="space-y-1.5">
+              <div className="space-y-2.5">
                 {approvals.map((a: any, i: number) => (
-                  <div key={i} className="flex items-center gap-3 text-sm">
-                    <span className="w-20 flex-none text-xs font-semibold text-gray-500">{LEVEL_KO[a.level] || a.level}</span>
-                    <span className="font-medium">{a.approver}</span>
-                    <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${
-                      a.decision === 'APPROVED' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>{a.decision === 'APPROVED' ? '승인' : a.decision}</span>
-                    <span className="text-xs text-gray-400">{a.decided_at}</span>
-                    {a.conditions && <span className="text-xs text-blue-600">조건: {a.conditions}</span>}
+                  <div key={i} className="text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="w-20 flex-none text-xs font-semibold text-gray-500">{LEVEL_KO[a.level] || a.level}</span>
+                      <span className="font-medium">{a.approver}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${
+                        DECISION_STYLE[a.decision]?.cls || 'bg-gray-100 text-gray-600'
+                      }`}>{DECISION_STYLE[a.decision]?.ko || a.decision}</span>
+                      <span className="text-xs text-gray-400">{a.decided_at}</span>
+                    </div>
+                    {/* 구조화 승인조건 - 선행/후속 구분과 이행기한을 그대로 보여준다.
+                        구조화 값이 없는 과거 결재는 자유 텍스트로 남아 있다. */}
+                    {a.conditions_structured?.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5 ml-[5.75rem]">
+                        {a.conditions_structured.map((c: any) => (
+                          <span key={c.code}
+                                className={`px-2 py-0.5 rounded text-[11px] border ${
+                                  c.type === 'CP'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                            <span className="font-semibold">{c.type === 'CP' ? '선행' : '후속'}</span>
+                            {' '}{c.label}
+                            {c.due_days ? <span className="text-gray-400"> · {c.due_days}일 내</span> : null}
+                          </span>
+                        ))}
+                      </div>
+                    ) : a.conditions ? (
+                      <p className="text-xs text-blue-600 mt-1 ml-[5.75rem]">조건: {a.conditions}</p>
+                    ) : null}
                   </div>
                 ))}
               </div>
