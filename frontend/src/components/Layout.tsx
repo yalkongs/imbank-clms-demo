@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   ShieldAlert,
   MapPin,
+  Recycle,
   Stamp,
   Landmark,
   Info,
@@ -61,6 +62,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { path: '/', label: '대시보드', icon: <LayoutDashboard size={20} /> },
       { path: '/governance', label: '보고·감사', icon: <ShieldCheck size={20} /> },
+      { path: '/accountability', label: '책무구조도', icon: <FileCheck size={20} /> },
       { path: '/obligations', label: '의무관리함', icon: <ListChecks size={20} /> },
     ]
   },
@@ -71,6 +73,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { path: '/applications', label: '여신신청', icon: <FileText size={20} /> },
       { path: '/approval-inbox', label: '결재함', icon: <Stamp size={20} /> },
+      { path: '/lifecycle', label: '연장·조건변경', icon: <Recycle size={20} /> },
       { path: '/covenant', label: '코베넌트 관리', icon: <FileCheck size={20} /> },
       { path: '/rate-reduction', label: '금리인하요구권', icon: <Percent size={20} /> },
       { path: '/inclusive-finance', label: '포용금융 이행', icon: <HeartHandshake size={20} /> },

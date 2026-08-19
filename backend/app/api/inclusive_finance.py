@@ -11,12 +11,16 @@ iM뱅크는 2024.5 시중은행 전환 인가 시 "중신용 중소기업·개�
   · 개인사업자   : customer.size_category = 'SOHO'
   (두 세그먼트는 겹칠 수 있다 - SOHO 이면서 중신용인 차주는 양쪽에 집계)
 """
-from fastapi import APIRouter, Depends, Query
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 from ..core.database import get_db
 from ..core.config import AS_OF_MONTH, as_of_months
+from ..core.auth import get_current_user, User
+from ..core.audit import record_audit
 
 router = APIRouter(prefix="/api/inclusive", tags=["Inclusive Finance"])
 
@@ -166,4 +170,195 @@ def get_segment_breakdown(db: Session = Depends(get_db)):
             }
             for r in by_region
         ],
+    }
+
+
+# ============================================================
+# P4: 개인사업자·소상공인 건전성 세그먼트 심화
+# (docs/IMPROVEMENT_RESEARCH_2026-08-19.md - 규제: 개인사업자 연체율 상승,
+#  새출발기금 연장·심사강화, 새도약기금 출범 / iM: 중기·소상공인 비중 87.1%)
+# ============================================================
+
+# 새출발기금 요건 근사 (제도 기준 - 화면 표기용)
+SAECHULBAL = {
+    "debt_cap_eok": 15.0,          # 담보 10억 + 무담보 5억
+    "npl_dpd": 90,                 # 부실차주: 90일 이상 연체
+    "risk_dpd_min": 30,            # 부실우려차주: 30~89일 연체
+    "deadline": "2026-12",         # 신청 기한 (연장)
+    "note": "사업영위 2020.4~2025.6 · 2026.6 재산심사 강화(가상자산·비상장주식 포함)",
+}
+
+
+@router.get("/soho/dashboard")
+def get_soho_dashboard(db: Session = Depends(get_db)):
+    """개인사업자(SOHO) 건전성 심화 - 업종×지역 히트맵 + DPD 버킷"""
+    heat = db.execute(text("""
+        SELECT c.industry_name, c.region,
+               COUNT(*), SUM(f.outstanding_amount),
+               SUM(CASE WHEN f.dpd > 0 THEN f.outstanding_amount ELSE 0 END)
+        FROM facility f
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE f.status IN ('ACTIVE','FROZEN') AND c.size_category = 'SOHO'
+        GROUP BY c.industry_name, c.region
+    """)).fetchall()
+
+    by_industry: dict = {}
+    for ind, region, cnt, exp, ov in heat:
+        cell = by_industry.setdefault(ind, {"industry": ind, "total_eok": 0.0, "cells": {}})
+        e = float(exp or 0)
+        cell["total_eok"] += round(e / 1e8, 1)
+        cell["cells"][region] = {
+            "count": cnt,
+            "exposure_eok": round(e / 1e8, 1),
+            "delinquency_rate": round(float(ov or 0) / e * 100, 2) if e else 0,
+        }
+    matrix = sorted(by_industry.values(), key=lambda x: -x["total_eok"])
+
+    buckets = db.execute(text("""
+        SELECT CASE WHEN f.dpd = 0 THEN '정상'
+                    WHEN f.dpd < 30 THEN '1~29일'
+                    WHEN f.dpd < 60 THEN '30~59일'
+                    WHEN f.dpd < 90 THEN '60~89일'
+                    ELSE '90일+' END AS bucket,
+               COUNT(*), SUM(f.outstanding_amount)
+        FROM facility f
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE f.status IN ('ACTIVE','FROZEN') AND c.size_category = 'SOHO'
+        GROUP BY bucket
+    """)).fetchall()
+    order = ['정상', '1~29일', '30~59일', '60~89일', '90일+']
+    bucket_map = {r[0]: r for r in buckets}
+
+    return {
+        "benchmark": {
+            "industry_soho_delinquency": 0.84,   # 은행권 개인사업자대출 연체율 (2026.5, 금감원)
+            "im_sme_delinquency": 1.26,          # iM뱅크 중소기업 연체율 (2026 상반기 말)
+            "policy": SAECHULBAL,
+        },
+        "matrix": matrix,
+        "dpd_buckets": [
+            {"bucket": b,
+             "count": bucket_map[b][1] if b in bucket_map else 0,
+             "exposure_eok": round(float(bucket_map[b][2] or 0) / 1e8, 1) if b in bucket_map else 0}
+            for b in order
+        ],
+    }
+
+
+@router.get("/soho/restructuring-candidates")
+def get_restructuring_candidates(db: Session = Depends(get_db)):
+    """새출발기금 요건 매칭 + 은행 자체 프리워크아웃 후보.
+
+    분류 규칙 (제도 근사):
+      · 부실차주(90일+) & 총여신 15억 이하  → 새출발기금 안내 대상
+      · 부실우려차주(30~89일) & 15억 이하   → 새출발기금(금리조정·유예) 안내
+      · 한도 초과 또는 EWS 악화(연체 전)    → 은행 자체 프리워크아웃 우선
+    """
+    rows = db.execute(text("""
+        SELECT c.customer_id, c.customer_name, c.industry_name, c.region,
+               SUM(f.outstanding_amount) AS exposure, MAX(f.dpd) AS max_dpd,
+               (SELECT composite_score FROM ews_composite_score e
+                WHERE e.customer_id = c.customer_id
+                ORDER BY score_date DESC LIMIT 1) AS ews_score
+        FROM facility f
+        JOIN customer c ON f.customer_id = c.customer_id
+        WHERE f.status IN ('ACTIVE','FROZEN') AND c.size_category = 'SOHO'
+        GROUP BY c.customer_id
+        HAVING max_dpd >= :risk_dpd
+            OR (ews_score IS NOT NULL AND ews_score < 45)
+        ORDER BY max_dpd DESC, ews_score ASC
+        LIMIT 50
+    """), {"risk_dpd": SAECHULBAL["risk_dpd_min"]}).fetchall()
+
+    # 이미 연계 등록된 고객은 표시만 바꾼다 (중복 등록 방지)
+    referred = {r[0] for r in db.execute(text("""
+        SELECT DISTINCT customer_id FROM automation_action
+        WHERE action_type = 'RESTRUCTURING_REFERRAL'
+          AND action_status IN ('PENDING','EXECUTED')
+    """)).fetchall()}
+
+    candidates = []
+    for r in rows:
+        exposure_eok = float(r[4] or 0) / 1e8
+        dpd = int(r[5] or 0)
+        within_cap = exposure_eok <= SAECHULBAL["debt_cap_eok"]
+        if dpd >= SAECHULBAL["npl_dpd"]:
+            category, track = "부실차주", ("새출발기금 (원금감면 심사)" if within_cap else "자체 워크아웃")
+        elif dpd >= SAECHULBAL["risk_dpd_min"]:
+            category, track = "부실우려차주", ("새출발기금 (금리조정·유예)" if within_cap else "자체 프리워크아웃")
+        else:
+            category, track = "EWS 악화 (연체 전)", "자체 프리워크아웃 (선제)"
+        candidates.append({
+            "customer_id": r[0], "customer_name": r[1],
+            "industry": r[2], "region": r[3],
+            "exposure_eok": round(exposure_eok, 1), "max_dpd": dpd,
+            "ews_score": r[6],
+            "category": category, "recommended_track": track,
+            "within_debt_cap": within_cap,
+            "already_referred": r[0] in referred,
+        })
+
+    return {
+        "policy": SAECHULBAL,
+        "candidates": candidates,
+        "summary": {
+            "total": len(candidates),
+            "npl": sum(1 for c in candidates if c["category"] == "부실차주"),
+            "at_risk": sum(1 for c in candidates if c["category"] == "부실우려차주"),
+            "preemptive": sum(1 for c in candidates if "EWS" in c["category"]),
+        },
+    }
+
+
+@router.post("/soho/restructuring-referral")
+def create_restructuring_referral(
+    customer_id: str = Query(...),
+    track: str = Query(..., description="연계 트랙 (새출발기금/자체 프리워크아웃 등)"),
+    notes: str = Query(None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """채무조정 연계 등록 - 팀장 이상, 감사기록 필수 (통제 완결 원칙).
+
+    자동화 액션 파이프라인(automation_action)에 태워 후속 실행·추적을
+    기존 통제 인프라로 일원화한다.
+    """
+    if current_user.approval_level not in ("TEAM_LEAD", "DEPT_HEAD", "EXECUTIVE", "COMMITTEE"):
+        raise HTTPException(403, "채무조정 연계 등록은 팀장 이상만 가능합니다")
+
+    cust = db.execute(text(
+        "SELECT customer_name, size_category FROM customer WHERE customer_id = :cid"),
+        {"cid": customer_id}).fetchone()
+    if not cust:
+        raise HTTPException(404, "고객 없음")
+    if cust[1] != "SOHO":
+        raise HTTPException(422, "개인사업자(SOHO) 고객만 연계 대상입니다")
+
+    dup = db.execute(text("""
+        SELECT action_id FROM automation_action
+        WHERE customer_id = :cid AND action_type = 'RESTRUCTURING_REFERRAL'
+          AND action_status = 'PENDING'
+    """), {"cid": customer_id}).fetchone()
+    if dup:
+        raise HTTPException(409, "이미 등록된 연계 건이 있습니다")
+
+    action_id = str(uuid.uuid4())
+    db.execute(text("""
+        INSERT INTO automation_action
+            (action_id, trigger_type, customer_id, action_type, priority)
+        VALUES (:aid, 'CUSTOM', :cid, 'RESTRUCTURING_REFERRAL', 'HIGH')
+    """), {"aid": action_id, "cid": customer_id})
+
+    record_audit(db, "RESTRUCTURING_REFERRAL", "customer", customer_id,
+                 after={"track": track, "notes": notes, "action_id": action_id},
+                 user_id=current_user.name, user_dept=current_user.dept,
+                 critical=True)
+    db.commit()
+
+    return {
+        "action_id": action_id,
+        "customer_id": customer_id,
+        "customer_name": cust[0],
+        "track": track,
+        "registered_by": current_user.name,
     }

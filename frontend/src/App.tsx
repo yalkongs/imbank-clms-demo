@@ -41,6 +41,8 @@ const Delinquency = React.lazy(() => import('./pages/Delinquency'));
 const LossAbsorption = React.lazy(() => import('./pages/LossAbsorption'));
 const CET1Path = React.lazy(() => import('./pages/CET1Path'));
 const RegionRebalancing = React.lazy(() => import('./pages/RegionRebalancing'));
+const Accountability = React.lazy(() => import('./pages/Accountability'));
+const FacilityLifecycle = React.lazy(() => import('./pages/FacilityLifecycle'));
 // 모바일 전용 (Tier 1)
 const MobileLayout = React.lazy(() => import('./mobile/MobileLayout'));
 const MHome = React.lazy(() => import('./mobile/MHome'));
@@ -112,6 +114,8 @@ function App() {
         <Route path="loss-absorption" element={<LossAbsorption />} />
         <Route path="cet1-path" element={<CET1Path />} />
         <Route path="region-rebalancing" element={<RegionRebalancing />} />
+        <Route path="accountability" element={<Accountability />} />
+        <Route path="lifecycle" element={<FacilityLifecycle />} />
       </Route>
 
       {/* 모바일 전용 (Tier 1) */}

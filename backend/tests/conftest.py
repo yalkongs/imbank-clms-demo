@@ -26,6 +26,9 @@ _SOURCE_DB = _REPO_ROOT / "database" / "imbank_demo.db"
 _TEST_DB = Path(tempfile.mkdtemp(prefix="clms-test-")) / "imbank_demo.db"
 shutil.copy(_SOURCE_DB, _TEST_DB)
 os.environ["CLMS_DB_PATH"] = str(_TEST_DB)
+# 테스트 다수가 SessionLocal() 을 닫지 않는다 - 풀 고갈(QueuePool 5+10)로
+# 뒤쪽 결재 테스트가 TimeoutError 나지 않도록 풀 없이 연결한다.
+os.environ["CLMS_DB_POOL"] = "null"
 
 
 # 결재 회귀 테스트가 소비할 '심사중' 표본을 사본에만 보충한다.
