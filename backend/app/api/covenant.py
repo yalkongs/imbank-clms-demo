@@ -11,6 +11,7 @@ from datetime import date, timedelta
 from ..core.database import get_db
 from ..core.config import AS_OF_DATE
 from ..core.auth import get_current_user, User
+from ..core.audit import record_audit
 from ..services.calculations import check_covenant_compliance
 
 router = APIRouter(prefix="/api/covenants", tags=["Covenant Management"])
@@ -209,7 +210,8 @@ def run_covenant_check(
     actual_value: Optional[float] = None,
     checked_by: Optional[str] = None,
     notes: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     코베넌트 점검 실행
@@ -273,7 +275,7 @@ def run_covenant_check(
         "check_date": str(today), "actual": _actual,
         "threshold": cov[6], "result": result,
         "severity": severity, "action": notes,
-        "checker": checked_by or "SYSTEM",
+        "checker": checked_by or current_user.name,
         "next_check": str(next_check),
     })
 
@@ -289,6 +291,9 @@ def run_covenant_check(
     if severity == 'EVENT_OF_DEFAULT':
         _trigger_ews_alert(customer_id, covenant_id, cov[3], db)
 
+    record_audit(db, "COVENANT_CHECK", "covenant", covenant_id,
+                 after={"result": result, "severity": severity, "actual_value": _actual},
+                 user_id=current_user.name, user_dept=current_user.dept)
     db.commit()
 
     return {
@@ -485,6 +490,13 @@ def apply_waiver(
         "approver": approved_by, "next": str(new_next_check),
     })
 
+    # 예외 통제의 해제 행위 - 감사기록 실패 시 웨이버 자체를 롤백한다
+    record_audit(db, "COVENANT_WAIVER", "covenant", covenant_id,
+                 before={"status": cov[2], "waiver_count": cov[3]},
+                 after={"status": "WAIVED", "waiver_count": (cov[3] or 0) + 1,
+                        "reason": reason, "period_days": waiver_period_days},
+                 user_id=current_user.name, user_dept=current_user.dept,
+                 critical=True)
     db.commit()
 
     return {

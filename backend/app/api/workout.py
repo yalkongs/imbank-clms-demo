@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
 from ..core.database import get_db
+from ..core.auth import get_current_user, User
+from ..core.audit import record_audit
 
 router = APIRouter(prefix="/api/workout", tags=["Workout Management"])
 
@@ -568,7 +570,8 @@ def get_workout_ecl_summary(db: Session = Depends(get_db)):
 @router.post("/auto-transfer-npl")
 def auto_transfer_npl_to_workout(
     dpd_threshold: int = Query(90, description="Workout 이관 DPD 임계값"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     DPD 90일+ 연체 → Workout 케이스 자동 생성
@@ -630,6 +633,11 @@ def auto_transfer_npl_to_workout(
         )
         created += 1
 
+    # 부실 이관은 건전성 통계를 바꾸는 행위 - 감사기록 실패 시 이관을 롤백한다
+    record_audit(db, "NPL_AUTO_TRANSFER", "workout_case", "BATCH",
+                 after={"created": created, "dpd_threshold": dpd_threshold},
+                 user_id=current_user.name, user_dept=current_user.dept,
+                 critical=True)
     db.commit()
     return {
         "message":  f"{created}건 Workout 케이스 자동 생성",

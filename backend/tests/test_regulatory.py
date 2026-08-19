@@ -112,6 +112,28 @@ def test_waiver_requires_dept_head():
     assert r.status_code == 403, f"STAFF 웨이버 승인이 차단되지 않음: {r.status_code}"
 
 
+def test_waiver_writes_audit_log():
+    """QW: 웨이버 승인(예외 통제의 해제)은 audit_log 에 반드시 남는다"""
+    db = SessionLocal()
+    row = db.execute(text("SELECT covenant_id FROM covenant LIMIT 1")).fetchone()
+    db.close()
+    if not row:
+        pytest.skip("코베넌트 없음")
+    r = client.post(f"/api/covenants/waiver/{row[0]}",
+                    params={"reason": "감사기록 회귀 테스트"},
+                    headers=_login("park.bujang", "2222"))
+    assert r.status_code == 200, f"부서장 웨이버 실패: {r.status_code} {r.text[:150]}"
+    db = SessionLocal()
+    aud = db.execute(text("""
+        SELECT user_id, after_value FROM audit_log
+        WHERE action_type = 'COVENANT_WAIVER' AND target_id = :cid
+        ORDER BY log_timestamp DESC LIMIT 1
+    """), {"cid": row[0]}).fetchone()
+    db.close()
+    assert aud is not None, "웨이버 승인이 감사로그에 남지 않음"
+    assert aud[0] == "박부장", f"감사로그 승인자가 인증 사용자가 아님: {aud[0]}"
+
+
 def test_freeze_limit_requires_dept_head():
     """Gate 0: 한도동결(FREEZE_LIMIT) 실행은 부서장 이상 - 담당자 시도 → 403"""
     db = SessionLocal()

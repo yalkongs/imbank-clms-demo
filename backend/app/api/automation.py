@@ -22,6 +22,7 @@ import math
 
 from ..core.database import get_db
 from ..core.auth import get_current_user, User
+from ..core.audit import record_audit
 
 router = APIRouter(prefix="/api/automation", tags=["Automation Bridge"])
 
@@ -354,6 +355,14 @@ def execute_action(
         """),
         {"summary": result_summary, "aid": action_id}
     )
+    # 시설 상태를 바꾸는 액션은 감사기록 실패 시 실행 자체를 롤백한다
+    record_audit(db, "AUTOMATION_EXECUTE", "automation_action", action_id,
+                 before={"action_status": "PENDING"},
+                 after={"action_status": "EXECUTED", "action_type": atype,
+                        "customer_id": cid, "facility_id": fid,
+                        "result_summary": result_summary},
+                 user_id=current_user.name, user_dept=current_user.dept,
+                 critical=atype in ("FREEZE_LIMIT", "RECLASSIFY", "CREATE_WORKOUT"))
     db.commit()
 
     return {
@@ -366,7 +375,8 @@ def execute_action(
 
 @router.post("/trigger/scan")
 def scan_and_create_triggers(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     트리거 스캔 - 현재 DB 상태를 기반으로 자동화 액션 자동 생성
@@ -489,6 +499,9 @@ def scan_and_create_triggers(
             )
             created.append({"trigger": "DPD_90", "customer": cid, "action": atype})
 
+    record_audit(db, "AUTOMATION_SCAN", "automation_action", "BATCH",
+                 after={"total_created": len(created)},
+                 user_id=current_user.name, user_dept=current_user.dept)
     db.commit()
 
     return {

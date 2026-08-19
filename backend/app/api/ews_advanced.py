@@ -11,6 +11,8 @@ from typing import Optional
 import uuid
 from ..core.database import get_db
 from ..core.config import AS_OF_MONTH
+from ..core.auth import get_current_user, User
+from ..core.audit import record_audit
 
 router = APIRouter(prefix="/api/ews-advanced", tags=["EWS Advanced"])
 
@@ -1190,7 +1192,8 @@ async def integrated_dashboard(
 @router.post("/trigger-automation")
 def trigger_automation_from_ews(
     score_threshold: float = Query(35.0, description="CRITICAL 판정 임계값"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     EWS 종합점수 CRITICAL 고객에 대해 automation_action 자동 생성
@@ -1246,6 +1249,9 @@ def trigger_automation_from_ews(
             )
             created += 1
 
+    record_audit(db, "EWS_TRIGGER_AUTOMATION", "automation_action", "BATCH",
+                 after={"actions_created": created, "threshold": score_threshold},
+                 user_id=current_user.name, user_dept=current_user.dept)
     db.commit()
 
     return {

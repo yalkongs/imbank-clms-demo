@@ -13,6 +13,8 @@ import uuid
 
 from ..core.database import get_db
 from ..core.config import AS_OF_DATE
+from ..core.auth import get_current_user, User
+from ..core.audit import record_audit
 from ..services.calculations import determine_delinquency_stage
 
 router = APIRouter(prefix="/api/delinquency", tags=["Delinquency Management"])
@@ -450,10 +452,11 @@ def record_collection_activity(
     promised_date: Optional[str] = None,
     promised_amount: Optional[float] = None,
     notes: Optional[str] = None,
-    officer: Optional[str] = "시스템",
-    db: Session = Depends(get_db)
+    officer: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """추심 활동 기록"""
+    """추심 활동 기록 - 담당자 미지정 시 인증 사용자로 기록"""
     # 연체 레코드 확인
     delinq = db.execute(
         text("SELECT delinquency_id FROM delinquency_record WHERE delinquency_id=:did"),
@@ -484,9 +487,13 @@ def record_collection_activity(
             "pdate":   promised_date,
             "pamount": promised_amount,
             "notes":   notes,
-            "officer": officer,
+            "officer": officer or current_user.name,
         }
     )
+    record_audit(db, "COLLECTION_ACTIVITY", "delinquency_record", delinquency_id,
+                 after={"activity_id": activity_id, "activity_type": activity_type,
+                        "contact_result": contact_result, "promised_amount": promised_amount},
+                 user_id=current_user.name, user_dept=current_user.dept)
     db.commit()
 
     return {

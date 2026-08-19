@@ -10,6 +10,8 @@ from typing import Optional
 from datetime import date
 from ..core.database import get_db
 from ..core.config import AS_OF_DATE
+from ..core.auth import get_current_user, User
+from ..core.audit import record_audit
 from ..services.calculations import (
     calculate_financial_ratios, calculate_dscr,
     calculate_altman_z, FINANCIAL_BENCHMARKS
@@ -399,7 +401,8 @@ def upsert_financial_statement(
     operating_cf: Optional[float] = None,
     audited: int = 0,
     source: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """재무제표 입력/수정 (Upsert)"""
     stmt_id = f"FS_{customer_id}_{fiscal_year}"
@@ -450,6 +453,10 @@ def upsert_financial_statement(
 
     # 재무비율 자동 산출 및 캐시
     _save_financial_ratio(customer_id, fiscal_year, db)
+    record_audit(db, "FIN_STATEMENT_UPSERT", "financial_statement", stmt_id,
+                 after={"customer_id": customer_id, "fiscal_year": fiscal_year,
+                        "audited": audited, "source": source},
+                 user_id=current_user.name, user_dept=current_user.dept)
     db.commit()
 
     return {"status": "success", "stmt_id": stmt_id,
