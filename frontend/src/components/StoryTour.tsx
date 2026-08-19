@@ -93,7 +93,7 @@ export default function StoryTour({ step, onStep, onExit, onDevJourney }: Props)
   }, [step]);
 
   // 투어가 어떤 경로로 끝나든(마치기·X) 시작점인 대시보드로 되돌린다.
-  // 투어는 화면 6곳을 순회하므로, 끝난 자리에 그대로 두면 사용자가 길을 잃는다.
+  // 투어는 화면 10곳을 순회하므로, 끝난 자리에 그대로 두면 사용자가 길을 잃는다.
   const exitTour = () => {
     navigate('/');
     onExit();

@@ -4,7 +4,7 @@
 
 기업여신의 심사·포트폴리오·모니터링·회수를 통합적으로 분석·시연하는 PoC 시스템입니다.
 Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 사용자 화면 · 265개 API 경로 · 97개 업무 테이블 ·
-자동 테스트 204개(전건 통과)**로 구성되며, iM뱅크 공시 규모를 참고한 모의 포트폴리오
+자동 테스트 207개(전건 통과)**로 구성되며, iM뱅크 공시 규모를 참고한 모의 포트폴리오
 (고객 2,160개사 · 총여신 36.7조 · 자기자본 5.5조 · BIS 14.5%)를 탑재합니다.
 
 **▶ 라이브: https://imbank-clms.onrender.com**  (예비: https://imbank-clms-demo.onrender.com)
@@ -16,10 +16,10 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 사�
 
 > 현재 공개 배포는 분석·의사결정 PoC입니다. 실제 여신 승인·실행 권한이 있는 은행 운영시스템으로 사용하지 않습니다.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-1.9-blue)
 ![Python](https://img.shields.io/badge/python-3.13-green)
 ![React](https://img.shields.io/badge/react-18.2-blue)
-![Tests](https://img.shields.io/badge/tests-204_passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-207_passed-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **체험 계정** (헤더 우측 로그인 → 계정 선택, PIN 힌트 표시):
@@ -191,7 +191,7 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 사�
 | **보고·감사** | 업무보고서(PDF 다운로드), 전결규정, 감사추적, 정책예외, 규정 레지스터(효력일 관리) |
 
 여기에 **규칙 기반 심사의견서 초안**(여신신청 상세에서 데이터 기반 7개 섹션 문안 자동 생성 + PDF),
-**스토리 투어**(한 기업의 생애주기 악화 경로 7단계 안내), **개발 여정**(소개 팝업에서 진입)이 더해집니다.
+**스토리 투어**(한 기업의 생애주기 악화 경로에서 손실흡수력·CET1까지 10단계 안내), **개발 여정**(소개 팝업에서 진입)이 더해집니다.
 
 ---
 
@@ -733,7 +733,7 @@ cd database && python3 generate_ews_leading_data.py
 - **P8 PF 충당금 차등화** — 사업성평가 4등급 자동 판정 → 차등 충당금(2/7/30/75% 가정)
   시뮬, 일률 적립 대비 증감
 - 스토리 투어 7단계 → 10단계 확장 (연장 통제 → 손실흡수력 → CET1 경로로 마무리)
-- 테스트 204개 전건 통과 (세션 풀 고갈 교정 포함)
+- 테스트 207개 전건 통과 (세션 풀 고갈 교정 포함)
 
 ### v2.0.1 (2026-08-15) — 승인조건 구조화
 
