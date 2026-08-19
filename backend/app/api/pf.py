@@ -267,3 +267,101 @@ def get_pf_alerts(db: Session = Depends(get_db)):
         }
         for r in rows
     ]
+
+
+# ============================================================
+# P8: PF 사업성평가 기반 충당금 차등화 선반영
+# (2024.5 사업성 평가기준 개선: 양호/보통/유의/부실우려 4등급.
+#  충당금 차등화 모범규준은 2026.2Q 마련 → 2027 전 업권 신규 PF 시행
+#  예정 - 차등율은 제도 시안을 반영한 가정치로 명시한다)
+# ============================================================
+
+# 등급별 차등 충당금율 (모범규준 확정 전 - 가정치)
+FEASIBILITY_PROVISION = {
+    "GOOD":     {"label": "양호",     "rate": 0.02},
+    "NORMAL":   {"label": "보통",     "rate": 0.07},
+    "CONCERN":  {"label": "유의(C)",  "rate": 0.30},
+    "DISTRESS": {"label": "부실우려(D)", "rate": 0.75},
+}
+
+
+def _feasibility_grade(progress: float, presale: float,
+                       equity: float, ltv: float) -> str:
+    """사업성평가 등급 판정 (개선방안 취지의 결정론적 근사).
+
+    핵심 신호는 공정률-분양률 괴리(지어지는데 팔리지 않는 사업장)와
+    자기자본·LTV 완충이다.
+    """
+    gap = (progress or 0) - (presale or 0)
+    if gap >= 40 or ((presale or 0) < 30 and (progress or 0) > 60):
+        return "DISTRESS"
+    if gap >= 25 or (equity or 0) < 5 or (ltv or 0) >= 80:
+        return "CONCERN"
+    if gap >= 10 or (equity or 0) < 10 or (ltv or 0) >= 65:
+        return "NORMAL"
+    return "GOOD"
+
+
+@router.get("/feasibility-provision")
+def get_feasibility_provision(db: Session = Depends(get_db)):
+    """사업장별 사업성평가 등급 → 차등 충당금 시뮬레이션"""
+    rows = db.execute(text("""
+        SELECT project_id, project_name, region, exposure,
+               equity_ratio, progress_rate, presale_rate, ltv
+        FROM pf_project WHERE status = 'ACTIVE'
+        ORDER BY exposure DESC
+    """)).fetchall()
+
+    projects = []
+    by_grade = {k: {"label": v["label"], "rate": v["rate"], "count": 0,
+                    "exposure_eok": 0.0, "provision_eok": 0.0}
+                for k, v in FEASIBILITY_PROVISION.items()}
+    total_exp = total_prov = 0.0
+
+    for r in rows:
+        exp = float(r[3] or 0)
+        grade = _feasibility_grade(r[5], r[6], r[4], r[7])
+        rate = FEASIBILITY_PROVISION[grade]["rate"]
+        prov = exp * rate
+        g = by_grade[grade]
+        g["count"] += 1
+        g["exposure_eok"] += exp / 1e8
+        g["provision_eok"] += prov / 1e8
+        total_exp += exp
+        total_prov += prov
+        projects.append({
+            "project_id": r[0], "project_name": r[1], "region": r[2],
+            "exposure_eok": round(exp / 1e8, 1),
+            "equity_ratio": r[4], "progress_rate": r[5],
+            "presale_rate": r[6], "ltv": r[7],
+            "gap": round((r[5] or 0) - (r[6] or 0), 1),
+            "grade": grade,
+            "grade_label": FEASIBILITY_PROVISION[grade]["label"],
+            "provision_rate": rate * 100,
+            "provision_eok": round(prov / 1e8, 1),
+        })
+
+    for g in by_grade.values():
+        g["exposure_eok"] = round(g["exposure_eok"], 1)
+        g["provision_eok"] = round(g["provision_eok"], 1)
+
+    # 현행 일률 적립 가정(익스포저 2.5%) 대비 차등화의 증감 효과
+    flat_rate = 0.025
+    flat_prov = total_exp * flat_rate
+
+    return {
+        "framework": {
+            "basis": "2024.5 사업성 평가기준 개선 (양호/보통/유의/부실우려)",
+            "schedule": "충당금 차등화 모범규준 2026.2Q 마련 → 2027 전 업권 신규 PF 시행 예정",
+            "rate_note": "차등율(2/7/30/75%)은 모범규준 확정 전 가정치",
+        },
+        "by_grade": by_grade,
+        "projects": projects,
+        "totals": {
+            "exposure_eok": round(total_exp / 1e8, 1),
+            "differentiated_provision_eok": round(total_prov / 1e8, 1),
+            "flat_provision_eok": round(flat_prov / 1e8, 1),
+            "delta_eok": round((total_prov - flat_prov) / 1e8, 1),
+            "flat_rate_note": f"일률 {flat_rate*100:.1f}% 가정 대비",
+        },
+    }

@@ -22,7 +22,8 @@ export default function PFMonitoring() {
   const [simulation, setSimulation] = useState<any>(null);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [region, setRegion] = useState('');
-  const [tab, setTab] = useState<'projects' | 'simulation'>('projects');
+  const [tab, setTab] = useState<'projects' | 'simulation' | 'feasibility'>('projects');
+  const [feas, setFeas] = useState<any>(null);
   const [detail, setDetail] = useState<any>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -41,11 +42,13 @@ export default function PFMonitoring() {
       axios.get('/api/pf/dashboard'),
       axios.get('/api/pf/regulation-simulation'),
       axios.get('/api/pf/alerts'),
+      axios.get('/api/pf/feasibility-provision'),
     ])
-      .then(([d, s, a]) => {
+      .then(([d, s, a, f]) => {
         setDashboard(d.data);
         setSimulation(s.data);
         setAlerts(a.data);
+        setFeas(f.data);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -148,7 +151,7 @@ export default function PFMonitoring() {
 
       {/* 탭: 사업장 목록 / 제도 시뮬레이션 */}
       <div className="flex gap-1 border-b border-gray-200" role="tablist">
-        {([['projects', '사업장 목록'], ['simulation', '2027 제도 시뮬레이션']] as const).map(([k, l]) => (
+        {([['projects', '사업장 목록'], ['simulation', '2027 제도 시뮬레이션'], ['feasibility', '충당금 차등화 (모범규준 선반영)']] as const).map(([k, l]) => (
           <button
             key={k}
             role="tab"
@@ -279,6 +282,77 @@ export default function PFMonitoring() {
               <p className="text-xs text-gray-500">충당금 추가 적립</p>
             </Card>
           </div>
+        </div>
+      )}
+
+
+      {tab === 'feasibility' && feas && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-4 gap-4">
+            {Object.entries(feas.by_grade).map(([k, g]: [string, any]) => (
+              <Card key={k} title={`${g.label} (충당금률 ${Math.round(g.rate * 100)}%)`}>
+                <p className="text-2xl font-bold tabular">{g.count}<span className="text-sm font-normal text-gray-500">개 사업장</span></p>
+                <p className="text-xs text-gray-500 mt-1">익스포저 {formatNumber(g.exposure_eok)}억</p>
+                <p className={`text-sm tabular mt-2 font-semibold ${k === 'CONCERN' || k === 'DISTRESS' ? 'text-red-600' : 'text-gray-700'}`}>
+                  충당금 {formatNumber(g.provision_eok)}억
+                </p>
+              </Card>
+            ))}
+          </div>
+
+          <Card title="사업장별 사업성평가 → 차등 충당금"
+            subtitle={`${feas.framework.basis} · ${feas.framework.schedule} · ${feas.framework.rate_note}`} noPadding>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
+                    <th className="py-2 px-4">사업장</th>
+                    <th className="py-2 px-3 text-right">익스포저 (억)</th>
+                    <th className="py-2 px-3 text-right">공정률</th>
+                    <th className="py-2 px-3 text-right">분양률</th>
+                    <th className="py-2 px-3 text-right">괴리</th>
+                    <th className="py-2 px-3 text-right">자기자본</th>
+                    <th className="py-2 px-3 text-center">등급</th>
+                    <th className="py-2 px-4 text-right">차등 충당금 (억)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feas.projects.slice(0, 15).map((pr: any) => (
+                    <tr key={pr.project_id} className="border-b border-gray-50">
+                      <td className="py-2 px-4">
+                        <p className="font-medium text-gray-900">{pr.project_name}</p>
+                        <p className="text-[11px] text-gray-400">{pr.region}</p>
+                      </td>
+                      <td className="py-2 px-3 text-right tabular">{formatNumber(pr.exposure_eok)}</td>
+                      <td className="py-2 px-3 text-right tabular">{formatPercent(pr.progress_rate, 1)}</td>
+                      <td className="py-2 px-3 text-right tabular">{formatPercent(pr.presale_rate, 1)}</td>
+                      <td className={`py-2 px-3 text-right tabular font-semibold ${pr.gap >= 25 ? 'text-red-500' : pr.gap >= 10 ? 'text-amber-600' : 'text-gray-600'}`}>
+                        {pr.gap}%p
+                      </td>
+                      <td className="py-2 px-3 text-right tabular">{formatPercent(pr.equity_ratio, 1)}</td>
+                      <td className="py-2 px-3 text-center">
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          pr.grade === 'GOOD' ? 'bg-emerald-50 text-emerald-700'
+                          : pr.grade === 'NORMAL' ? 'bg-yellow-50 text-yellow-700'
+                          : pr.grade === 'CONCERN' ? 'bg-amber-100 text-amber-700'
+                          : 'bg-red-100 text-red-700'}`}>
+                          {pr.grade_label}
+                        </span>
+                      </td>
+                      <td className="py-2 px-4 text-right tabular font-semibold">{formatNumber(pr.provision_eok)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-4 py-3 flex flex-wrap gap-x-6 gap-y-1 text-xs">
+              <span className="text-gray-500">차등화 충당금 합계 <b className="tabular">{formatNumber(feas.totals.differentiated_provision_eok)}억</b></span>
+              <span className="text-gray-500">{feas.totals.flat_rate_note} <b className="tabular">{formatNumber(feas.totals.flat_provision_eok)}억</b></span>
+              <span className={`font-semibold ${feas.totals.delta_eok > 0 ? 'text-red-500' : 'text-green-600'}`}>
+                증감 {feas.totals.delta_eok > 0 ? '+' : ''}{formatNumber(feas.totals.delta_eok)}억 → 손실흡수력(P1) 경로의 적립 부담으로 연결
+              </span>
+            </div>
+          </Card>
         </div>
       )}
 

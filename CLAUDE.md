@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 28개 화면 · 34개 API 모듈 · 95개 DB 테이블.
+iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 42개 사용자 화면 · 43개 API 모듈(라우터) · 97개 업무 테이블 · 자동 테스트 204건.
 
 ## 개발 서버 실행
 
@@ -40,9 +40,9 @@ React 18 (Vite, port 3000)  →  /api/* proxy  →  FastAPI (uvicorn, port 8000)
 
 **프론트엔드** (`frontend/`): TypeScript + React 18 + Vite. Tailwind CSS, Recharts, Axios. `vite.config.ts`에 `/api` → `localhost:8000` 프록시 설정.
 
-**백엔드** (`backend/`): FastAPI + SQLAlchemy. ORM 모델 정의는 있으나 실제로는 raw SQL을 직접 실행하는 방식을 사용함 (`db.execute(text(...))`). `backend/app/main.py`에서 27개 라우터 등록.
+**백엔드** (`backend/`): FastAPI + SQLAlchemy. ORM 모델 정의는 있으나 실제로는 raw SQL을 직접 실행하는 방식을 사용함 (`db.execute(text(...))`). `backend/app/main.py`에서 43개 라우터 등록.
 
-**데이터베이스** (`database/`): SQLite 단일 파일 (`database/imbank_demo.db`, 40MB). 49개 테이블. WAL 모드 활성화됨.
+**데이터베이스** (`database/`): SQLite 단일 파일 (`database/imbank_demo.db`, 40MB). 업무 테이블 97개 (schema.sql 49 + migrations/*.sql 확장). WAL 모드 활성화됨.
 
 ## 핵심 파일
 
@@ -58,7 +58,7 @@ React 18 (Vite, port 3000)  →  /api/* proxy  →  FastAPI (uvicorn, port 8000)
 
 ## API 모듈 구조
 
-`backend/app/api/` 아래 27개 모듈이 각각 라우터 담당:
+`backend/app/api/` 아래 44개 모듈(라우터 43 + helper 1)이 각각 담당:
 
 - **기본 (8개)**: `dashboard`, `applications`, `capital`, `portfolio`, `limits`, `stress_test`, `models`, `customers`
 - **고도화 (9개)**: `capital_optimizer`, `ews_advanced`, `dynamic_limits`, `customer_profitability`, `collateral_monitoring`, `portfolio_optimization`, `workout`, `esg`, `alm`
@@ -66,6 +66,7 @@ React 18 (Vite, port 3000)  →  /api/* proxy  →  FastAPI (uvicorn, port 8000)
 - **Phase 2** (부실관리): `asset_classification`, `ecl`, `delinquency`
 - **Phase 3** (자동화): `automation`
 - **추가**: `model_inference`, `region_helper`
+- **규제 대응·건전성 고도화 (2026-08, P1~P8)**: `loss_absorption`(커버리지 조종석), `cet1_path`(output floor), `region_rebalancing`, `accountability`(책무구조도 증거), `facility_lifecycle`(연장·조건변경, 에버그리닝 통제) + `inclusive_finance`·`ecl`·`pf` 확장
 
 ## 페이지-API 대응
 

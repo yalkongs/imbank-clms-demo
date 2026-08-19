@@ -4,7 +4,7 @@ IFRS 9 ECL 충당금 산출 API
 3단계 기대신용손실(Expected Credit Loss) 체계
 Stage 1 (12M ECL) / Stage 2 (Lifetime) / Stage 3 (Impaired)
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional
@@ -543,4 +543,169 @@ def get_macro_sensitivity(
         "weighted_ecl":   weighted_ecl,
         "scenarios":      scenarios,
         "scope":          facility_id or "portfolio",
+    }
+
+
+# ============================================================
+# P7: 전망모형 점검체계 대응 - 관리자 오버레이 + 점검 리포트
+# (2023 은행업감독규정 개정: 예상손실 전망모형을 매년 독립 검증해
+#  금감원 제출, 미흡 시 특별대손준비금 적립요구. FLI 실무지침 2022)
+# ============================================================
+import uuid as _uuid
+
+from ..core.auth import get_current_user, User
+from ..core.audit import record_audit
+from ..core.config import AS_OF_DATE as _AS_OF
+
+
+@router.post("/overlay")
+def create_overlay(
+    amount_eok: float = Query(..., description="조정액 (억, 양수=추가 적립 / 음수=환입)"),
+    reason: str = Query(..., min_length=5, description="판단 근거 (필수)"),
+    segment: str = Query("PORTFOLIO"),
+    risk_driver: str = Query(None, description="지목 리스크 (PF·자영업·금리 등)"),
+    review_months: int = Query(6, ge=1, le=12, description="재검토 기한 (개월)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """관리자 오버레이 등록 - 부서장 이상 + 감사기록 critical.
+
+    모형 밖의 경영진 판단 조정은 존속기한(재검토일)을 강제한다 -
+    영구 오버레이는 모형 무력화이므로 검증에서 지적 대상이다.
+    """
+    if current_user.approval_level not in ("DEPT_HEAD", "EXECUTIVE", "COMMITTEE"):
+        raise HTTPException(403, "ECL 오버레이는 부서장 이상만 등록할 수 있습니다")
+
+    overlay_id = f"OVL_{_uuid.uuid4().hex[:10].upper()}"
+    expiry = _AS_OF.replace(day=1)
+    # review_months 개월 뒤 말일 근사
+    y, m = expiry.year, expiry.month + review_months
+    y += (m - 1) // 12
+    m = (m - 1) % 12 + 1
+    expiry = f"{y:04d}-{m:02d}-01"
+
+    db.execute(text("""
+        INSERT INTO ecl_overlay
+            (overlay_id, segment, amount, direction, reason, risk_driver,
+             expiry_review, approved_by, approved_level)
+        VALUES (:oid, :seg, :amt, :dir, :reason, :driver, :expiry, :by, :lv)
+    """), {
+        "oid": overlay_id, "seg": segment, "amt": amount_eok * 1e8,
+        "dir": "ADD" if amount_eok >= 0 else "RELEASE",
+        "reason": reason, "driver": risk_driver, "expiry": expiry,
+        "by": current_user.name, "lv": current_user.approval_level,
+    })
+    record_audit(db, "ECL_OVERLAY", "ecl_overlay", overlay_id,
+                 after={"amount_eok": amount_eok, "segment": segment,
+                        "reason": reason, "risk_driver": risk_driver,
+                        "expiry_review": expiry},
+                 user_id=current_user.name, user_dept=current_user.dept,
+                 critical=True)
+    db.commit()
+    return {"overlay_id": overlay_id, "amount_eok": amount_eok,
+            "expiry_review": expiry, "approved_by": current_user.name}
+
+
+@router.get("/overlays")
+def list_overlays(db: Session = Depends(get_db)):
+    """오버레이 목록 (ACTIVE 우선)"""
+    rows = db.execute(text("""
+        SELECT overlay_id, created_at, segment, amount, direction, reason,
+               risk_driver, expiry_review, status, approved_by, approved_level
+        FROM ecl_overlay ORDER BY status = 'ACTIVE' DESC, created_at DESC LIMIT 30
+    """)).fetchall()
+    active_total = sum(float(r[3]) for r in rows if r[8] == "ACTIVE")
+    return {
+        "active_total_eok": round(active_total / 1e8, 1),
+        "overlays": [
+            {"overlay_id": r[0], "created_at": str(r[1])[:10], "segment": r[2],
+             "amount_eok": round(float(r[3]) / 1e8, 1), "direction": r[4],
+             "reason": r[5], "risk_driver": r[6], "expiry_review": r[7],
+             "status": r[8], "approved_by": r[9], "approved_level": r[10]}
+            for r in rows
+        ],
+    }
+
+
+@router.get("/validation-report")
+def get_validation_report(db: Session = Depends(get_db)):
+    """전망모형 점검 리포트 초안 - 매년 독립 검증 제출용 요약.
+
+    검증 항목: ① FLI 시나리오 반영(가중 ECL vs 기본), ② 관리자 오버레이의
+    금액·사유·존속기한, ③ 감독 §29 요구 대비 적정성(대손준비금 필요액),
+    ④ SICR 트리거 분포. 결론은 산출값에서 기계적으로 도출한다.
+    """
+    base_ecl = float(db.execute(text("""
+        SELECT COALESCE(SUM(ecl_base), 0) FROM ecl_calculation
+        JOIN (SELECT facility_id, MAX(calc_date) AS latest
+              FROM ecl_calculation GROUP BY facility_id) mx USING (facility_id)
+        WHERE ecl_calculation.calc_date = mx.latest
+    """)).scalar() or 0)
+    final_ecl = float(db.execute(text("""
+        SELECT COALESCE(SUM(ecl_final), 0) FROM ecl_calculation
+        JOIN (SELECT facility_id, MAX(calc_date) AS latest
+              FROM ecl_calculation GROUP BY facility_id) mx USING (facility_id)
+        WHERE ecl_calculation.calc_date = mx.latest
+    """)).scalar() or 0)
+    weighted_factor = _weighted_macro_factor()
+
+    sup_row = db.execute(text("""
+        SELECT COALESCE(SUM(required_provision), 0)
+        FROM asset_classification
+        WHERE base_date = (SELECT MAX(base_date) FROM asset_classification)
+    """)).fetchone()
+    supervisory = float(sup_row[0] or 0)
+
+    stage_rows = db.execute(text("""
+        SELECT stage, COUNT(*),
+               SUM(CASE WHEN sicr_triggered = 1 THEN 1 ELSE 0 END)
+        FROM ecl_calculation
+        WHERE calc_date = (SELECT MAX(calc_date) FROM ecl_calculation)
+        GROUP BY stage
+    """)).fetchall()
+
+    overlay_total = float(db.execute(text(
+        "SELECT COALESCE(SUM(amount), 0) FROM ecl_overlay WHERE status = 'ACTIVE'"
+    )).scalar() or 0)
+    overlay_count = db.execute(text(
+        "SELECT COUNT(*) FROM ecl_overlay WHERE status = 'ACTIVE'")).scalar() or 0
+
+    adjusted_ecl = final_ecl + overlay_total
+    reserve_needed = max(supervisory - adjusted_ecl, 0)
+    overlay_share = overlay_total / final_ecl * 100 if final_ecl else 0
+
+    findings = []
+    if weighted_factor <= 1.0:
+        findings.append("가중 거시계수가 1.0 이하 - 저부도기 낙관 편향 여부 점검 필요 (FLI 실무지침 취지)")
+    if overlay_share > 10:
+        findings.append(f"오버레이 비중 {overlay_share:.1f}% - 모형 밖 조정 과다, 모형 재보정 검토")
+    if reserve_needed > 0:
+        findings.append(f"감독 §29 요구 대비 {reserve_needed/1e8:,.0f}억 미달 - 대손준비금 적립 대상")
+    if not findings:
+        findings.append("주요 지적사항 없음 - 시나리오 반영·오버레이 통제·적정성 기준 충족")
+
+    return {
+        "as_of": str(_AS_OF),
+        "fli": {
+            "base_ecl_eok": round(base_ecl / 1e8, 1),
+            "final_ecl_eok": round(final_ecl / 1e8, 1),
+            "weighted_macro_factor": round(weighted_factor, 4),
+            "scenarios": {k: v for k, v in MACRO_SCENARIOS.items()},
+        },
+        "overlay": {
+            "active_count": int(overlay_count),
+            "total_eok": round(overlay_total / 1e8, 1),
+            "share_of_ecl": round(overlay_share, 1),
+        },
+        "adequacy": {
+            "supervisory_required_eok": round(supervisory / 1e8, 1),
+            "adjusted_ecl_eok": round(adjusted_ecl / 1e8, 1),
+            "reserve_needed_eok": round(reserve_needed / 1e8, 1),
+        },
+        "sicr": [
+            {"stage": r[0], "count": r[1], "sicr_triggered": r[2]}
+            for r in stage_rows
+        ],
+        "findings": findings,
+        "framework": "2023 은행업감독규정 개정 - 예상손실 전망모형 연 1회 독립 검증 · 금감원 제출 · 미흡 시 특별대손준비금",
     }

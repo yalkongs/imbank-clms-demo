@@ -330,7 +330,7 @@ export default function Layout() {
             <span className="status-dot is-live mr-2"></span>
             시스템 정상 운영중
           </div>
-          <p className="text-xs text-gray-400 mt-1">v1.0.0 | PoC</p>
+          <p className="text-xs text-gray-400 mt-1">v1.9 | PoC</p>
           <p className="text-[10px] text-gray-400 mt-1">© 2026 yalkongs</p>
         </div>
       </aside>

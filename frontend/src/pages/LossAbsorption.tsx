@@ -29,6 +29,38 @@ export default function LossAbsorption() {
   const [overview, setOverview] = useState<any>(null);
   const [sim, setSim] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // P7: ECL 전망모형 점검 (FLI)
+  const [valReport, setValReport] = useState<any>(null);
+  const [overlays, setOverlays] = useState<any>(null);
+  const [ovlAmount, setOvlAmount] = useState('');
+  const [ovlReason, setOvlReason] = useState('');
+  const [ovlDriver, setOvlDriver] = useState('부동산PF');
+  const [ovlMsg, setOvlMsg] = useState<string | null>(null);
+  const [ovlBusy, setOvlBusy] = useState(false);
+
+  const loadFli = () => Promise.all([
+    axios.get('/api/ecl/validation-report'),
+    axios.get('/api/ecl/overlays'),
+  ]).then(([v, o]) => { setValReport(v.data); setOverlays(o.data); }).catch(console.error);
+
+  const submitOverlay = () => {
+    if (!ovlAmount || !ovlReason || ovlReason.length < 5) {
+      setOvlMsg('금액과 사유(5자 이상)를 입력하세요');
+      return;
+    }
+    setOvlBusy(true);
+    setOvlMsg(null);
+    axios.post('/api/ecl/overlay', null, {
+      params: { amount_eok: Number(ovlAmount), reason: ovlReason, risk_driver: ovlDriver },
+    })
+      .then(r => {
+        setOvlMsg(`오버레이 ${r.data.amount_eok}억 등록 (재검토 기한 ${r.data.expiry_review}, 감사기록)`);
+        setOvlAmount(''); setOvlReason('');
+        return loadFli();
+      })
+      .catch(e => setOvlMsg(e?.response?.data?.detail || '등록 실패 - 부서장 이상 로그인이 필요합니다'))
+      .finally(() => setOvlBusy(false));
+  };
   // 레버
   const [monthlyProv, setMonthlyProv] = useState<number | null>(null);  // null = 현행 페이스
   const [writeoff, setWriteoff] = useState(0);
@@ -45,6 +77,7 @@ export default function LossAbsorption() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+    loadFli();
   }, []);
 
   useEffect(() => {
@@ -268,6 +301,85 @@ export default function LossAbsorption() {
           </p>
         </Card>
       </div>
+
+      {/* ── P7: ECL 전망모형 점검 (FLI) ─────────────────────────── */}
+      {valReport && (
+        <div className="grid grid-cols-3 gap-6">
+          <Card title="ECL 전망모형 점검 (FLI)" className="col-span-2"
+            subtitle={valReport.framework}>
+            <div className="grid grid-cols-4 gap-3 mb-4">
+              {Object.entries(valReport.fli.scenarios).map(([k, sc]: [string, any]) => (
+                <div key={k} className="p-3 bg-gray-50 rounded-lg text-center">
+                  <p className="text-xs text-gray-500">{sc.label} (가중 {Math.round(sc.weight * 100)}%)</p>
+                  <p className="text-lg font-bold tabular mt-0.5">
+                    {formatNumber(Math.round(valReport.fli.base_ecl_eok * sc.factor))}억
+                  </p>
+                  <p className="text-[11px] text-gray-400">×{sc.factor}</p>
+                </div>
+              ))}
+              <div className="p-3 bg-[#00BFA5]/10 rounded-lg text-center border border-[#00BFA5]/30">
+                <p className="text-xs text-[#00695F] font-medium">가중 반영 ECL</p>
+                <p className="text-lg font-bold tabular mt-0.5 text-[#00695F]">
+                  {formatNumber(valReport.fli.final_ecl_eok)}억
+                </p>
+                <p className="text-[11px] text-gray-400">계수 {valReport.fli.weighted_macro_factor}</p>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              {valReport.findings.map((f: string, i: number) => (
+                <p key={i} className={`text-sm ${f.includes('없음') ? 'text-green-600' : 'text-amber-700'}`}>
+                  {f.includes('없음') ? '✓' : '⚑'} {f}
+                </p>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-gray-400 mt-3 pt-3 border-t border-gray-100">
+              <span>감독 §29 요구 {formatNumber(valReport.adequacy.supervisory_required_eok)}억</span>
+              <span>조정 후 ECL {formatNumber(valReport.adequacy.adjusted_ecl_eok)}억</span>
+              <span className="text-amber-600 font-medium">대손준비금 필요 {formatNumber(valReport.adequacy.reserve_needed_eok)}억</span>
+              <span>오버레이 비중 {formatPercent(valReport.overlay.share_of_ecl, 1)}</span>
+            </div>
+          </Card>
+
+          <Card title="관리자 오버레이" subtitle="모형 밖 경영진 판단 조정 - 부서장 이상 + 재검토 기한 강제">
+            <div className="space-y-3">
+              <div className="flex gap-2">
+                <input value={ovlAmount} onChange={e => setOvlAmount(e.target.value)}
+                  placeholder="금액 (억)" type="number"
+                  className="w-24 px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg" />
+                <select value={ovlDriver} onChange={e => setOvlDriver(e.target.value)}
+                  className="flex-1 px-2 py-1.5 text-sm border border-gray-200 rounded-lg bg-white">
+                  {['부동산PF', '자영업·소상공인', '금리·경기', '특정 업종', '기타'].map(d => (
+                    <option key={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+              <input value={ovlReason} onChange={e => setOvlReason(e.target.value)}
+                placeholder="판단 근거 (필수, 5자 이상)"
+                className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg" />
+              <button onClick={submitOverlay} disabled={ovlBusy}
+                className="w-full py-1.5 text-sm font-semibold bg-[#00897B] text-white rounded-lg hover:bg-[#00695F] disabled:opacity-50">
+                오버레이 등록
+              </button>
+              {ovlMsg && <p className="text-xs font-medium text-[#00695F]">{ovlMsg}</p>}
+              <div className="pt-2 border-t border-gray-100 space-y-2 max-h-48 overflow-y-auto">
+                {(overlays?.overlays || []).map((o: any) => (
+                  <div key={o.overlay_id} className="text-xs p-2 bg-gray-50 rounded-lg">
+                    <div className="flex justify-between font-medium text-gray-900">
+                      <span>{o.risk_driver || o.segment}</span>
+                      <span className="tabular">{o.direction === 'ADD' ? '+' : ''}{formatNumber(o.amount_eok)}억</span>
+                    </div>
+                    <p className="text-gray-500 mt-0.5">{o.reason}</p>
+                    <p className="text-gray-400 mt-0.5">{o.approved_by} ({o.approved_level}) · 재검토 {o.expiry_review}</p>
+                  </div>
+                ))}
+                {(overlays?.overlays || []).length === 0 && (
+                  <p className="text-xs text-gray-400 text-center py-2">등록된 오버레이 없음</p>
+                )}
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

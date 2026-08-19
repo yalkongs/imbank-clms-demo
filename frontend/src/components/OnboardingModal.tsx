@@ -174,8 +174,8 @@ export default function OnboardingModal({ onClose, onDevJourney, journeyNext }: 
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* 스토리 투어 - 한 기업의 생애주기 악화 경로(경보→위반→강등→연체→회수)를
-                화면 순서대로 안내한다 */}
+            {/* 스토리 투어 - 한 기업의 생애주기 악화 경로(경보→위반→연장통제→강등→
+                연체→회수)를 따라가 은행 전체의 손실흡수력·자본(CET1)까지 안내한다 */}
             <button
               onClick={() => onClose(true)}
               className="btn-mint px-5 text-sm"

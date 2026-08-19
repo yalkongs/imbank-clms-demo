@@ -3,8 +3,8 @@
 **Credit Lifecycle Management System**
 
 기업여신의 심사·포트폴리오·모니터링·회수를 통합적으로 분석·시연하는 PoC 시스템입니다.
-Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **37개 사용자 화면 · 243개 API 경로 · 95개 업무 테이블 ·
-자동 테스트 188개(전건 통과)**로 구성되며, iM뱅크 공시 규모를 참고한 모의 포트폴리오
+Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 사용자 화면 · 265개 API 경로 · 97개 업무 테이블 ·
+자동 테스트 204개(전건 통과)**로 구성되며, iM뱅크 공시 규모를 참고한 모의 포트폴리오
 (고객 2,160개사 · 총여신 36.7조 · 자기자본 5.5조 · BIS 14.5%)를 탑재합니다.
 
 **▶ 라이브: https://imbank-clms.onrender.com**  (예비: https://imbank-clms-demo.onrender.com)
@@ -19,7 +19,7 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **37개 사�
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![Python](https://img.shields.io/badge/python-3.13-green)
 ![React](https://img.shields.io/badge/react-18.2-blue)
-![Tests](https://img.shields.io/badge/tests-175_passed%20%7C%202_skipped-brightgreen)
+![Tests](https://img.shields.io/badge/tests-204_passed-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **체험 계정** (헤더 우측 로그인 → 계정 선택, PIN 힌트 표시):
@@ -62,7 +62,7 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **37개 사�
 | **규제 분석** | Basel III 자본비율, 은행법 §35 법정 3한도 조회·시뮬레이션, 스트레스 테스트, 모델 검증(MRM) |
 | **내부통제** | 서버 결정 전결권·동일인 중복결재 차단, 승인 시점 심사자료 봉인(SHA-256), 핵심 승인 감사추적, 규정 레지스터 *(다단계 Maker-Checker는 후속 과제)* |
 | **선제적 리스크 관리** | 5채널 선행지표 EWS(조치 상태기계 포함), 동적한도, ESG 연동 |
-| **통합 모니터링** | 37개 사용자 화면, 포트폴리오 맵(what-if 드래그·타임슬라이더), 의무관리함, 지역별 필터 |
+| **통합 모니터링** | 42개 사용자 화면, 포트폴리오 맵(what-if 드래그·타임슬라이더), 의무관리함, 지역별 필터 |
 
 ### 시스템 범위
 
@@ -317,7 +317,7 @@ Stage 3  신용손상 발생 (부록A)                      → 개별 평가
 imbank-clms-demo/
 ├── backend/
 │   ├── app/
-│   │   ├── api/                    # API 모듈 39개 (라우터 38 + helper 1, 아래는 대표 파일)
+│   │   ├── api/                    # API 모듈 44개 (라우터 43 + helper 1, 아래는 대표 파일)
 │   │   │   ├── dashboard.py        # 전략 대시보드
 │   │   │   ├── applications.py     # 여신심사
 │   │   │   ├── capital.py          # 자본관리
@@ -353,7 +353,7 @@ imbank-clms-demo/
 │   │   │   ├── index.ts            # Card, StatCard, Badge, Table, Modal
 │   │   │   ├── Layout.tsx
 │   │   │   └── RegionFilter.tsx
-│   │   ├── pages/                  # 사용자 화면 37개 · 페이지 컴포넌트 41개
+│   │   ├── pages/                  # 사용자 화면 42개 · 페이지 컴포넌트 46개
 │   │   │   ├── Dashboard.tsx
 │   │   │   ├── Applications.tsx
 │   │   │   ├── Capital.tsx
@@ -514,7 +514,7 @@ git add frontend/dist && git commit
 
 ## API 엔드포인트
 
-총 **243개 경로 / 244개 operation** (OpenAPI 기준 · 아래는 대표 모듈 발췌). 대부분 `?region=CAPITAL|DAEGU_GB|BUSAN_GN` 파라미터 지원.
+총 **265개 경로** (OpenAPI 기준 · 아래는 대표 모듈 발췌). 대부분 `?region=CAPITAL|DAEGU_GB|BUSAN_GN` 파라미터 지원.
 
 ### Dashboard (5)
 | Method | Endpoint | 설명 |
@@ -610,7 +610,7 @@ git add frontend/dist && git commit
 
 ## 데이터 모델
 
-### 테이블 분류 (업무 테이블 95개)
+### 테이블 분류 (업무 테이블 97개)
 
 | 계층 | 주요 테이블 |
 |------|------------|
@@ -707,6 +707,33 @@ cd database && python3 generate_ews_leading_data.py
 ---
 
 ## 변경 이력
+
+### v1.9 (2026-08-19) — 규제 대응·건전성 고도화 P1~P8 (화면 표시 버전 v1.9 로 상향)
+
+`docs/IMPROVEMENT_RESEARCH_2026-08-19.md` 연구의 권장 실행 순서(QW → P1~P8)를 전량 반영.
+핵심 프레임: iM금융 2026.2Q 컨퍼런스콜에서 경영진이 공언한 두 목표(CRO: NPL커버리지
+연말 100% 회복 / CFO: CET1 12.3%)를 그대로 화면으로 만들었다.
+
+- **QW** 상태 변경 API 전반 감사기록 일원화 (covenant 웨이버·automation 실행·NPL 이관·
+  추심활동·재무제표·EWS 트리거) — 웨이버는 critical(실패 시 롤백)
+- **P1 손실흡수력 관리** (`/loss-absorption`) — 커버리지 경로 시뮬레이터(적립·상각·매각
+  3레버), 연말 100% 필요 적립액 역산, 감독 §29 vs ECL 이중구조 실측 블록
+- **P2 CET1 경로** (`/cet1-path`) — output floor 65→72.5% 경과규정 반영 연도별 경로,
+  생산적 금융 위험가중치 시나리오, RAROC 리밸런싱 연동
+- **P3 지역 리밸런싱** (`/region-rebalancing`) — 재투자 의무 하한 ↔ 편중 상한 양면 게이지,
+  신규취급 지역 구성 추이, 산업×지역 히트맵
+- **P4 개인사업자 심화** (포용금융 확장) — SOHO 히트맵·DPD 버킷, 새출발기금 요건 매칭,
+  채무조정 연계 등록(팀장 이상 + 감사 + 중복 409)
+- **P5 책무구조도 증거체인** (`/accountability`) — 책무 8건 ↔ 통제활동 매핑, 증거를
+  audit_log 실측 집계(EVIDENCED/GAP/IDLE), 임원별 관리의무 점검 리포트
+- **P6 거래 생애주기** (`/lifecycle`, migration 007) — 기한연장·조건변경 재승인,
+  에버그리닝 플래그 시 부서장 이상 전결 상향 + 사후 관제
+- **P7 ECL 전망모형 점검** (migration 008) — FLI 시나리오 민감도, 관리자 오버레이
+  (부서장 이상·재검토 기한 강제), 독립 검증 제출용 점검 리포트 초안
+- **P8 PF 충당금 차등화** — 사업성평가 4등급 자동 판정 → 차등 충당금(2/7/30/75% 가정)
+  시뮬, 일률 적립 대비 증감
+- 스토리 투어 7단계 → 10단계 확장 (연장 통제 → 손실흡수력 → CET1 경로로 마무리)
+- 테스트 204개 전건 통과 (세션 풀 고갈 교정 포함)
 
 ### v2.0.1 (2026-08-15) — 승인조건 구조화
 

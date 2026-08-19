@@ -86,7 +86,7 @@ app = FastAPI(
     - **ESG 리스크**: ESG 평가, 녹색금융
     - **ALM**: 금리갭 분석, 헷지 전략
     """,
-    version="1.0.0",
+    version="1.9.0",
     lifespan=lifespan
 )
 
