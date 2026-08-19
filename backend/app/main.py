@@ -26,6 +26,8 @@ from .api import portfolio_map
 # 여신통제 확장: 여신철·EWS 조치의무·금리인하요구권
 from .api import credit_case, ews_actions, rate_reduction, obligations, rules
 from .api import opinion
+# 규제 대응·건전성 고도화 (2026-08 개선 연구 P1~P8)
+from .api import loss_absorption, cet1_path, region_rebalancing
 # 인증 (서버측 전결·승인자 결정)
 from .api import auth as auth_api
 from .core.auth import verify_token
@@ -184,6 +186,11 @@ app.include_router(auth_api.router)
 app.include_router(obligations.router)
 app.include_router(rules.router)
 app.include_router(opinion.router)
+
+# 규제 대응·건전성 고도화 (2026-08 개선 연구)
+app.include_router(loss_absorption.router)
+app.include_router(cet1_path.router)
+app.include_router(region_rebalancing.router)
 
 
 @app.get("/health")

@@ -27,6 +27,8 @@ import {
   AlertOctagon,
   HeartHandshake,
   ShieldCheck,
+  ShieldAlert,
+  MapPin,
   Stamp,
   Landmark,
   Info,
@@ -81,6 +83,7 @@ export const navGroups: NavGroup[] = [
       { path: '/collateral-monitoring', label: '담보 모니터링', icon: <Home size={20} /> },
       { path: '/asset-classification', label: '자산건전성 분류', icon: <ListChecks size={20} /> },
       { path: '/portfolio-map', label: '포트폴리오 맵', icon: <Target size={20} /> },
+      { path: '/region-rebalancing', label: '지역 리밸런싱', icon: <MapPin size={20} /> },
       { path: '/pf-monitoring', label: 'PF 사업장', icon: <Landmark size={20} /> },
     ]
   },
@@ -89,6 +92,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { path: '/delinquency', label: '연체 관리', icon: <AlertOctagon size={20} /> },
       { path: '/workout', label: '부실채권 관리', icon: <Briefcase size={20} /> },
+      { path: '/loss-absorption', label: '손실흡수력 관리', icon: <ShieldAlert size={20} /> },
     ]
   },
   {
@@ -98,6 +102,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { path: '/portfolio', label: '포트폴리오', icon: <PieChart size={20} /> },
       { path: '/capital', label: '자본관리', icon: <PiggyBank size={20} /> },
+      { path: '/cet1-path', label: 'CET1 경로', icon: <TrendingUp size={20} /> },
       { path: '/limits', label: '한도관리', icon: <Gauge size={20} /> },
       { path: '/alm', label: 'ALM', icon: <TrendingDown size={20} /> },
     ]

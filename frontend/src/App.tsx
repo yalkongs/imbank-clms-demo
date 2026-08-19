@@ -37,6 +37,10 @@ const CustomerBrowser = React.lazy(() => import('./pages/CustomerBrowser'));
 const Covenant = React.lazy(() => import('./pages/Covenant'));
 const AssetClassification = React.lazy(() => import('./pages/AssetClassification'));
 const Delinquency = React.lazy(() => import('./pages/Delinquency'));
+// 규제 대응·건전성 고도화 (2026-08 개선 연구 P1~P8)
+const LossAbsorption = React.lazy(() => import('./pages/LossAbsorption'));
+const CET1Path = React.lazy(() => import('./pages/CET1Path'));
+const RegionRebalancing = React.lazy(() => import('./pages/RegionRebalancing'));
 // 모바일 전용 (Tier 1)
 const MobileLayout = React.lazy(() => import('./mobile/MobileLayout'));
 const MHome = React.lazy(() => import('./mobile/MHome'));
@@ -104,6 +108,10 @@ function App() {
         {/* Phase 2: 부실 관리 핵심 */}
         <Route path="asset-classification" element={<AssetClassification />} />
         <Route path="delinquency" element={<Delinquency />} />
+        {/* 규제 대응·건전성 고도화 */}
+        <Route path="loss-absorption" element={<LossAbsorption />} />
+        <Route path="cet1-path" element={<CET1Path />} />
+        <Route path="region-rebalancing" element={<RegionRebalancing />} />
       </Route>
 
       {/* 모바일 전용 (Tier 1) */}
