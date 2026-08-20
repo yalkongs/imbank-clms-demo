@@ -366,9 +366,11 @@ def get_dynamic_pricing_suggestion(
     rwa = app_info[11] or ead * 0.5
     tenor = app_info[2] or 12
 
-    # 기본 금리 구성요소
-    base_rate = 0.035  # 정책금리 3.5%
-    ftp_spread = 0.008  # FTP 0.8%
+    # 기본 금리 구성요소 - 가격 정본(calculate_pricing 기본값)과 동일 상수.
+    # 종전에는 3.5%/0.8% 를 자체 보유해 동일 거래 조달원가가 모듈 간
+    # 110bp 어긋났다 (2026-08-21 외부감사 #8).
+    base_rate = 0.027   # CD91 근사 (정본과 동일)
+    ftp_spread = 0.005  # FTP (정본과 동일)
     opex_spread = 0.002  # 운영비 0.2%
 
     # EL 스프레드 = PD * LGD (연환산)
@@ -381,12 +383,12 @@ def get_dynamic_pricing_suggestion(
     # 전략 조정
     strategy_adj = (strategy[1] / 10000) if strategy else 0
 
-    # 최소 필요 금리 (허들레이트 충족)
-    min_rate_for_hurdle = base_rate + ftp_spread + el_spread + (ec * hurdle_rate / ead if ead > 0 else 0) + opex_spread
+    # 최소 필요 금리 (허들레이트 충족) - 전략조정 포함 (감사 #8: 산출만 하고 미반영이던 값)
+    min_rate_for_hurdle = base_rate + ftp_spread + el_spread + (ec * hurdle_rate / ead if ead > 0 else 0) + opex_spread + strategy_adj
 
     # 목표 RAROC 달성 금리
     target_raroc_pct = target_raroc / 100 if target_raroc else default_target
-    rate_for_target = base_rate + ftp_spread + el_spread + (ec * target_raroc_pct / ead if ead > 0 else 0) + opex_spread
+    rate_for_target = base_rate + ftp_spread + el_spread + (ec * target_raroc_pct / ead if ead > 0 else 0) + opex_spread + strategy_adj
 
     # 시나리오별 금리-RAROC 분석
     scenarios = []
@@ -758,35 +760,12 @@ def get_rating_bucket(grade: str) -> str:
 
 
 def calculate_irb_rwa(pd: float, lgd: float, ead: float, maturity: float) -> float:
-    """Basel II IRB 방식 RWA 계산"""
-    from scipy.stats import norm
+    """Basel IRB RWA - 정본 계산기(services.calculations)에 위임.
 
-    # PD 범위 제한
-    pd = max(0.0003, min(pd, 1.0))
-
-    # 상관계수 R
-    r = 0.12 * (1 - math.exp(-50 * pd)) / (1 - math.exp(-50)) + \
-        0.24 * (1 - (1 - math.exp(-50 * pd)) / (1 - math.exp(-50)))
-
-    # 만기조정 b
-    b = (0.11852 - 0.05478 * math.log(pd)) ** 2
-
-    # 만기 제한
+    종전에는 이 모듈이 자체 공식(PD 하한 0.03%, scipy)을 중복 보유해
+    모듈 간 RWA 가 달랐다 (2026-08-21 외부감사 #1 - 계산기 통합).
+    PD 하한·부도 분기·만기조정은 정본이 일괄 처리한다.
+    """
+    from ..services.calculations import calculate_rwa
     m = max(1, min(maturity, 5))
-
-    # K 계산
-    try:
-        k = lgd * norm.cdf(
-            (1 / math.sqrt(1 - r)) * norm.ppf(pd) +
-            math.sqrt(r / (1 - r)) * norm.ppf(0.999)
-        ) - pd * lgd
-
-        # 만기조정
-        k = k * (1 + (m - 2.5) * b) / (1 - 1.5 * b)
-
-        # RWA
-        rwa = k * 12.5 * ead
-    except:
-        rwa = ead * 0.5  # 기본값
-
-    return rwa
+    return calculate_rwa(pd=pd, lgd=lgd, ead=ead, maturity_years=m)

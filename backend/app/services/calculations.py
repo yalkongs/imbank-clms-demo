@@ -24,11 +24,38 @@ STRATEGY_PRICING_ADJ = {
 }
 
 
+# 바젤Ⅲ 최종안 기업 익스포저 PD 입력 하한 (CRE32). credit_models 의 등급 PD
+# (AAA 0.02% 등)가 이보다 낮아도 규제자본 산출에는 하한을 적용한다.
+# 종전에는 하한이 없어 우량등급 RWA 가 약 42% 과소산출됐다 (2026-08-21 외부감사 #1).
+PD_FLOOR = 0.0005
+
+# 부도 판정 경계 - 이 이상이면 부도 익스포저 공식으로 분기한다
+PD_DEFAULTED = 0.999
+
+# 부도 익스포저의 최선추정 예상손실(EL_BE) 비율 가정 - CRE31 은
+# K = max(0, LGD - EL_BE) 를 요구한다. PoC 에서는 EL_BE = LGD×80% 로 가정
+# (회수 불확실성 20% 를 미예상손실 자본으로 보유). 가정임을 명시한다.
+DEFAULTED_EL_BE_RATIO = 0.8
+
+
 def calculate_rwa(pd: float, lgd: float, ead: float, maturity_years: float = 2.5) -> float:
     """
     IRB 방식 RWA 계산
     Basel II/III 공식 기반 간소화 버전
+
+    - 비부도: PD 하한(PD_FLOOR) 적용 후 표준 IRB 공식
+    - 부도(PD≥PD_DEFAULTED): 비부도 공식은 K가 음수가 되어 RWA 0 이 되므로
+      CRE31 방식 K = max(0, LGD - EL_BE) 로 분기한다. 종전에는 부도등급(D)
+      자본요구가 0 이었다 (2026-08-21 외부감사 #1).
     """
+    # 부도 익스포저 분기
+    if pd >= PD_DEFAULTED:
+        k = max(lgd - lgd * DEFAULTED_EL_BE_RATIO, 0.0)
+        return k * 12.5 * ead
+
+    # 비부도: PD 입력 하한
+    pd = min(max(pd, PD_FLOOR), PD_DEFAULTED)
+
     # 상관계수 R 계산
     r = 0.12 * (1 - math.exp(-50 * pd)) / (1 - math.exp(-50)) + \
         0.24 * (1 - (1 - math.exp(-50 * pd)) / (1 - math.exp(-50)))
@@ -629,18 +656,26 @@ def classify_asset_by_dpd(dpd: int) -> str:
         return 'LOSS'
 
 
+# PD 기준 분류 검토 트리거 - 이 이상이면 여신역 정밀 검토 대상으로 표시한다
+PD_REVIEW_TRIGGER = 0.20
+
+
 def classify_asset_by_pd(pd: float) -> str:
-    """PD 기준 자산건전성 분류"""
+    """PD 기준 자산건전성 분류 - 최대 '고정'까지만.
+
+    회수의문·추정손실은 규정상 회수예상가액·부도 등 객관적 증거로 판정하는
+    등급이므로 모형 PD 단독으로 확정하지 않는다 (EWS가 요주의까지만 영향을
+    주는 것과 같은 원칙). 종전에는 DPD 0·EWS 정상이어도 PD≥50% 면 최불리
+    규칙에 의해 추정손실·적립 100% 가 됐다 (2026-08-21 외부감사 #3).
+    PD≥PD_REVIEW_TRIGGER 는 classify_asset 결과의 pd_review_trigger 로
+    정밀 검토 대상임을 표시한다.
+    """
     if pd < 0.03:
         return 'NORMAL'
     elif pd < 0.10:
         return 'PRECAUTIONARY'
-    elif pd < 0.20:
-        return 'SUBSTANDARD'
-    elif pd < 0.50:
-        return 'DOUBTFUL'
     else:
-        return 'LOSS'
+        return 'SUBSTANDARD'
 
 
 def classify_asset_by_ews(ews_score: float) -> str:
@@ -698,6 +733,8 @@ def classify_asset(dpd: int, pd: float, ews_score: float = None,
         'pd_based_class':    pd_class,
         'ews_based_class':   ews_class,
         'final_class_basis': final_basis,
+        # PD 가 검토 트리거를 넘으면 분류 확정과 별개로 정밀 검토 대상 표시
+        'pd_review_trigger': pd >= PD_REVIEW_TRIGGER,
         'provision_rate':    PROVISION_RATES[final_class],
     }
 

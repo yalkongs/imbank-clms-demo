@@ -266,7 +266,10 @@ def get_portfolio_distribution(region: str = Query(None), db: Session = Depends(
     rating_dist = db.execute(text(f"""
         SELECT cr.final_grade, SUM(f.approved_amount) as exposure
         FROM facility f
+        -- 최신 평가 1건만 조인 (평가 이력 수만큼 잔액 중복 - 감사 #5)
         JOIN credit_rating_result cr ON f.customer_id = cr.customer_id
+            AND cr.rating_date = (SELECT MAX(rating_date)
+                                  FROM credit_rating_result WHERE customer_id = f.customer_id)
         JOIN customer c ON f.customer_id = c.customer_id
         WHERE f.status = 'ACTIVE' {region_cond}
         GROUP BY cr.final_grade

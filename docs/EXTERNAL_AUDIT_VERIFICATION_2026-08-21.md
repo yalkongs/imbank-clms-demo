@@ -60,3 +60,22 @@ agy는 비대화(`--print`) 모드에서 자체 도구 호출 권한을 승인�
 
 ---
 *검증 주체: Claude (본 세션). 검증 방식: 파일 직접 열람 + 계산기 호출 재현 + SQL 재현. codex 원본 보고는 세션 스크래치패드 `codex-result.md`.*
+
+## 조치 결과 (2026-08-21 당일 반영 - Track A~C)
+
+| # | 조치 | 구현 |
+|---|---|---|
+| 1 | ✅ A1 | `calculate_rwa` 에 PD 하한(0.05%)·부도 분기(CRE31, K=max(0,LGD−EL_BE)) 추가. capital_optimizer 중복 계산기는 정본 위임으로 통합 |
+| 3 | ✅ A2 | `classify_asset_by_pd` 상한을 '고정'으로 제한 (EWS 요주의 상한과 동일 원칙), `pd_review_trigger` 로 정밀 검토 표시 |
+| 4 | ✅ A3 | migration 009 `facility_origination_risk` (3,734건 백필, source 표기) + ECL 이 스냅샷 기준으로 SICR 판정. 현재 등급 조인 복원 → 등급하락 트리거 실발화 확인 |
+| 5 | ✅ B1 | portfolio 2곳·dashboard·group_credit 등급 조인을 최신 1건으로 제한. 산업 합계가 시설 실합과 정합 |
+| 6 | ✅ B2 | 기존충당금 정본 규칙: ① 시설 워크아웃 실적 ② 전기 요구액 ③ 0. 가공 배수(×1.05/80~90%) 제거. ECL 도 시설 스코프로 교정 |
+| 7 | ✅ B3 | 회수예상가액 = 인정가액 − 선순위 (순회수가능가액) |
+| 8 | ✅ C1 | 가격 상수 정본 정렬(2.7%/0.5%), 전략조정 미반영 결함 수정, 담보효과 LGD 경로 1회로 일원화 |
+| 9 | ✅ C2 | migration 010 `repayment_type` (AMORTIZING 1,409 / BULLET 2,325) + 상환방식·잔존만기 기반 원금상환 추정 + 신규 이자 반영 |
+| 10 | ✅ C3 | 배치평가 결측 대체에 `is_estimated`·`imputed_fields` provenance 부착 |
+| 11 | ✅ C3 | `sales_growth`→`asset_turnover` 명칭 정정, PIT PD 산업계수 재곱 제거(원점수 1회 반영), 모델 사양 문구 정합 |
+| 12 | ✅ A1 | What-if `risk.rwa` 가 선택 만기를 따름 (RAROC 과 동일 만기) |
+| 2 | ⏸ 보류 | ECL 현금부족액·EIR 엔진은 계약 현금흐름 스키마 신설이 필요한 대공사(L) - 문서화된 후속 과제로 유지 |
+
+회귀 테스트 5건 추가 (부도 RWA·PD 하한·PD 분류 상한·What-if 만기·origination 스냅샷), 전체 212건 통과.

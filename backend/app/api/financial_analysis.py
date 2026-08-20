@@ -19,6 +19,37 @@ from ..services.calculations import (
 
 router = APIRouter(prefix="/api/financial", tags=["Financial Analysis"])
 
+
+def _annual_principal_estimate(db: Session, customer_id: str) -> float:
+    """상환방식 기반 연간 원금상환 추정 (2026-08-21 외부감사 #9).
+
+    종전에는 활성 잔액의 15%/년 일률 가정이라 만기일시 여신도 연 15%
+    상환으로 계산됐다. 규칙:
+      · AMORTIZING: 잔액 / 잔존연수 (원금균등 근사, 최소 1년)
+      · BULLET(만기일시·회전성): 12개월 내 만기 도래분만 전액 반영
+    """
+    from datetime import date as _date
+    rows = db.execute(text("""
+        SELECT outstanding_amount, maturity_date, COALESCE(repayment_type, 'BULLET')
+        FROM facility WHERE customer_id = :cid AND status = 'ACTIVE'
+    """), {"cid": customer_id}).fetchall()
+    total = 0.0
+    for amt, mat, rt in rows:
+        amt = float(amt or 0)
+        years_left = 1.0
+        if mat:
+            try:
+                years_left = max((_date.fromisoformat(str(mat)) - AS_OF_DATE).days / 365.0, 0.0)
+            except Exception:
+                pass
+        if rt == 'AMORTIZING':
+            total += amt / max(years_left, 1.0)
+        elif years_left <= 1.0:
+            total += amt
+    return total
+
+
+
 # ============================================================
 # 재무비율 판정 기준 레이블
 # ============================================================
@@ -87,13 +118,9 @@ def get_financial_ratios(
         stmt_list = [_row_to_stmt(r) for r in stmts]
         for i, stmt in enumerate(stmt_list):
             prev = stmt_list[i + 1] if i + 1 < len(stmt_list) else None
-            # 여신 원금상환액: facility 합계에서 추정
-            facility_row = db.execute(text("""
-                SELECT COALESCE(SUM(outstanding_amount), 0)
-                FROM facility
-                WHERE customer_id = :cid AND status = 'ACTIVE'
-            """), {"cid": customer_id}).scalar() or 0
-            annual_principal = facility_row * 0.15  # 평균 6.7년 만기 가정
+            # 여신 원금상환액: 상환방식·잔존만기 기반 추정 (감사 #9).
+            # 과거 연도에도 현재 여신 구성을 근사로 적용한다 (이력 스케줄 부재).
+            annual_principal = _annual_principal_estimate(db, customer_id)
 
             ratios = calculate_financial_ratios(stmt, prev, annual_principal)
             results.append({
@@ -326,10 +353,14 @@ def get_financial_summary_for_application(
             'total_borrowing': stmt[9], 'equity': stmt[10], 'retained_earning': stmt[11],
             'working_capital': stmt[12], 'operating_cf': stmt[13],
         }
-        # 신청 건 포함 원금 상환 추정
+        # 신청 건 포함 원금 상환 추정 (감사 #9: 기존분은 상환방식 기반)
         new_annual_principal = requested_amount / (tenor_months / 12)
-        existing_annual = (existing_debt * 0.15)
+        existing_annual = _annual_principal_estimate(db, customer_id)
         total_annual_principal = existing_annual + new_annual_principal
+        # 신규 여신 이자도 상환부담에 반영 - 종전에는 원금만 더하고 이자를
+        # 누락했다. 금리는 여신 평균(4.7%) 근사 (실제 견적 확정 전 단계).
+        stmt_dict['interest_expense'] = float(stmt_dict.get('interest_expense') or 0) \
+            + requested_amount * 0.047
 
         ratios = calculate_financial_ratios(
             stmt_dict, annual_principal=total_annual_principal

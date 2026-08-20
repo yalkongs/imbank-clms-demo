@@ -484,7 +484,11 @@ def get_industry_detail(industry_code: str, region: str = Query(None), db: Sessi
                cr.final_grade, SUM(f.outstanding_amount) as exposure
         FROM customer c
         LEFT JOIN facility f ON c.customer_id = f.customer_id
+        -- 최신 평가 1건만 조인 - 평가 이력 수만큼 잔액이 곱해지던 결함
+        -- (2026-08-21 외부감사 #5: 산업 익스포저 1.64배 부풀림)
         LEFT JOIN credit_rating_result cr ON c.customer_id = cr.customer_id
+            AND cr.rating_date = (SELECT MAX(rating_date)
+                                  FROM credit_rating_result WHERE customer_id = c.customer_id)
         WHERE c.industry_code = :code AND f.status = 'ACTIVE' {region_clause}
         GROUP BY c.customer_id
         ORDER BY exposure DESC
@@ -504,11 +508,13 @@ def get_industry_detail(industry_code: str, region: str = Query(None), db: Sessi
         SELECT cr.final_grade, COUNT(*) as cnt, SUM(f.outstanding_amount) as exposure
         FROM customer c
         JOIN facility f ON c.customer_id = f.customer_id
+        -- 최신 평가 1건 (종전 GROUP BY 는 임의 등급을 골랐다 - 감사 #5)
         LEFT JOIN (
-            SELECT customer_id, final_grade
+            SELECT customer_id, final_grade,
+                   ROW_NUMBER() OVER (PARTITION BY customer_id
+                                      ORDER BY rating_date DESC) AS rn
             FROM credit_rating_result
-            GROUP BY customer_id
-        ) cr ON c.customer_id = cr.customer_id
+        ) cr ON c.customer_id = cr.customer_id AND cr.rn = 1
         WHERE c.industry_code = :code AND f.status = 'ACTIVE' {region_clause}
         GROUP BY cr.final_grade
         ORDER BY cr.final_grade

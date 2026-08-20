@@ -305,6 +305,8 @@ def get_guarantee_network(
                    COALESCE(SUM(f.outstanding_amount), 0) AS outstanding
             FROM customer c
             LEFT JOIN credit_rating_result cr ON c.customer_id = cr.customer_id
+                AND cr.rating_date = (SELECT MAX(rating_date)
+                                      FROM credit_rating_result WHERE customer_id = c.customer_id)
             LEFT JOIN facility f ON c.customer_id = f.customer_id AND f.status = 'ACTIVE'
             WHERE c.customer_id = :cid
             GROUP BY c.customer_name, cr.final_grade

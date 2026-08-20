@@ -1075,7 +1075,7 @@ def get_model_type_specifications(model_type: str) -> dict:
                 "pit_pd": {
                     "name": "Point-in-Time PD",
                     "formula": "PD_PIT = PD_TTC × Scalar(Macro)",
-                    "description": "현재 경기 상황을 반영한 PD"
+                    "description": "현재 경기 상황을 반영한 PD - 본 시스템은 거시 스칼라를 ECL 단계(macro_adj_factor)에서 1회 적용하며, 등급모형 산출 PD에 산업계수를 재곱하지 않는다 (2026-08-21 정비)"
                 },
                 "ttc_pd": {
                     "name": "Through-the-Cycle PD",

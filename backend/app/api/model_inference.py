@@ -407,7 +407,13 @@ def run_batch_rating(
 
         if customer:
             try:
-                # 간이 입력 데이터 구성
+                # 간이 입력 데이터 구성 - 결측 필드는 기본값으로 대체하되,
+                # 어떤 필드가 대체됐는지 imputed_fields 로 결과에 남긴다
+                # (2026-08-21 외부감사 #10: 결측 무표시 대체 금지).
+                _core = {"total_assets": customer[3], "total_liabilities": customer[4],
+                         "sales": customer[6], "operating_income": customer[7],
+                         "net_income": customer[8]}
+                imputed_fields = [k for k, v in _core.items() if not v]
                 input_data = {
                     "total_assets": float(customer[3]) if customer[3] else 100_000_000_000,
                     "total_liabilities": float(customer[4]) if customer[4] else 60_000_000_000,
@@ -437,7 +443,10 @@ def run_batch_rating(
                     "success": True,
                     "grade": result['grade'],
                     "pd": result['pd'],
-                    "score": result['score_1000']
+                    "score": result['score_1000'],
+                    # 결측 대체 provenance (감사 #10) - 추정 등급임을 숨기지 않는다
+                    "is_estimated": bool(imputed_fields),
+                    "imputed_fields": imputed_fields,
                 })
             except Exception as e:
                 results.append({

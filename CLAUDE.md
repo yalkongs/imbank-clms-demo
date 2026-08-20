@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 42개 사용자 화면 · 43개 API 모듈(라우터) · 97개 업무 테이블 · 자동 테스트 207건.
+iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 42개 사용자 화면 · 43개 API 모듈(라우터) · 97개 업무 테이블 · 자동 테스트 212건.
 
 ## 개발 서버 실행
 
@@ -42,7 +42,7 @@ React 18 (Vite, port 3000)  →  /api/* proxy  →  FastAPI (uvicorn, port 8000)
 
 **백엔드** (`backend/`): FastAPI + SQLAlchemy. ORM 모델 정의는 있으나 실제로는 raw SQL을 직접 실행하는 방식을 사용함 (`db.execute(text(...))`). `backend/app/main.py`에서 43개 라우터 등록.
 
-**데이터베이스** (`database/`): SQLite 단일 파일 (`database/imbank_demo.db`, 40MB). 업무 테이블 97개 (schema.sql 49 + migrations/*.sql 확장). WAL 모드 활성화됨.
+**데이터베이스** (`database/`): SQLite 단일 파일 (`database/imbank_demo.db`, 40MB). 업무 테이블 98개 (schema.sql 49 + migrations/*.sql 확장). WAL 모드 활성화됨.
 
 ## 핵심 파일
 

@@ -287,12 +287,16 @@ def run_classification(
         """)
     ).fetchall()
 
-    # 담보 회수예상가액 (인정가액 합계) - 3개월 이상 연체 건의 분할분류에 쓴다.
+    # 담보 회수예상가액 - 3개월 이상 연체 건의 분할분류에 쓴다.
     # 시행세칙 별표3: 회수예상가액 해당분은 고정, 초과분은 회수의문/추정손실.
+    # 선순위 담보권 공제 후 순회수가능가액을 쓴다 - 종전에는 인정가액
+    # 총액을 그대로 써서 선순위 채권자 귀속분까지 은행 회수액으로 봤다
+    # (2026-08-21 외부감사 #7).
     recoverable_map = {
         r[0]: float(r[1] or 0)
         for r in db.execute(text("""
-            SELECT facility_id, SUM(recognized_value)
+            SELECT facility_id,
+                   SUM(MAX(recognized_value - COALESCE(prior_lien_amount, 0), 0))
             FROM collateral WHERE facility_id IS NOT NULL
             GROUP BY facility_id
         """)).fetchall()
@@ -322,19 +326,29 @@ def run_classification(
         req_prov    = result.get('required_provision')
         if req_prov is None:
             req_prov = round(exposure * prov_rate, 2)
-        # 현재 충당금: 직전 기록의 existing_provision 사용 (없으면 필요충당금의 80%)
-        ex_prov_row = db.execute(
+        # 현재(기존) 충당금 - 시설 단위 정본 규칙 (2026-08-21 외부감사 #6):
+        #   ① 해당 시설의 워크아웃 개별충당금 실제액
+        #   ② 없으면 직전 분류의 필요충당금 (전기 요구액을 적립했다는 회계 가정)
+        #   ③ 이력이 없으면 0 (신규 산정 - 적립 이력 없음)
+        # 종전에는 '직전×1.05, 요구액의 80~90% 상한' 가공값이라 인위적
+        # 부족액이 영구 재생산됐고 화면은 이를 실제 적립액처럼 표시했다.
+        wo_row = db.execute(
+            text("SELECT SUM(provision_amount) FROM workout_case WHERE facility_id=:fid"),
+            {"fid": fid}
+        ).fetchone()
+        prev_req_row = db.execute(
             text("""
-                SELECT existing_provision FROM asset_classification
+                SELECT required_provision FROM asset_classification
                 WHERE facility_id=:fid ORDER BY base_date DESC LIMIT 1
             """),
             {"fid": fid}
         ).fetchone()
-        if ex_prov_row and ex_prov_row[0] is not None:
-            # 직전 충당금 대비 이번 필요충당금 변동분의 80%를 적립으로 가정
-            ex_prov = round(min(float(ex_prov_row[0]) * 1.05, req_prov * 0.90), 2)
+        if wo_row and wo_row[0]:
+            ex_prov = round(float(wo_row[0]), 2)
+        elif prev_req_row and prev_req_row[0] is not None:
+            ex_prov = round(float(prev_req_row[0]), 2)
         else:
-            ex_prov = round(req_prov * 0.80, 2)
+            ex_prov = 0.0
         prov_gap = round(req_prov - ex_prov, 2)
 
         # 이전 분류 조회

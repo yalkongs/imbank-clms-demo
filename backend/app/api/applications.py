@@ -845,11 +845,13 @@ def simulate_application(
     lgd = 0.35 if has_collateral else 0.50
 
     # 가격 계산
+    # 담보효과는 LGD 경로(0.50→0.35)로만 1회 반영한다. 종전에는
+    # has_collateral 로 -30bp 를 추가로 받아 이중 반영됐다 (감사 #8).
     pricing_result = calculate_pricing(
         pd=pd,
         lgd=lgd,
         strategy_code=strategy_code,
-        has_collateral=has_collateral
+        has_collateral=False
     )
 
     sim_rate = rate or pricing_result["final_rate"]
@@ -873,8 +875,11 @@ def simulate_application(
         tenor_years=sim_tenor / 12
     )
 
-    # RWA 계산
-    rwa = calculate_rwa(ead=sim_amount, pd=pd, lgd=lgd)
+    # RWA 계산 - RAROC 과 동일한 만기를 쓴다. 종전에는 만기를 생략해 기본
+    # 2.5년이 적용됐고, 한 What-if 응답 안에 만기 다른 RWA 두 개가 반환됐다
+    # (2026-08-21 외부감사 #12).
+    rwa = calculate_rwa(ead=sim_amount, pd=pd, lgd=lgd,
+                        maturity_years=sim_tenor / 12)
 
     # 허들레이트 조회
     hurdle = db.execute(text("""

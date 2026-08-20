@@ -558,3 +558,54 @@ def test_conditional_application_stays_in_approval_inbox():
     entry = next((i for i in inbox["items"] if i["application_id"] == aid), None)
     assert entry is not None, "조건부승인 건이 결재함에서 사라짐 - 2차 결재 불가"
     assert entry["status"] == "CONDITIONAL"
+
+
+# ============================================================
+# 2026-08-21 외부감사 정비 회귀 (Track A~C)
+# ============================================================
+
+def test_defaulted_rwa_not_zero():
+    """감사 #1: 부도등급(PD 100%)의 자본요구가 사라지지 않는다 (CRE31 분기)"""
+    from app.services.calculations import calculate_rwa
+    assert calculate_rwa(1.0, 0.45, 100e8) > 0, "부도 익스포저 RWA 가 0"
+
+
+def test_pd_input_floor_applied():
+    """감사 #1: PD 입력 하한(0.05%) - 하한 미만 PD 도 하한 기준으로 산출"""
+    from app.services.calculations import calculate_rwa
+    assert abs(calculate_rwa(0.0002, 0.35, 100e8)
+               - calculate_rwa(0.0005, 0.35, 100e8)) < 1.0
+
+
+def test_pd_alone_capped_at_substandard():
+    """감사 #3: 정상 이행 차주는 모형 PD 단독으로 회수의문·추정손실이 되지 않는다"""
+    from app.services.calculations import classify_asset
+    r = classify_asset(dpd=0, pd=0.60, ews_score=80)
+    assert r["classification"] == "SUBSTANDARD", r
+    assert r["pd_review_trigger"] is True
+
+
+def test_whatif_rwa_follows_selected_maturity():
+    """감사 #12: What-if 응답의 risk.rwa 가 선택 만기를 따른다"""
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT application_id FROM loan_application
+        WHERE status IN ('REVIEWING','RECEIVED') LIMIT 1
+    """)).fetchone()
+    db.close()
+    if not row:
+        pytest.skip("표본 없음")
+    r1 = client.get(f"/api/applications/{row[0]}/simulate", params={"tenor": 12})
+    r2 = client.get(f"/api/applications/{row[0]}/simulate", params={"tenor": 60})
+    if r1.status_code != 200 or r2.status_code != 200:
+        pytest.skip("simulate 불가 표본")
+    assert r1.json()["risk"]["rwa"] != r2.json()["risk"]["rwa"], \
+        "만기를 바꿔도 RWA 가 같다 - 기본 2.5년 고정 결함 재발"
+
+
+def test_origination_snapshot_backfilled():
+    """감사 #4: SICR 최초 인식 기준점 스냅샷이 존재한다 (사후 ×0.7 추정 제거)"""
+    db = SessionLocal()
+    n = db.execute(text("SELECT COUNT(*) FROM facility_origination_risk")).scalar()
+    db.close()
+    assert n and n > 3000, f"origination 스냅샷 부족: {n}"

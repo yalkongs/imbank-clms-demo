@@ -110,7 +110,7 @@ class CorporateRatingModel:
         'roa': 0.6,  # ROA (높을수록 좋음)
         'roe': 0.4,  # ROE (높을수록 좋음)
         'operating_margin': 0.5,  # 영업이익률 (높을수록 좋음)
-        'sales_growth': 0.3,  # 매출성장률 (높을수록 좋음)
+        'asset_turnover': 0.3,  # 총자산회전율 (높을수록 좋음) - 종전 명칭 sales_growth 는 실제 산식(매출/총자산)과 달라 정정 (감사 #11)
         'ebitda_margin': 0.4,  # EBITDA 마진 (높을수록 좋음)
         'cash_ratio': 0.3,  # 현금비율 (높을수록 좋음)
 
@@ -177,7 +177,7 @@ class CorporateRatingModel:
                                if input_data.current_liabilities > 0 else 0.5)
 
         # 성장성 (매출액 대비 자산 회전율로 대체)
-        ratios['sales_growth'] = input_data.sales / input_data.total_assets if input_data.total_assets > 0 else 0.5
+        ratios['asset_turnover'] = input_data.sales / input_data.total_assets if input_data.total_assets > 0 else 0.5
 
         return ratios
 
@@ -210,7 +210,7 @@ class CorporateRatingModel:
         normalized['cash_ratio'] = normalize(ratios['cash_ratio'], 0, 1)
 
         # 매출/자산 회전율: 0~2 → 0~1
-        normalized['sales_growth'] = normalize(ratios['sales_growth'], 0, 2)
+        normalized['asset_turnover'] = normalize(ratios['asset_turnover'], 0, 2)
 
         return normalized
 
@@ -305,7 +305,7 @@ class CorporateRatingModel:
             'score_1000': score_1000,
             'pd': pd,
             'ttc_pd': pd,  # TTC PD
-            'pit_pd': pd * industry_risk,  # PIT PD (산업 조정)
+            'pit_pd': pd,  # 산업효과는 원점수에 1회 반영 - 재곱 제거 (감사 #11). 거시 PIT 반영은 ECL macro_adj_factor 단계 소관
             'grade': grade,
             'components': {
                 'financial': {
@@ -511,7 +511,7 @@ class RetailRatingModel:
             'score_1000': int(total_score * 10),
             'pd': pd,
             'ttc_pd': pd,
-            'pit_pd': pd * industry_risk,
+            'pit_pd': pd,   # 산업 이중반영 제거 (감사 #11)
             'grade': grade,
             'components': {
                 'sales_score': scores['sales'],

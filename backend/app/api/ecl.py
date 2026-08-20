@@ -285,7 +285,12 @@ def calculate_ecl_for_facility(
         text("""
             SELECT f.facility_id, f.customer_id, f.outstanding_amount,
                    f.dpd, f.contract_date, f.maturity_date,
-                   NULL AS credit_grade, rp.ttc_pd AS pd, rp.lgd
+                   -- 현재 등급: 최신 신용평가 1건. 종전에는 NULL 고정이라
+                   -- 등급 하락 SICR 트리거가 영구 무력화돼 있었다 (감사 #4)
+                   (SELECT crr.final_grade FROM credit_rating_result crr
+                    WHERE crr.customer_id = f.customer_id
+                    ORDER BY crr.rating_date DESC LIMIT 1) AS credit_grade,
+                   rp.ttc_pd AS pd, rp.lgd
             FROM facility f
             JOIN customer c ON f.customer_id = c.customer_id
             -- risk_parameter 는 customer_id 를 갖지 않는다(application_id 기준).
@@ -306,15 +311,28 @@ def calculate_ecl_for_facility(
     pd_curr = fac[7] or GRADE_PD_MAP.get(fac[6] or 'BBB', 0.02)
     lgd     = fac[8] or 0.45
 
-    # 최초 승인 시 PD (이력에서 가져오거나 현재 PD의 70% 추정)
+    # 최초 인식 기준점 - facility_origination_risk 불변 스냅샷 (IFRS9 5.5.9).
+    # 종전에는 '현재 PD×0.7' 사후 추정이라 2배 트리거가 구조적으로 미달했다
+    # (2026-08-21 외부감사 #4). 스냅샷이 없으면 현재 PD·등급을 기준점으로
+    # 고정 저장하고(FIRST_CALC_CURRENT), 이후 악화를 그 기준에서 측정한다.
     orig_row = db.execute(
         text("""
-            SELECT pd_original FROM ecl_calculation
-            WHERE facility_id=:fid ORDER BY calc_date ASC LIMIT 1
+            SELECT orig_pd, orig_grade FROM facility_origination_risk
+            WHERE facility_id = :fid
         """),
         {"fid": facility_id}
     ).fetchone()
-    pd_orig = orig_row[0] if orig_row else pd_curr * 0.7
+    if orig_row and orig_row[0] is not None:
+        pd_orig = float(orig_row[0])
+        orig_grade_db = orig_row[1]
+    else:
+        pd_orig = pd_curr
+        orig_grade_db = None
+        db.execute(text("""
+            INSERT OR IGNORE INTO facility_origination_risk
+                (facility_id, orig_date, orig_grade, orig_pd, source)
+            VALUES (:fid, :d, :g, :pd, 'FIRST_CALC_CURRENT')
+        """), {"fid": facility_id, "d": cd, "g": fac[6], "pd": pd_curr})
 
     # 잔존 기간 (개월)
     remaining_months = 24  # 기본값
@@ -335,10 +353,11 @@ def calculate_ecl_for_facility(
     ).fetchone()
     ews_score = float(ews_row[0]) if ews_row else None
 
-    # 등급 낙폭 추정
+    # 등급 낙폭 - 최초 인식 스냅샷 등급 vs 최신 평가 등급.
+    # 종전에는 orig=curr 로 고정해 낙폭이 언제나 0이었다 (감사 #4)
     grade_order = list(GRADE_PD_MAP.keys())
     curr_grade  = fac[6] or 'BBB'
-    orig_grade  = curr_grade  # 단순화
+    orig_grade  = orig_grade_db or curr_grade
     try:
         drop = grade_order.index(curr_grade) - grade_order.index(orig_grade)
         grade_drop_notches = max(0, drop)
@@ -388,11 +407,22 @@ def calculate_ecl_for_facility(
     ).fetchone()
     prev_ecl = float(prev_row[0]) if prev_row else None
 
-    # 현재 충당금
+    # 현재 충당금 - 시설 단위 정본 (감사 #6): ① 해당 시설의 워크아웃
+    # 개별충당금 ② 직전 자산건전성 분류의 기존충당금. 종전에는 고객 전체
+    # 워크아웃 합계를 개별 시설에 기록해 시설 수만큼 중복 계상됐다.
     ex_prov = db.execute(
-        text("SELECT COALESCE(SUM(provision_amount),0) FROM workout_case WHERE customer_id=:cid"),
-        {"cid": cid}
+        text("SELECT COALESCE(SUM(provision_amount),0) FROM workout_case WHERE facility_id=:fid"),
+        {"fid": facility_id}
     ).scalar()
+    if not ex_prov:
+        _ac_row = db.execute(
+            text("""
+                SELECT existing_provision FROM asset_classification
+                WHERE facility_id=:fid ORDER BY base_date DESC LIMIT 1
+            """),
+            {"fid": facility_id}
+        ).fetchone()
+        ex_prov = float(_ac_row[0]) if _ac_row and _ac_row[0] is not None else 0.0
 
     ecl_id = str(uuid.uuid4())
     db.execute(
