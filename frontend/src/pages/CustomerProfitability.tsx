@@ -101,7 +101,7 @@ export default function CustomerProfitability() {
             고객 수익성 분석 (RBC)
             <HelpButton onClick={() => openFeatureModal('rbc_overview')} />
           </h1>
-          <p className="text-sm text-gray-500 mt-1">고객 생애가치(CLV), 교차판매, 이탈예측 분석</p>
+          <p className="text-sm text-gray-500 mt-1">고객 생애가치(CLV), 교차판매, 이탈예측 분석 · 여신수익·EL·자본은 여신 정본(계약금리·risk_parameter) 연동, 비여신 관계는 자본 소모가 작아 RAROC이 높게 표시됩니다</p>
         </div>
         {/* 지역 구분은 전 화면에서 같은 형태로 모두 노출한다.
             드롭다운은 선택지가 숨겨져 화면마다 조작 방식이 달라 보였다. */}

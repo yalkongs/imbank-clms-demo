@@ -673,3 +673,44 @@ def test_ews_proposal_respects_bounds():
             assert abs(pr.get(ch, 0) - cur[ch]) <= 0.0501, \
                 f"{seg}/{ch} 이동폭 초과: {cur[ch]} → {pr.get(ch)}"
         assert pr.get("financial") == cur.get("financial"), "지표 없는 재무 채널이 변경됨"
+
+
+# ============================================================
+# 고객 수익성(RBC) 정본 연동 회귀 (2026-08-22)
+# ============================================================
+
+def test_profitability_loan_revenue_matches_contract_rates():
+    """여신이자수익 = Σ(잔액×실제 계약금리) - 난수 생성 회귀 방지"""
+    db = SessionLocal()
+    row = db.execute(text("""
+        SELECT cp.loan_revenue,
+               (SELECT SUM(f.outstanding_amount * f.final_rate) FROM facility f
+                WHERE f.customer_id = cp.customer_id AND f.status = 'ACTIVE') AS expected
+        FROM customer_profitability cp
+        WHERE cp.loan_revenue > 0 LIMIT 20
+    """)).fetchall()
+    db.close()
+    assert row, "표본 없음"
+    for stored, expected in row:
+        assert expected and abs(stored - expected) / expected < 0.01, \
+            f"여신수익이 계약금리 기반이 아님: {stored} vs {expected}"
+
+
+def test_profitability_no_loan_revenue_without_loans():
+    """여신 잔액 0 고객에 여신이자수익이 없어야 한다 (종전 161사 결함)"""
+    db = SessionLocal()
+    n = db.execute(text("""
+        SELECT COUNT(*) FROM customer_profitability cp
+        WHERE cp.loan_revenue > 0 AND cp.customer_id NOT IN
+          (SELECT customer_id FROM facility WHERE status = 'ACTIVE')
+    """)).scalar()
+    db.close()
+    assert n == 0, f"무여신 고객 {n}사에 여신수익 존재"
+
+
+def test_profitability_raroc_bounded():
+    """RAROC 폭주 방지 - 종전 최대 20,893% (EC 난수·하한 100만원 결함)"""
+    db = SessionLocal()
+    mx = db.execute(text("SELECT MAX(raroc) FROM customer_profitability")).scalar()
+    db.close()
+    assert mx < 1000, f"RAROC 폭주: {mx}%"

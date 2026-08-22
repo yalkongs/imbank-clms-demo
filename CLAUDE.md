@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 42개 사용자 화면 · 44개 API 모듈(라우터) · 103개 업무 테이블 · 자동 테스트 223건.
+iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 42개 사용자 화면 · 44개 API 모듈(라우터) · 103개 업무 테이블 · 자동 테스트 226건.
 
 ## 개발 서버 실행
 
@@ -94,6 +94,7 @@ python generate_phase2_data.py   # Phase 2 부실관리 데이터
 python generate_phase3_data.py   # Phase 3 자동화 데이터
 python generate_ews_leading_data.py  # EWS 선행지표 데이터
 python generate_extension_data.py    # 확장 데이터
+python regenerate_customer_profitability.py  # 고객 수익성(RBC) - 정본 연동 재생성 (난수 생성 금지)
 python migrate.py                    # migrations/*.sql 멱등 적용 (앱 기동 시 자동 실행되기도 함)
 ../venv/bin/python generate_ews_extended_channels.py  # EWS 8채널 데이터 (멱등, 백엔드 정본 import)
 ```
