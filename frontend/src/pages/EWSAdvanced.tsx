@@ -18,6 +18,9 @@ import EWSMarketSignals from './ews/EWSMarketSignals';
 import EWSNewsSentiment from './ews/EWSNewsSentiment';
 import EWSSupplyChain from './ews/EWSSupplyChain';
 import EWSActionCenter from './ews/EWSActionCenter';
+import EWSExtendedChannels from './ews/EWSExtendedChannels';
+import EWSB2BDelinquency from './ews/EWSB2BDelinquency';
+import EWSChannelValidation from './ews/EWSChannelValidation';
 
 const TABS = [
   { id: 'integrated', label: '통합 대시보드', icon: <Activity size={16} /> },
@@ -26,6 +29,9 @@ const TABS = [
   { id: 'market', label: '시장신호', icon: <TrendingUp size={16} /> },
   { id: 'news', label: '뉴스/감성', icon: <Newspaper size={16} /> },
   { id: 'supply', label: '공급망', icon: <Network size={16} /> },
+  { id: 'extended', label: '매출·고용', icon: <CreditCard size={16} /> },
+  { id: 'b2b', label: '상거래연체', icon: <FileWarning size={16} /> },
+  { id: 'validation', label: '채널 검증', icon: <Activity size={16} /> },
   { id: 'actions', label: '조치 관리', icon: <ClipboardCheck size={16} /> },
 ];
 
@@ -53,6 +59,9 @@ export default function EWSAdvanced() {
       case 'market': return <EWSMarketSignals region={region} />;
       case 'news': return <EWSNewsSentiment region={region} />;
       case 'supply': return <EWSSupplyChain region={region} />;
+      case 'extended': return <EWSExtendedChannels />;
+      case 'b2b': return <EWSB2BDelinquency />;
+      case 'validation': return <EWSChannelValidation />;
       case 'actions': return <EWSActionCenter />;
       default: return <EWSIntegratedDashboard region={region} />;
     }
@@ -69,7 +78,7 @@ export default function EWSAdvanced() {
             <HelpButton onClick={() => openFeatureModal('ews_overview')} />
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            5채널 선행지표 통합 모니터링 (거래행태 / 공적정보 / 시장신호 / 뉴스감성 / 공급망)
+            8채널 선행지표 통합 모니터링 (거래행태·공적·시장·뉴스·공급망 + 카드매출·고용·상거래연체) · 채널 선행성 백테스트 검증
           </p>
         </div>
         <RegionFilter value={region} onChange={setRegion} />

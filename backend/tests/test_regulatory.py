@@ -609,3 +609,37 @@ def test_origination_snapshot_backfilled():
     n = db.execute(text("SELECT COUNT(*) FROM facility_origination_risk")).scalar()
     db.close()
     assert n and n > 3000, f"origination 스냅샷 부족: {n}"
+
+
+# ============================================================
+# EWS 8채널 확장 회귀 (2026-08-22)
+# ============================================================
+
+def test_ews_weight_approve_requires_dept_head():
+    """가중치 발효는 부서장 이상 - 팀장 시도 → 403 (모형 거버넌스)"""
+    r = client.post("/api/ews-advanced/weight-proposal/approve",
+                    params={"reason": "테스트 사유입니다"},
+                    headers=_login("kim.yeosin", "1234"))
+    assert r.status_code == 403, f"팀장 가중치 발효가 차단되지 않음: {r.status_code}"
+
+
+def test_ews_channel_validation_metrics_exist():
+    """채널 선행성 백테스트 지표가 8채널 중 7개 이상 존재 (재무는 월별 제외)"""
+    r = client.get("/api/ews-advanced/channel-validation")
+    assert r.status_code == 200
+    chs = r.json()["channels"]
+    assert len(chs) >= 7, f"채널 지표 부족: {len(chs)}"
+    for c in chs:
+        assert c["false_alarm_rate"] is not None, f"{c['channel']} 오경보율 누락"
+
+
+def test_ews_composite_coverage_recorded():
+    """종합점수에 채널 커버리지(결측·동의 사유)가 기록된다"""
+    db = SessionLocal()
+    n = db.execute(text("""
+        SELECT COUNT(*) FROM ews_composite_score
+        WHERE score_date = (SELECT MAX(score_date) FROM ews_composite_score)
+          AND channel_coverage IS NOT NULL
+    """)).scalar()
+    db.close()
+    assert n and n > 2000, f"커버리지 기록 부족: {n}"

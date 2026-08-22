@@ -27,7 +27,7 @@ export const TOUR_STEPS: TourStep[] = [
   },
   {
     route: '/ews-advanced',
-    title: '② 5채널 조기경보',
+    title: '② 8채널 조기경보',
     body: '거래행태(한도소진·출금 급증) 채널이 먼저 신호를 잡았습니다. 종합점수 41.2점(WARNING) - 재무제표에 나타나기 전에 행동 데이터가 먼저 움직입니다.',
   },
   {
