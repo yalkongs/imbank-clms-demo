@@ -4,7 +4,7 @@
 
 기업여신의 심사·포트폴리오·모니터링·회수를 통합적으로 분석·시연하는 PoC 시스템입니다.
 Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 사용자 화면 · 265개 API 경로 · 103개 업무 테이블 ·
-자동 테스트 220개(전건 통과)**로 구성되며, iM뱅크 공시 규모를 참고한 모의 포트폴리오
+자동 테스트 223개(전건 통과)**로 구성되며, iM뱅크 공시 규모를 참고한 모의 포트폴리오
 (고객 2,160개사 · 총여신 36.7조 · 자기자본 5.5조 · BIS 14.5%)를 탑재합니다.
 
 **▶ 라이브: https://imbank-clms.onrender.com**  (예비: https://imbank-clms-demo.onrender.com)
@@ -19,7 +19,7 @@ Basel II/III IRB 신용리스크 계량화 체계를 기반으로, **42개 사�
 ![Version](https://img.shields.io/badge/version-1.9-blue)
 ![Python](https://img.shields.io/badge/python-3.13-green)
 ![React](https://img.shields.io/badge/react-18.2-blue)
-![Tests](https://img.shields.io/badge/tests-220_passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-223_passed-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 **체험 계정** (헤더 우측 로그인 → 계정 선택, PIN 힌트 표시):
@@ -723,7 +723,7 @@ cd database && python3 generate_ews_leading_data.py
 - **동의 관리**: 신용정보법 §32 동의 레지스트리 - 만료·철회 채널 자동 결측 전환,
   가중치 재정규화, channel_coverage 로 사유 기록. 만료 임박 D-30 표시
 - EWS 탭 7→10 (매출·고용 / 상거래연체 / 채널 검증), 투어 ② 8채널로 갱신
-- 회귀 테스트 3건 추가, 220개 전건 통과
+- 회귀 테스트 추가, 223개 전건 통과 (2026-08-22 외부 감사 8건 정비 포함 - docs/EXTERNAL_AUDIT_EWS_2026-08-22.md)
 
 ### v1.9 (2026-08-19) — 규제 대응·건전성 고도화 P1~P8 (화면 표시 버전 v1.9 로 상향)
 

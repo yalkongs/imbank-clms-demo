@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 42개 사용자 화면 · 43개 API 모듈(라우터) · 97개 업무 테이블 · 자동 테스트 220건.
+iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 42개 사용자 화면 · 43개 API 모듈(라우터) · 97개 업무 테이블 · 자동 테스트 223건.
 
 ## 개발 서버 실행
 
