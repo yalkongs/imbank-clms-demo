@@ -38,12 +38,16 @@ export default function EWSIntegratedDashboard({ region }: Props) {
   ].filter(d => d.value > 0);
 
   const cs = data.channel_scores || {};
+  const cov = data.channel_coverage_counts || {};
   const channelBarData = [
     { name: '거래행태', score: cs.transaction || 0 },
     { name: '공적정보', score: cs.public_registry || 0 },
     { name: '시장신호', score: cs.market || 0 },
     { name: '뉴스감성', score: cs.news || 0 },
     { name: '공급망', score: cs.supply_chain || 0 },
+    { name: `카드매출 (${cov.card_sales || 0}사)`, score: cs.card_sales || 0 },
+    { name: `고용 (${cov.employment || 0}사)`, score: cs.employment || 0 },
+    { name: '상거래연체', score: cs.b2b_delinq || 0 },
     { name: '재무', score: cs.financial || 0 },
   ];
 

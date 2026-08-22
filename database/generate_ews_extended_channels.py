@@ -29,6 +29,20 @@ from app.services.ews_channels import (   # noqa: E402
     score_card_sales, score_employment, score_b2b, DEFAULT_WEIGHTS,
 )
 
+
+def load_active_weights(con) -> dict:
+    """rule_register 정본의 유효 가중치 (감사 A8 - 생성기도 정본을 쓴다)"""
+    import json as _json
+    row = con.execute("""SELECT params_json FROM rule_register
+        WHERE rule_id LIKE 'RULE_EWS_WEIGHTS%' AND valid_to IS NULL
+        ORDER BY valid_from DESC LIMIT 1""").fetchone()
+    if row and row[0]:
+        try:
+            return _json.loads(row[0])
+        except ValueError:
+            pass
+    return DEFAULT_WEIGHTS
+
 MONTHS_24 = []          # 2024-08 .. 2026-07
 for y in (2024, 2025, 2026):
     for m in range(1, 13):
@@ -52,6 +66,9 @@ def main():
     con = sqlite3.connect(DB)
     con.row_factory = sqlite3.Row
     cur = con.cursor()
+
+    global ACTIVE_WEIGHTS
+    ACTIVE_WEIGHTS = load_active_weights(cur)
 
     customers = cur.execute("""
         SELECT customer_id, size_category, listing_status, industry_name,
@@ -118,6 +135,8 @@ def main():
                 emp_ok.add(cid)
 
     # ── 원천 24개월 + 월별 채널점수 ─────────────────────────────────
+    # 정합 원칙 (2026-08-22 감사 A6): 저장되는 MoM·YoY·3개월 증감은 전부
+    # 실제 금액·인원 시계열에서 계산한다 - 원천에서 점수가 재현돼야 한다.
     def month_idx(ym):
         return MONTHS_24.index(ym)
 
@@ -130,64 +149,79 @@ def main():
         noise = (not is_event) and h(cid, "noise") < 0.05   # 오경보 주입 5%
         noise_idx = 6 + int(h(cid, "nidx") * 12) if noise else None
 
-        # 카드매출 (적격 기업만 데이터 존재)
+        # 카드매출: 실제 금액 시계열 → MoM·YoY·연속하락 실계산
         if cid in card_eligible:
             base = 8e7 + h(cid, "cbase") * 5e8
+            amts, days_drops, ind_pcts = [], [], []
+            for i, ym in enumerate(MONTHS_24):
+                mult = 1.0 + (h(cid, "cs" + ym) - 0.5) * 0.08     # ±4% 노이즈
+                days_drop = 0.0
+                ind_pct = 30 + h(cid, "cpct" + ym) * 60
+                if is_event and i >= e_idx - 9:
+                    prog = min((i - (e_idx - 9)) / 9.0, 1.0)
+                    mult *= (1 - 0.45 * prog)                     # 최대 -45%
+                    days_drop = prog * 30
+                    ind_pct = max(5, 25 - prog * 20)
+                if noise and i == noise_idx:
+                    mult *= 0.62                                   # 일시 급감 (오경보)
+                    ind_pct = 8.0
+                amts.append(base * mult)
+                days_drops.append(days_drop)
+                ind_pcts.append(ind_pct)
             streak = 0
             for i, ym in enumerate(MONTHS_24):
-                yoy = (h(cid, "cyoy" + ym) - 0.5) * 12          # ±6%
-                ind_pct = 30 + h(cid, "cpct" + ym) * 60
-                days_drop = 0.0
-                if is_event and i >= e_idx - 9:                 # 9개월 전부터 악화, 이후 지속
-                    prog = min((i - (e_idx - 9)) / 9.0, 1.0)
-                    yoy = -8 - prog * 40                        # -8% → -48%
-                    ind_pct = max(5, 25 - prog * 20)
-                    days_drop = prog * 30
-                if noise and i == noise_idx:
-                    yoy = -32                                    # 일시 급감 (오경보)
-                    ind_pct = 8.0
-                streak = streak + 1 if yoy < 0 else 0
-                amt = base * (1 + yoy / 100)
-                sc = score_card_sales(yoy, streak, days_drop, ind_pct)
+                mom = (amts[i] / amts[i - 1] - 1) * 100 if i >= 1 else None
+                yoy = (amts[i] / amts[i - 12] - 1) * 100 if i >= 12 else None
+                streak = streak + 1 if (mom is not None and mom < 0) else 0
+                sc = score_card_sales(yoy, streak, days_drops[i], ind_pcts[i])
                 card_scores[(cid, ym)] = sc
                 cur.execute("""INSERT INTO ews_card_sales_monthly
                     (record_id, customer_id, month, card_sales_amount,
                      active_merchant_days, mom_change_pct, yoy_change_pct, industry_percentile)
                     VALUES (?,?,?,?,?,?,?,?)""",
-                    (f"CS_{uuid.uuid4().hex[:10].upper()}", cid, ym, round(amt),
-                     int(26 * (1 - days_drop / 100)), round(yoy / 3, 1),
-                     round(yoy, 1), round(ind_pct, 1)))
+                    (f"CS_{uuid.uuid4().hex[:10].upper()}", cid, ym, round(amts[i]),
+                     int(26 * (1 - days_drops[i] / 100)),
+                     round(mom, 1) if mom is not None else None,
+                     round(yoy, 1) if yoy is not None else None,
+                     round(ind_pcts[i], 1)))
 
-        # 고용 (전 기업 데이터 존재 - 동의는 점수 반영 단계에서 게이트)
+        # 고용: 실제 인원 시계열 → 3개월 증감 실계산
         emp0 = max(int(r["emp"]), 5)
+        cnts, arrears_list = [], []
         for i, ym in enumerate(MONTHS_24):
-            chg = (h(cid, "e" + ym) - 0.5) * 6                  # ±3%
+            mult = 1.0 + (h(cid, "em" + ym) - 0.5) * 0.04         # ±2% 노이즈
             arrears = 0
-            if is_event and i >= e_idx - 5:                     # 5개월 전부터 감원, 이후 지속
+            if is_event and i >= e_idx - 5:
                 prog = min((i - (e_idx - 5)) / 5.0, 1.0)
-                chg = -6 - prog * 20                            # -6% → -26%
-                arrears = 1 if i >= e_idx - 2 else 0
+                mult *= (1 - 0.26 * prog)                          # 최대 -26%
+                if i >= e_idx - 2:
+                    arrears = 1
                 if i >= e_idx - 1:
                     arrears = 2
             if noise and i == noise_idx:
-                chg = -21
+                mult *= 0.78                                       # 일시 감원 (오경보)
                 arrears = 1
-            cnt = max(int(emp0 * (1 + chg / 100)), 1)
-            sc = score_employment(chg, arrears)
+            cnts.append(max(int(emp0 * mult), 1))
+            arrears_list.append(arrears)
+        for i, ym in enumerate(MONTHS_24):
+            change_3m = cnts[i] - cnts[i - 3] if i >= 3 else 0
+            base_3m = cnts[i - 3] if i >= 3 else cnts[0]
+            chg_pct = change_3m / base_3m * 100 if base_3m else 0.0
+            sc = score_employment(chg_pct, arrears_list[i])
             emp_scores[(cid, ym)] = sc
             cur.execute("""INSERT INTO ews_employment_monthly
                 (record_id, customer_id, month, insured_count, insured_change_3m,
                  premium_arrears_months)
                 VALUES (?,?,?,?,?,?)""",
-                (f"EM_{uuid.uuid4().hex[:10].upper()}", cid, ym, cnt,
-                 int(emp0 * chg / 100), arrears))
+                (f"EM_{uuid.uuid4().hex[:10].upper()}", cid, ym, cnts[i],
+                 change_3m, arrears_list[i]))
 
-        # 상거래연체 (법정집중 - 이벤트 없으면 청정 100점)
-        open_by_month = {ym: (0, 0, False) for ym in MONTHS_24}
+        # 상거래연체: 미해소 이벤트의 건수·경과일·금액을 월별 누적 (설계 §3)
+        open_by_month = {ym: (0, 0, False, 0.0) for ym in MONTHS_24}
         events = []
         if is_event:
-            events.append((e_idx - 4, "PAYMENT_DELAY", 35, 1))   # 4개월 전
-            events.append((e_idx - 3, "PAYMENT_DELAY", 60, 1))   # 중첩 - e-3 경보
+            events.append((e_idx - 4, "PAYMENT_DELAY", 35, 1))
+            events.append((e_idx - 3, "PAYMENT_DELAY", 60, 1))
             events.append((e_idx - 2, "NOTE_EXTENSION", 65, 1))
             if h(cid, "b2bdef") < 0.30:
                 events.append((e_idx - 1, "COMMERCIAL_DEFAULT", 90, 1))
@@ -197,6 +231,7 @@ def main():
             if not 0 <= idx < len(MONTHS_24):
                 continue
             ym = MONTHS_24[idx]
+            amt = 2e8 + h(cid, "b2bamt" + str(idx)) * 2e9
             resolved = None if etype == "COMMERCIAL_DEFAULT" or idx >= len(MONTHS_24) - 3 \
                 else MONTHS_24[idx + 2] + "-15"
             cur.execute("""INSERT INTO ews_b2b_delinquency
@@ -204,14 +239,16 @@ def main():
                  overdue_amount, overdue_days, event_type, resolved_date)
                 VALUES (?,?,?,?,?,?,?,?)""",
                 (f"B2B_{uuid.uuid4().hex[:10].upper()}", cid, ym + "-10", ncp,
-                 round(2e8 + h(cid, "b2bamt") * 2e9), odays, etype, resolved))
-            for j in range(idx, len(MONTHS_24) if resolved is None else min(idx + 2, len(MONTHS_24))):
-                o, d, df = open_by_month[MONTHS_24[j]]
+                 round(amt), odays, etype, resolved))
+            until = len(MONTHS_24) if resolved is None else min(idx + 2, len(MONTHS_24))
+            for j in range(idx, until):
+                o, d, df, a = open_by_month[MONTHS_24[j]]
                 open_by_month[MONTHS_24[j]] = (o + ncp, max(d, odays),
-                                               df or etype == "COMMERCIAL_DEFAULT")
+                                               df or etype == "COMMERCIAL_DEFAULT",
+                                               a + amt / 1e8)
         for ym in MONTHS_24:
-            o, d, df = open_by_month[ym]
-            b2b_scores[(cid, ym)] = score_b2b(o, d, df)
+            o, d, df, a = open_by_month[ym]
+            b2b_scores[(cid, ym)] = score_b2b(o, d, df, a)
 
     # ── 부실 진행 기업의 현재 레거시 채널점수 정합화 ────────────────
     # 워크아웃·DPD90 기업이 거래행태·뉴스·공급망에서 건전 점수를 유지하던
@@ -248,7 +285,7 @@ def main():
         target = ANCHOR_TARGETS.get(cid, float(row[0]))
         seg = "SOHO" if row[1] == "SOHO" else (
             "LISTED" if (row[2] or "") in ("KOSPI", "KOSDAQ", "LISTED") else "UNLISTED")
-        w = DEFAULT_WEIGHTS[seg]
+        w = ACTIVE_WEIGHTS[seg]
         legacy = {"transaction": row[3], "public": row[4], "market": row[5],
                   "news": row[6], "supply": row[7], "financial": row[8]}
         L = sum(w[ch] * float(v) for ch, v in legacy.items() if v is not None and w.get(ch, 0) > 0)

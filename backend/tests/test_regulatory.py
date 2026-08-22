@@ -618,7 +618,7 @@ def test_origination_snapshot_backfilled():
 def test_ews_weight_approve_requires_dept_head():
     """가중치 발효는 부서장 이상 - 팀장 시도 → 403 (모형 거버넌스)"""
     r = client.post("/api/ews-advanced/weight-proposal/approve",
-                    params={"reason": "테스트 사유입니다"},
+                    params={"reason": "테스트 사유입니다", "proposal_hash": "dummy"},
                     headers=_login("kim.yeosin", "1234"))
     assert r.status_code == 403, f"팀장 가중치 발효가 차단되지 않음: {r.status_code}"
 
@@ -630,7 +630,7 @@ def test_ews_channel_validation_metrics_exist():
     chs = r.json()["channels"]
     assert len(chs) >= 7, f"채널 지표 부족: {len(chs)}"
     for c in chs:
-        assert c["false_alarm_rate"] is not None, f"{c['channel']} 오경보율 누락"
+        assert c["control_alert_rate"] is not None, f"{c['channel']} 대조군 경보율 누락"
 
 
 def test_ews_composite_coverage_recorded():
@@ -643,3 +643,33 @@ def test_ews_composite_coverage_recorded():
     """)).scalar()
     db.close()
     assert n and n > 2000, f"커버리지 기록 부족: {n}"
+
+
+def test_ews_weight_approve_hash_binding():
+    """감사 A5: 조회한 제안과 다른 해시로는 발효 불가 (409)"""
+    r = client.post("/api/ews-advanced/weight-proposal/approve",
+                    params={"reason": "해시 결박 테스트", "proposal_hash": "stale-hash",
+                            "synthetic_ack": True},
+                    headers=_login("park.bujang", "2222"))
+    assert r.status_code == 409, f"오래된 제안 발효가 차단되지 않음: {r.status_code}"
+
+
+def test_ews_weight_approve_requires_synthetic_ack():
+    """감사 B: 합성 백테스트 근거는 확인 없이 발효 불가 (422)"""
+    h = client.get("/api/ews-advanced/weight-proposal").json()["proposal_hash"]
+    r = client.post("/api/ews-advanced/weight-proposal/approve",
+                    params={"reason": "합성 확인 테스트", "proposal_hash": h},
+                    headers=_login("park.bujang", "2222"))
+    assert r.status_code == 422, f"합성 근거 무확인 발효가 차단되지 않음: {r.status_code}"
+
+
+def test_ews_proposal_respects_bounds():
+    """감사 A2: 제안 가중치 - 채널당 ±5%p·세그먼트 합계 1.000"""
+    p = client.get("/api/ews-advanced/weight-proposal").json()
+    for seg in ("LISTED", "UNLISTED", "SOHO"):
+        cur, pr = p["current"][seg], p["proposal"][seg]
+        assert abs(sum(pr.values()) - 1.0) < 1e-9, f"{seg} 합계 {sum(pr.values())}"
+        for ch in cur:
+            assert abs(pr.get(ch, 0) - cur[ch]) <= 0.0501, \
+                f"{seg}/{ch} 이동폭 초과: {cur[ch]} → {pr.get(ch)}"
+        assert pr.get("financial") == cur.get("financial"), "지표 없는 재무 채널이 변경됨"

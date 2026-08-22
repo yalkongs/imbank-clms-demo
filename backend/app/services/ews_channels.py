@@ -57,19 +57,44 @@ def segment_of(size_category: str, listing_status: str) -> str:
     return "UNLISTED"
 
 
-def load_weights(db: Session) -> dict:
-    """rule_register 의 유효 가중치 (최신 valid_from, valid_to 없는 행)"""
+def _validate_weights(w: dict) -> bool:
+    """구조·합계·범위 검증 - 세그먼트 3종, 값 0~1, 세그먼트 합 1±0.02"""
+    try:
+        for seg in ("LISTED", "UNLISTED", "SOHO"):
+            m = w[seg]
+            vals = [float(v) for v in m.values()]
+            if any(v < 0 or v > 1 for v in vals):
+                return False
+            if abs(sum(vals) - 1.0) > 0.02:
+                return False
+        return True
+    except (KeyError, TypeError, ValueError):
+        return False
+
+
+def load_weights_meta(db: Session) -> tuple[dict, str, str]:
+    """(가중치, rule_id, source). 정본이 깨졌으면 폴백하되 소리 내서 알린다
+    (2026-08-22 감사 A8: 조용한 fail-open 금지)."""
     row = db.execute(text("""
-        SELECT params_json FROM rule_register
+        SELECT rule_id, params_json FROM rule_register
         WHERE rule_id LIKE 'RULE_EWS_WEIGHTS%' AND valid_to IS NULL
         ORDER BY valid_from DESC LIMIT 1
     """)).fetchone()
-    if row and row[0]:
+    if row and row[1]:
         try:
-            return json.loads(row[0])
+            w = json.loads(row[1])
+            if _validate_weights(w):
+                return w, row[0], "RULE_REGISTER"
+            print(f"[ews_channels] 경고: {row[0]} 가중치 검증 실패 - 폴백 사용")
         except ValueError:
-            pass
-    return DEFAULT_WEIGHTS
+            print(f"[ews_channels] 경고: {row[0]} params_json 파싱 실패 - 폴백 사용")
+    else:
+        print("[ews_channels] 경고: 유효한 RULE_EWS_WEIGHTS 없음 - 폴백 사용")
+    return DEFAULT_WEIGHTS, "FALLBACK_DEFAULT", "FALLBACK"
+
+
+def load_weights(db: Session) -> dict:
+    return load_weights_meta(db)[0]
 
 
 # ── 신규 채널 점수화 룰 (0~100, 낮을수록 위험) ─────────────────────────
@@ -112,8 +137,10 @@ def score_employment(insured_change_3m_pct: float, arrears_months: int) -> float
     return max(s, 0.0)
 
 
-def score_b2b(open_events: int, max_overdue_days: int, has_default: bool) -> float:
-    """상거래연체: 미해소 이벤트 건수·경과일. 상거래 부도는 CRITICAL 직행"""
+def score_b2b(open_events: int, max_overdue_days: int, has_default: bool,
+              open_amount_eok: float = 0.0) -> float:
+    """상거래연체: 미해소 이벤트 건수·경과일·금액 가중 (설계 §3).
+    상거래 부도는 CRITICAL 직행"""
     if has_default:
         return 15.0
     s = 100.0
@@ -122,6 +149,10 @@ def score_b2b(open_events: int, max_overdue_days: int, has_default: bool) -> flo
         s -= 25
     elif max_overdue_days >= 30:
         s -= 15
+    if open_amount_eok >= 50:
+        s -= 10
+    elif open_amount_eok >= 20:
+        s -= 5
     return max(s, 0.0)
 
 
@@ -157,15 +188,20 @@ def _consent_state(db: Session) -> dict:
     return out
 
 
-def recompute_composite(db: Session, weights: dict | None = None) -> dict:
+def recompute_composite(db: Session, weights: dict | None = None,
+                        applied_rule_id: str | None = None) -> dict:
     """최신 score_date 의 전 고객 종합점수를 8채널·결측 재정규화로 재계산.
 
     채널 점수 자체는 갱신하지 않는다 (원천 반영은 생성기·배치의 몫) -
     이 함수는 '가중 결합' 정본이다. 가중치 변경 승인 시에도 호출된다.
     """
-    weights = weights or load_weights(db)
+    if weights is None:
+        weights, rid, _src = load_weights_meta(db)
+        applied_rule_id = applied_rule_id or rid
     consent = _consent_state(db)
     today = db.execute(text("SELECT date('now')")).scalar()
+    from datetime import datetime as _dt
+    computed_at = _dt.now().strftime("%Y-%m-%d %H:%M:%S")
 
     rows = db.execute(text("""
         SELECT s.score_id, s.customer_id, c.size_category, c.listing_status,
@@ -218,19 +254,28 @@ def recompute_composite(db: Session, weights: dict | None = None) -> dict:
         db.execute(text("""
             UPDATE ews_composite_score
             SET composite_score = :cs, ews_grade = :g, risk_level = :rl,
-                channel_coverage = :cov
+                channel_coverage = :cov,
+                applied_rule_id = :rid, computed_at = :cat
             WHERE score_id = :sid
         """), {"cs": composite, "g": grade, "rl": risk,
-               "cov": json.dumps(coverage, ensure_ascii=False), "sid": score_id})
+               "cov": json.dumps(coverage, ensure_ascii=False),
+               "rid": applied_rule_id, "cat": computed_at, "sid": score_id})
         updated += 1
 
     return {"updated": updated, "as_of": today}
 
 
 def publish_weights(db: Session, new_weights: dict, version_label: str,
-                    approved_by: str) -> str:
+                    approved_by: str) -> tuple[str, str]:
     """가중치 새 버전 발효 - 기존 행 valid_to 마감 + 새 행 삽입.
-    호출부(API)가 권한·감사기록을 책임진다."""
+    버전은 서버가 단조 증가로 채번한다 (감사 A5 - 중복 버전 차단).
+    호출부(API)가 권한·감사기록을 책임진다. 반환: (rule_id, version)"""
+    if not _validate_weights(new_weights):
+        raise ValueError("가중치 검증 실패 - 세그먼트 합계·범위 위반")
+    n = db.execute(text(
+        "SELECT COUNT(*) FROM rule_register WHERE rule_id LIKE 'RULE_EWS_WEIGHTS%'"
+    )).scalar() or 0
+    version = f"v3.{n} ({version_label})"
     db.execute(text("""
         UPDATE rule_register SET valid_to = date('now')
         WHERE rule_id LIKE 'RULE_EWS_WEIGHTS%' AND valid_to IS NULL
@@ -244,6 +289,6 @@ def publish_weights(db: Session, new_weights: dict, version_label: str,
                 'services/ews_channels.py recompute_composite')
     """), {"rid": new_id,
            "basis": f"채널 선행성 백테스트 기반 재조정 - 승인 {approved_by}",
-           "ver": version_label,
+           "ver": version,
            "params": json.dumps(new_weights, ensure_ascii=False)})
-    return new_id
+    return new_id, version

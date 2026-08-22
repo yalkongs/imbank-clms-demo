@@ -6,7 +6,9 @@ EWS 확장 채널 API (docs/EWS_8CHANNEL_DESIGN_2026-08-21.md Phase 2·3)
 가중치 변경은 부서장 이상 승인 + 감사기록(critical)으로만 발효되고,
 발효 즉시 종합점수가 정본(services/ews_channels.py)으로 재계산된다.
 """
+import hashlib
 import json
+import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -16,7 +18,7 @@ from ..core.database import get_db
 from ..core.auth import get_current_user, User
 from ..core.audit import record_audit
 from ..services.ews_channels import (
-    load_weights, publish_weights, recompute_composite, CHANNEL_COLUMNS,
+    load_weights_meta, publish_weights, recompute_composite, CHANNEL_COLUMNS,
 )
 
 router = APIRouter(prefix="/api/ews-advanced", tags=["EWS Extended Channels"])
@@ -39,6 +41,7 @@ def get_card_employment_dashboard(db: Session = Depends(get_db)):
         JOIN customer c ON cs.customer_id = c.customer_id
         JOIN ews_channel_consent cc ON cc.customer_id = cs.customer_id
              AND cc.channel = 'CARD_SALES' AND cc.status = 'ACTIVE'
+             AND (cc.expiry_date IS NULL OR cc.expiry_date >= date('now'))
         LEFT JOIN ews_composite_score ecs ON ecs.customer_id = cs.customer_id
              AND ecs.score_date = (SELECT MAX(score_date) FROM ews_composite_score)
         WHERE cs.month = (SELECT MAX(month) FROM ews_card_sales_monthly)
@@ -53,6 +56,7 @@ def get_card_employment_dashboard(db: Session = Depends(get_db)):
         JOIN customer c ON em.customer_id = c.customer_id
         JOIN ews_channel_consent cc ON cc.customer_id = em.customer_id
              AND cc.channel = 'EMPLOYMENT' AND cc.status = 'ACTIVE'
+             AND (cc.expiry_date IS NULL OR cc.expiry_date >= date('now'))
         LEFT JOIN ews_composite_score ecs ON ecs.customer_id = em.customer_id
              AND ecs.score_date = (SELECT MAX(score_date) FROM ews_composite_score)
         WHERE em.month = (SELECT MAX(month) FROM ews_employment_monthly)
@@ -60,16 +64,25 @@ def get_card_employment_dashboard(db: Session = Depends(get_db)):
         ORDER BY em.premium_arrears_months DESC, em.insured_change_3m ASC LIMIT 15
     """)).fetchall()
 
+    # 경보 카운트도 동의 유효 모집단으로 센다 (감사 A3 - 화면 고지와 정합)
     counts = db.execute(text("""
         SELECT
-          (SELECT COUNT(*) FROM ews_channel_consent WHERE channel='CARD_SALES' AND status='ACTIVE'),
-          (SELECT COUNT(*) FROM ews_channel_consent WHERE channel='EMPLOYMENT' AND status='ACTIVE'),
-          (SELECT COUNT(*) FROM ews_composite_score
-           WHERE score_date=(SELECT MAX(score_date) FROM ews_composite_score)
-             AND card_sales_score < 55),
-          (SELECT COUNT(*) FROM ews_composite_score
-           WHERE score_date=(SELECT MAX(score_date) FROM ews_composite_score)
-             AND employment_score < 55)
+          (SELECT COUNT(*) FROM ews_channel_consent WHERE channel='CARD_SALES' AND status='ACTIVE'
+             AND (expiry_date IS NULL OR expiry_date >= date('now'))),
+          (SELECT COUNT(*) FROM ews_channel_consent WHERE channel='EMPLOYMENT' AND status='ACTIVE'
+             AND (expiry_date IS NULL OR expiry_date >= date('now'))),
+          (SELECT COUNT(*) FROM ews_composite_score s
+           JOIN ews_channel_consent cc ON cc.customer_id = s.customer_id
+             AND cc.channel='CARD_SALES' AND cc.status='ACTIVE'
+             AND (cc.expiry_date IS NULL OR cc.expiry_date >= date('now'))
+           WHERE s.score_date=(SELECT MAX(score_date) FROM ews_composite_score)
+             AND s.card_sales_score < 55),
+          (SELECT COUNT(*) FROM ews_composite_score s
+           JOIN ews_channel_consent cc ON cc.customer_id = s.customer_id
+             AND cc.channel='EMPLOYMENT' AND cc.status='ACTIVE'
+             AND (cc.expiry_date IS NULL OR cc.expiry_date >= date('now'))
+           WHERE s.score_date=(SELECT MAX(score_date) FROM ews_composite_score)
+             AND s.employment_score < 55)
     """)).fetchone()
 
     return {
@@ -110,13 +123,28 @@ def get_b2b_dashboard(db: Session = Depends(get_db)):
         LIMIT 30
     """)).fetchall()
 
+    # 총계는 절단(LIMIT) 전 기준으로 센다 (감사 A7). 선행 판정은 현재 DPD 가
+    # 아니라 '최초 은행연체일이 상거래연체 발생일보다 늦거나 없는가'로 판단.
+    totals = db.execute(text("""
+        SELECT COUNT(*),
+               SUM(CASE WHEN fb.first_dt IS NULL OR fb.first_dt > b.event_date
+                        THEN 1 ELSE 0 END)
+        FROM ews_b2b_delinquency b
+        LEFT JOIN (SELECT customer_id, MIN(first_delinquency_date) AS first_dt
+                   FROM facility WHERE first_delinquency_date IS NOT NULL
+                   GROUP BY customer_id) fb ON fb.customer_id = b.customer_id
+        WHERE b.resolved_date IS NULL
+    """)).fetchone()
+    first_bank = {r[0]: r[1] for r in db.execute(text("""
+        SELECT customer_id, MIN(first_delinquency_date) FROM facility
+        WHERE first_delinquency_date IS NOT NULL GROUP BY customer_id
+    """)).fetchall()}
+
     items = []
-    leading = 0
     for r in rows:
         bank_dpd = r[9] or 0
-        is_leading = bank_dpd == 0
-        if is_leading:
-            leading += 1
+        fb = first_bank.get(r[0])
+        is_leading = fb is None or str(fb) > str(r[3])
         items.append({
             "customer_id": r[0], "customer_name": r[1], "industry": r[2],
             "event_date": str(r[3]), "event_type": r[4],
@@ -127,128 +155,233 @@ def get_b2b_dashboard(db: Session = Depends(get_db)):
     return {
         "open_events": items,
         "summary": {
-            "total_open": len(items),
-            "leading_signals": leading,
-            "note": "은행 DPD 0 인데 상거래연체가 있는 구간 = 이 채널이 은행 연체보다 먼저 본 기업",
+            "total_open": totals[0] or 0,
+            "leading_signals": totals[1] or 0,
+            "listed": len(items),
+            "note": "선행 = 상거래연체 발생일이 최초 은행연체일보다 빠르거나 은행연체 없음 - 이 채널이 먼저 본 기업",
         },
     }
 
 
 @router.get("/channel-validation")
 def get_channel_validation(db: Session = Depends(get_db)):
-    """채널 선행성 백테스트 지표 - 가중치는 주장이 아니라 백테스트로 정한다"""
+    """채널 선행성 백테스트 지표 - 가중치는 주장이 아니라 백테스트로 정한다.
+
+    정직성 원칙 (2026-08-22 감사 반영):
+    - '오경보율'이 아니라 **대조군 경보율** (이벤트 미발생 대조군 중 경보가
+      난 기업 비율)로 표기한다 - 12개월 성숙·우측검열을 적용한 설계상
+      오경보율과 다른 근사 지표이기 때문.
+    - 탐지율에 Wilson 95% 신뢰구간과 표본 충분성 플래그를 병기한다.
+    - 합성 백테스트(생성 규칙의 재확인)임을 응답에 명시한다.
+    """
     rows = db.execute(text("""
         SELECT scope_value, n_defaults, n_detected, detection_rate_pct,
                avg_lead_months, median_lead_months,
                pct_alert_before_3m, pct_alert_before_6m,
-               false_alarm_rate_pct, computed_ym
+               false_alarm_rate_pct, computed_ym, source
         FROM ews_validation_metrics
         WHERE scope_type = 'CHANNEL'
         ORDER BY median_lead_months DESC, detection_rate_pct DESC
     """)).fetchall()
+
+    # 채널별 대조군 크기 (월별 점수 패널에서 실측 - 이벤트 기업 제외)
+    controls = {r[0]: r[1] for r in db.execute(text("""
+        SELECT channel, COUNT(DISTINCT customer_id) FROM ews_channel_score_monthly
+        WHERE customer_id NOT IN (SELECT customer_id FROM workout_case
+                                  UNION SELECT customer_id FROM facility WHERE dpd >= 90)
+        GROUP BY channel
+    """)).fetchall()}
+
+    def wilson(k: int, n: int) -> tuple[float, float] | None:
+        if not n:
+            return None
+        z = 1.96
+        ph = k / n
+        denom = 1 + z * z / n
+        center = (ph + z * z / (2 * n)) / denom
+        half = z * math.sqrt(ph * (1 - ph) / n + z * z / (4 * n * n)) / denom
+        return round((center - half) * 100, 1), round((center + half) * 100, 1)
+
+    channels = []
+    synthetic = False
+    for r in rows:
+        if (r[10] or "").startswith("channel_backtest"):
+            synthetic = True
+        ci = wilson(r[2] or 0, r[1] or 0)
+        channels.append({
+            "channel": r[0], "label": CHANNEL_LABELS.get(r[0], r[0]),
+            "n_events": r[1], "n_detected": r[2], "detection_rate": r[3],
+            "detection_ci95": ci,
+            "sample_adequate": (r[1] or 0) >= 30,
+            "n_controls": controls.get(r[0]),
+            "avg_lead_months": r[4], "median_lead_months": r[5],
+            "pct_before_3m": r[6], "pct_before_6m": r[7],
+            "control_alert_rate": r[8], "computed_ym": r[9],
+        })
+
     return {
         "methodology": {
             "events": "워크아웃 이관·DPD90 기업 (91사) - 채널 점수가 경보 임계(55) 아래로 최초 하락한 시점과 이벤트 시점의 차 = 리드타임",
-            "false_alarm": "대조군 400사 중 경보 발화 후 이벤트 미발생 비율 - 탐지율과 반드시 쌍으로 본다",
+            "control_alert": "대조군 400사 중 경보가 난 기업 비율 (설계상 '경보 후 12개월 무이벤트' 오경보율의 근사 - 성숙·검열 미적용)",
             "window": "신규 채널 24개월 · 기존 채널 12개월 (원천 이력 한도)",
+            "consent_note": "백테스트는 데이터 보유 전체 기준(동의 게이트 미적용) - 운영 반영 모집단과 다르다",
         },
-        "channels": [
-            {"channel": r[0], "label": CHANNEL_LABELS.get(r[0], r[0]),
-             "n_events": r[1], "n_detected": r[2], "detection_rate": r[3],
-             "avg_lead_months": r[4], "median_lead_months": r[5],
-             "pct_before_3m": r[6], "pct_before_6m": r[7],
-             "false_alarm_rate": r[8], "computed_ym": r[9]}
-            for r in rows
-        ],
+        "synthetic": synthetic,
+        "synthetic_notice": ("합성 데모 백테스트 - 생성기가 심은 악화 패턴을 같은 임계로 채점한 "
+                             "생성 규칙의 재확인이며, 실데이터 성능 검증이 아니다. "
+                             "실데이터 검증 전 가중치 보정의 단독 근거로 쓸 수 없다") if synthetic else None,
+        "channels": channels,
     }
 
 
 def _quality(metrics: dict) -> dict:
-    """채널 품질 점수 - 탐지율 × 리드타임 보너스 × (1-오경보율)"""
+    """채널 품질 점수 - 탐지율 × 리드타임 보너스 × (1-대조군 경보율)"""
     q = {}
     for ch, m in metrics.items():
         det = (m["detection_rate"] or 0) / 100
         lead = (m["median_lead_months"] or 0)
-        fa = (m["false_alarm_rate"] or 0) / 100
+        fa = (m["control_alert_rate"] or 0) / 100
         q[ch] = det * (1 + lead / 12) * (1 - fa)
     return q
 
 
 def _bounded_proposal(current: dict, quality: dict, max_shift: float = 0.05) -> dict:
-    """검증 기반 가중치 제안 - 채널당 이동폭 ±max_shift 로 제한 후 재정규화.
-    급격한 가중치 교체는 모형 안정성을 해치므로 점진 조정만 제안한다."""
+    """검증 기반 가중치 제안 (2026-08-22 감사 A2 재작성).
+
+    제약 3개를 동시에 만족시킨다:
+      ① 채널별 최종 이동폭 ≤ ±max_shift  ② 세그먼트 합계 = 1.000
+      ③ 지표 없는 채널(재무 등)·가중치 0 채널은 현행 고정
+    방법: 반복 투영 (조정→클램프→합계 보정을 수렴까지) + 최대잔여 반올림.
+    """
     proposal = {}
     for seg, w in current.items():
-        active = {ch: wt for ch, wt in w.items() if wt > 0}
-        qs = {ch: quality.get(ch, 0.5) for ch in active}
-        avg_q = sum(qs.values()) / len(qs) if qs else 1.0
-        raw = {}
-        for ch, wt in active.items():
-            factor = 1.0 + (qs[ch] - avg_q)          # 품질 상대치만큼 가감
-            raw[ch] = min(max(wt * factor, wt - max_shift), wt + max_shift)
-        total = sum(raw.values())
-        seg_prop = {ch: round(v / total, 3) for ch, v in raw.items()}
-        # 미활성 채널은 0 유지
-        for ch in w:
-            seg_prop.setdefault(ch, 0.0)
+        adjustable = {ch: wt for ch, wt in w.items() if wt > 0 and ch in quality}
+        fixed = {ch: wt for ch, wt in w.items() if ch not in adjustable}
+        if not adjustable:
+            proposal[seg] = dict(w)
+            continue
+        avg_q = sum(quality[ch] for ch in adjustable) / len(adjustable)
+        target = {ch: wt * (1.0 + (quality[ch] - avg_q)) for ch, wt in adjustable.items()}
+        cur_mass = sum(adjustable.values())
+        vals = dict(target)
+        for _ in range(20):
+            # 클램프 (±max_shift)
+            vals = {ch: min(max(v, adjustable[ch] - max_shift), adjustable[ch] + max_shift)
+                    for ch, v in vals.items()}
+            gap = cur_mass - sum(vals.values())
+            if abs(gap) < 1e-9:
+                break
+            # 여유가 있는 채널에 잔여를 비례 배분
+            room = {ch: (adjustable[ch] + max_shift - v) if gap > 0
+                    else (v - (adjustable[ch] - max_shift))
+                    for ch, v in vals.items()}
+            total_room = sum(room.values())
+            if total_room <= 1e-12:
+                break
+            vals = {ch: v + gap * (room[ch] / total_room) for ch, v in vals.items()}
+        # 0.1%p 단위 최대잔여 반올림으로 합계를 정확히 맞춘다
+        scaled = {ch: v * 1000 for ch, v in vals.items()}
+        floors = {ch: math.floor(v) for ch, v in scaled.items()}
+        remain = round(cur_mass * 1000) - sum(floors.values())
+        order = sorted(scaled, key=lambda c: scaled[c] - floors[c], reverse=True)
+        for ch in order[:max(remain, 0)]:
+            floors[ch] += 1
+        seg_prop = {ch: floors[ch] / 1000 for ch in floors}
+        seg_prop.update({ch: wt for ch, wt in fixed.items()})
         proposal[seg] = seg_prop
     return proposal
 
 
-@router.get("/weight-proposal")
-def get_weight_proposal(db: Session = Depends(get_db)):
-    """현행 가중치 vs 백테스트 기반 제안 (±5%p 점진 조정)"""
-    current = load_weights(db)
+def _proposal_bundle(db: Session) -> dict:
+    """현행·제안·해시를 한 번에 - 조회와 승인이 같은 근거를 쓴다 (감사 A5)"""
+    current, rule_id, source = load_weights_meta(db)
     metrics = {r[0]: {"detection_rate": r[1], "median_lead_months": r[2],
-                      "false_alarm_rate": r[3]}
+                      "control_alert_rate": r[3]}
                for r in db.execute(text("""
                    SELECT scope_value, detection_rate_pct, median_lead_months,
                           false_alarm_rate_pct
                    FROM ews_validation_metrics WHERE scope_type='CHANNEL'
                """)).fetchall()}
+    computed_ym = db.execute(text("""
+        SELECT MAX(computed_ym) FROM ews_validation_metrics WHERE scope_type='CHANNEL'
+    """)).scalar()
+    synthetic = bool(db.execute(text("""
+        SELECT 1 FROM ews_validation_metrics
+        WHERE scope_type='CHANNEL' AND source LIKE 'channel_backtest%' LIMIT 1
+    """)).fetchone())
     quality = _quality(metrics)
     proposal = _bounded_proposal(current, quality)
+    payload = json.dumps({"base": rule_id, "ym": computed_ym, "proposal": proposal},
+                         ensure_ascii=False, sort_keys=True)
+    return {
+        "current": current, "proposal": proposal, "quality": quality,
+        "base_rule_id": rule_id, "weights_source": source,
+        "computed_ym": computed_ym, "synthetic": synthetic,
+        "proposal_hash": hashlib.sha256(payload.encode()).hexdigest()[:16],
+    }
+
+
+@router.get("/weight-proposal")
+def get_weight_proposal(db: Session = Depends(get_db)):
+    """현행 가중치 vs 백테스트 기반 제안 (±5%p 점진 조정, 합계 1 보장)"""
+    b = _proposal_bundle(db)
     rule = db.execute(text("""
         SELECT version, valid_from FROM rule_register
         WHERE rule_id LIKE 'RULE_EWS_WEIGHTS%' AND valid_to IS NULL
         ORDER BY valid_from DESC LIMIT 1
     """)).fetchone()
     return {
-        "current": current,
-        "proposal": proposal,
-        "quality": {ch: round(v, 3) for ch, v in quality.items()},
+        "current": b["current"],
+        "proposal": b["proposal"],
+        "quality": {ch: round(v, 3) for ch, v in b["quality"].items()},
         "current_version": {"version": rule[0], "valid_from": str(rule[1])} if rule else None,
+        "base_rule_id": b["base_rule_id"],
+        "weights_source": b["weights_source"],
+        "proposal_hash": b["proposal_hash"],
+        "synthetic": b["synthetic"],
         "governance": "발효는 부서장 이상 승인 + 감사기록 - 승인 즉시 전 고객 종합점수 재계산",
-        "bound_note": "채널당 이동폭 ±5%p 제한 (모형 안정성)",
+        "bound_note": "채널당 이동폭 ±5%p·세그먼트 합계 100% 보장 · 지표 없는 채널(재무)은 현행 고정",
     }
 
 
 @router.post("/weight-proposal/approve")
 def approve_weight_proposal(
-    version_label: str = Query("v3.1 (백테스트 재조정)"),
+    proposal_hash: str = Query(..., description="조회한 제안의 해시 - 불일치 시 409"),
     reason: str = Query(..., min_length=5),
+    synthetic_ack: bool = Query(False, description="합성 백테스트 근거임을 승인자가 확인"),
+    version_label: str = Query("백테스트 재조정"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """가중치 제안 발효 - 부서장 이상 + 감사 critical + 즉시 재계산"""
+    """가중치 제안 발효 - 부서장 이상 + 제안 해시 결박 + 감사 critical.
+
+    승인자는 화면에서 본 제안 그대로만 발효할 수 있다 (감사 A5 - TOCTOU 차단).
+    합성 백테스트가 근거인 동안은 synthetic_ack 확인 없이 발효할 수 없다.
+    """
     if current_user.approval_level not in ("DEPT_HEAD", "EXECUTIVE", "COMMITTEE"):
         raise HTTPException(403, "EWS 가중치 변경은 부서장 이상만 승인할 수 있습니다")
 
-    prop = get_weight_proposal(db)
-    before = prop["current"]
-    new_weights = prop["proposal"]
+    b = _proposal_bundle(db)
+    if b["proposal_hash"] != proposal_hash:
+        raise HTTPException(409, "제안이 조회 시점과 달라졌습니다 - 화면을 새로고침해 다시 검토하세요")
+    if b["synthetic"] and not synthetic_ack:
+        raise HTTPException(422, "합성 데모 백테스트가 근거입니다 - 확인(synthetic_ack) 없이 발효할 수 없습니다")
 
-    rule_id = publish_weights(db, new_weights, version_label, current_user.name)
-    stats = recompute_composite(db, weights=new_weights)
+    rule_id, version = publish_weights(db, b["proposal"], version_label, current_user.name)
+    stats = recompute_composite(db, weights=b["proposal"], applied_rule_id=rule_id)
 
     record_audit(db, "EWS_WEIGHTS_PUBLISH", "rule_register", rule_id,
-                 before={"weights": before},
-                 after={"weights": new_weights, "version": version_label,
-                        "reason": reason, "recomputed": stats["updated"]},
-                 user_id=current_user.name, user_dept=current_user.dept,
+                 before={"weights": b["current"], "base_rule_id": b["base_rule_id"]},
+                 after={"weights": b["proposal"], "version": version,
+                        "reason": reason, "proposal_hash": proposal_hash,
+                        "synthetic_ack": b["synthetic"] and synthetic_ack,
+                        "approver_name": current_user.name,
+                        "approver_level": current_user.approval_level,
+                        "recomputed": stats["updated"]},
+                 user_id=current_user.user_id, user_dept=current_user.dept,
                  critical=True)
     db.commit()
-    return {"rule_id": rule_id, "version": version_label,
+    return {"rule_id": rule_id, "version": version,
             "approved_by": current_user.name,
             "recomputed_customers": stats["updated"]}
 

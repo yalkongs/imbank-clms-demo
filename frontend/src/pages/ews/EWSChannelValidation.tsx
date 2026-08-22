@@ -38,20 +38,31 @@ export default function EWSChannelValidation() {
 
   useEffect(() => { load().catch(console.error).finally(() => setLoading(false)); }, []);
 
+  const [synAck, setSynAck] = useState(false);
+
   const approve = () => {
     if (reason.trim().length < 5) {
       setMsg('승인 사유를 5자 이상 입력하세요');
       return;
     }
+    if (prop.synthetic && !synAck) {
+      setMsg('합성 데모 백테스트 근거임을 확인(체크)해야 발효할 수 있습니다');
+      return;
+    }
     setBusy(true);
     setMsg(null);
-    axios.post('/api/ews-advanced/weight-proposal/approve', null, { params: { reason } })
+    axios.post('/api/ews-advanced/weight-proposal/approve', null, {
+      params: { reason, proposal_hash: prop.proposal_hash, synthetic_ack: synAck },
+    })
       .then(r => {
         setMsg(`발효 완료: ${r.data.version} (${r.data.approved_by}) - ${r.data.recomputed_customers}사 종합점수 재계산·감사기록`);
         setReason('');
         return load();
       })
-      .catch(e => setMsg(e?.response?.data?.detail || '발효 실패 - 부서장 이상 로그인이 필요합니다'))
+      .catch(e => {
+        if (e?.response?.status === 409) { setMsg('제안이 조회 시점과 달라졌습니다 - 새로고침 후 다시 검토하세요'); load(); }
+        else setMsg(e?.response?.data?.detail || '발효 실패 - 부서장 이상 로그인이 필요합니다');
+      })
       .finally(() => setBusy(false));
   };
 
@@ -66,18 +77,18 @@ export default function EWSChannelValidation() {
 
   return (
     <div className="space-y-6">
-      <Card title="채널 선행성 백테스트" subtitle={`${val.methodology.events} · 오경보: ${val.methodology.false_alarm}`} noPadding>
+      <Card title="채널 선행성 백테스트" subtitle={val.methodology.events} noPadding>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs text-gray-400 border-b border-gray-100">
                 <th className="py-2 px-4">채널</th>
-                <th className="py-2 px-3 text-right">이벤트 표본</th>
-                <th className="py-2 px-3 text-right">탐지율</th>
+                <th className="py-2 px-3 text-right">표본 (이벤트/대조군)</th>
+                <th className="py-2 px-3 text-right">탐지율 (95% CI)</th>
                 <th className="py-2 px-3 text-right">리드타임 (중앙값)</th>
                 <th className="py-2 px-3 text-right">3개월+ 선행</th>
                 <th className="py-2 px-3 text-right">6개월+ 선행</th>
-                <th className="py-2 px-4 text-right">오경보율</th>
+                <th className="py-2 px-4 text-right">대조군 경보율</th>
               </tr>
             </thead>
             <tbody>
@@ -88,27 +99,37 @@ export default function EWSChannelValidation() {
                     {['card_sales', 'employment', 'b2b_delinq'].includes(c.channel) &&
                       <Badge variant="info">신규</Badge>}
                   </td>
-                  <td className="py-2 px-3 text-right tabular">{c.n_events}사</td>
+                  <td className="py-2 px-3 text-right tabular">
+                    {c.n_events}/{c.n_controls ?? '-'}사
+                    {!c.sample_adequate && <span className="ml-1 text-[10px] text-red-500 font-semibold">표본부족</span>}
+                  </td>
                   <td className={`py-2 px-3 text-right tabular font-semibold ${c.detection_rate >= 70 ? 'text-green-600' : c.detection_rate >= 25 ? 'text-amber-600' : 'text-gray-500'}`}>
                     {formatPercent(c.detection_rate, 1)}
+                    {c.detection_ci95 && <span className="block text-[10px] font-normal text-gray-400">[{c.detection_ci95[0]}~{c.detection_ci95[1]}%]</span>}
                   </td>
                   <td className="py-2 px-3 text-right tabular font-semibold">
                     {c.median_lead_months != null ? `${c.median_lead_months}개월 전` : '-'}
                   </td>
                   <td className="py-2 px-3 text-right tabular">{formatPercent(c.pct_before_3m ?? 0, 0)}</td>
                   <td className="py-2 px-3 text-right tabular">{formatPercent(c.pct_before_6m ?? 0, 0)}</td>
-                  <td className={`py-2 px-4 text-right tabular ${(c.false_alarm_rate ?? 0) > 25 ? 'text-red-500 font-semibold' : 'text-gray-700'}`}>
-                    {formatPercent(c.false_alarm_rate ?? 0, 1)}
+                  <td className={`py-2 px-4 text-right tabular ${(c.control_alert_rate ?? 0) > 25 ? 'text-red-500 font-semibold' : 'text-gray-700'}`}>
+                    {formatPercent(c.control_alert_rate ?? 0, 1)}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p className="px-4 py-3 text-[11px] text-gray-400">
-          {val.methodology.window} · 탐지율과 오경보율은 반드시 쌍으로 본다 - 뉴스감성처럼
-          오경보가 높은 채널은 리드타임이 좋아도 가중치를 낮게 가져간다.
-        </p>
+        <div className="px-4 py-3 space-y-1">
+          <p className="text-[11px] text-gray-400">
+            {val.methodology.window} · {val.methodology.control_alert} · {val.methodology.consent_note}
+          </p>
+          {val.synthetic_notice && (
+            <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
+              ⚠ {val.synthetic_notice}
+            </p>
+          )}
+        </div>
       </Card>
 
       <div className="grid grid-cols-3 gap-6">
@@ -161,6 +182,14 @@ export default function EWSChannelValidation() {
             <input value={reason} onChange={e => setReason(e.target.value)}
               placeholder="승인 사유 (필수, 5자 이상)"
               className="w-full px-2.5 py-1.5 text-sm border border-gray-200 rounded-lg" />
+            {prop.synthetic && (
+              <label className="flex items-start gap-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2 cursor-pointer">
+                <input type="checkbox" checked={synAck} onChange={e => setSynAck(e.target.checked)}
+                  className="mt-0.5 accent-[#00897B]" />
+                본 제안의 근거가 합성 데모 백테스트(생성 규칙의 재확인)이며 실데이터 성능
+                검증이 아님을 확인합니다
+              </label>
+            )}
             <button onClick={approve} disabled={busy}
               className="w-full py-2 text-sm font-semibold bg-[#00897B] text-white rounded-lg hover:bg-[#00695F] disabled:opacity-50">
               제안 가중치 발효 (부서장 이상)

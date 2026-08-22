@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/ews-advanced", tags=["EWS Advanced"])
 FEATURE_DESCRIPTIONS = {
     "ews_overview": {
         "title": "조기경보 시스템 (EWS) 고도화",
-        "description": "전통적인 재무지표 기반 EWS를 넘어 선행지표, 공급망 분석, 외부 신호를 통합한 예측적 조기경보 시스템",
+        "description": "전통적인 재무지표 기반 EWS를 넘어 8채널(거래행태·공적정보·시장신호·뉴스감성·공급망·카드매출·고용·상거래연체) 선행지표를 통합하고, 채널별 선행성을 백테스트로 검증하는 예측적 조기경보 시스템",
         "benefits": [
             "부도 6-12개월 전 조기 포착",
             "포트폴리오 손실 사전 대응",
@@ -108,13 +108,12 @@ Dependency = (거래비중 × 대체난이도) / 거래처다각화지수
 종합 EWS 점수는 0~100점 척도로 산출되며, 점수가 높을수록 안전합니다.
 
 ```
-상장기업 (6채널)
-Composite = 0.25×거래행태 + 0.15×공적정보 + 0.15×시장신호
-          + 0.15×뉴스감성 + 0.15×공급망 + 0.15×재무
-
-비상장기업 (5채널, 시장신호 제외)
-Composite = 0.30×거래행태 + 0.20×공적정보 + 0.20×뉴스감성
-          + 0.15×공급망 + 0.15×재무
+가중치는 규정 레지스터(RULE_EWS_WEIGHTS)가 정본이며, 세그먼트 3종
+(상장 / 비상장 / 개인사업자)별로 8채널에 배분됩니다. 예: 개인사업자는
+카드매출 0.20·재무 0.25, 상장은 시장신호 0.15 포함. 채널 결측·동의
+만료 시 가용 채널 가중치로 재정규화하고 사유를 channel_coverage 에
+기록합니다. 가중치 변경은 채널 선행성 백테스트 근거 + 부서장 이상
+승인으로만 발효됩니다 ('채널 검증' 탭).
 ```
 
 **위험 등급 분류**
@@ -1104,7 +1103,7 @@ async def integrated_dashboard(
     """), rp)
     grade_distribution = {r[0]: r[1] for r in grade_dist}
 
-    # 5채널 평균 점수
+    # 8채널 평균 점수 (2026-08-22 확장: 카드매출·고용·상거래연체 포함)
     channel_avg = db.execute(text(f"""
         {latest_cte}
         SELECT
@@ -1115,7 +1114,12 @@ async def integrated_dashboard(
             AVG(l.supply_chain_score) as sc,
             AVG(l.financial_score) as fin,
             AVG(l.composite_score) as composite,
-            COUNT(*) as total
+            COUNT(*) as total,
+            AVG(l.card_sales_score) as card,
+            AVG(l.employment_score) as emp,
+            AVG(l.b2b_delinq_score) as b2b,
+            SUM(CASE WHEN l.card_sales_score IS NOT NULL THEN 1 ELSE 0 END) as card_n,
+            SUM(CASE WHEN l.employment_score IS NOT NULL THEN 1 ELSE 0 END) as emp_n
         FROM latest l
         JOIN customer c ON l.customer_id = c.customer_id
         WHERE l.rn = 1{rc}
@@ -1177,6 +1181,14 @@ async def integrated_dashboard(
             "supply_chain": round(channel_avg[4], 1) if channel_avg and channel_avg[4] else 0,
             "financial": round(channel_avg[5], 1) if channel_avg and channel_avg[5] else 0,
             "composite": round(channel_avg[6], 1) if channel_avg and channel_avg[6] else 0,
+            "card_sales": round(channel_avg[8], 1) if channel_avg and channel_avg[8] else 0,
+            "employment": round(channel_avg[9], 1) if channel_avg and channel_avg[9] else 0,
+            "b2b_delinq": round(channel_avg[10], 1) if channel_avg and channel_avg[10] else 0,
+        },
+        "channel_coverage_counts": {
+            "card_sales": channel_avg[11] if channel_avg else 0,
+            "employment": channel_avg[12] if channel_avg else 0,
+            "total": channel_avg[7] if channel_avg else 0,
         },
         "total_monitored": channel_avg[7] if channel_avg else 0,
         "trend_distribution": trend_distribution,
