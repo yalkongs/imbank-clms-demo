@@ -184,6 +184,20 @@ def get_channel_validation(db: Session = Depends(get_db)):
         ORDER BY median_lead_months DESC, detection_rate_pct DESC
     """)).fetchall()
 
+    # 이벤트 계층 분해 (T2 중대 연체·T3 건전성 강등) - 데이터 충분성 개선 ①
+    tier_rows = db.execute(text("""
+        SELECT scope_value, n_defaults, n_detected, detection_rate_pct,
+               median_lead_months, false_alarm_rate_pct
+        FROM ews_validation_metrics WHERE scope_type = 'CHANNEL_TIER'
+    """)).fetchall()
+    tiers_by_channel: dict = {}
+    for r in tier_rows:
+        ch, tier = r[0].rsplit(":", 1)
+        tiers_by_channel.setdefault(ch, {})[tier] = {
+            "n_events": r[1], "n_detected": r[2], "detection_rate": r[3],
+            "median_lead_months": r[4], "control_alert_rate": r[5],
+        }
+
     # 채널별 대조군 크기 (월별 점수 패널에서 실측 - 이벤트 기업 제외)
     controls = {r[0]: r[1] for r in db.execute(text("""
         SELECT channel, COUNT(DISTINCT customer_id) FROM ews_channel_score_monthly
@@ -217,6 +231,7 @@ def get_channel_validation(db: Session = Depends(get_db)):
             "avg_lead_months": r[4], "median_lead_months": r[5],
             "pct_before_3m": r[6], "pct_before_6m": r[7],
             "control_alert_rate": r[8], "computed_ym": r[9],
+            "tiers": tiers_by_channel.get(r[0], {}),
         })
 
     return {
@@ -226,6 +241,17 @@ def get_channel_validation(db: Session = Depends(get_db)):
             "window": "신규 채널 24개월 · 기존 채널 12개월 (원천 이력 한도)",
             "consent_note": "백테스트는 데이터 보유 전체 기준(동의 게이트 미적용) - 운영 반영 모집단과 다르다",
         },
+        "tier_definitions": {
+            "T1": "부도·워크아웃 (DPD90 포함) - 91사",
+            "T2": "중대 연체 (DPD 60~89) - 13사",
+            "T3": "건전성 강등 (요주의 이하, 연체 60일 미만) - 20사",
+        },
+        "roadmap": [
+            "① 데모: 이벤트 3계층 + 표본·CI 표시 (완료) - 합성 한계는 고지 유지",
+            "② 파일럿: CB 과거 이력 구입 → 자행 부도와 매칭한 후향적 백테스트 (수천 이벤트)",
+            "③ 파일럿: 신규 채널 12~24개월 그림자 운영 (점수 미반영) 후 가중치 편입",
+            "④ 운영: 검증 데이터마트(3시점·검열·성숙 코호트) + 연 1회 독립 검증 편입",
+        ],
         "synthetic": synthetic,
         "synthetic_notice": ("합성 데모 백테스트 - 생성기가 심은 악화 패턴을 같은 임계로 채점한 "
                              "생성 규칙의 재확인이며, 실데이터 성능 검증이 아니다. "

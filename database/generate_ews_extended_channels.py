@@ -76,14 +76,23 @@ def main():
         FROM customer
     """).fetchall()
 
-    # ── 이벤트 기업: 워크아웃 + DPD90 (이벤트 월은 해시로 최근 6개월 분산) ──
-    event_ids = {r[0] for r in cur.execute(
-        "SELECT DISTINCT customer_id FROM workout_case")}
-    event_ids |= {r[0] for r in cur.execute(
-        "SELECT DISTINCT customer_id FROM facility WHERE dpd >= 90")}
+    # ── 이벤트 3계층 (2026-08-22 데이터 충분성 개선 ①) ────────────────
+    # T1 부도·워크아웃(+DPD90) / T2 중대 연체(DPD60+) / T3 건전성 강등.
+    # 계층별로 악화 곡선 깊이를 차등(T1>T2>T3)해 "부도 예측력"과 "악화
+    # 감지력"이 검증 화면에서 구분되게 한다. 이벤트 월은 해시로 분산.
+    t1 = {r[0] for r in cur.execute("SELECT DISTINCT customer_id FROM workout_case")}
+    t1 |= {r[0] for r in cur.execute("SELECT DISTINCT customer_id FROM facility WHERE dpd >= 90")}
+    t2 = {r[0] for r in cur.execute("SELECT DISTINCT customer_id FROM facility WHERE dpd >= 60")} - t1
+    t3 = {r[0] for r in cur.execute("""
+        SELECT DISTINCT customer_id FROM asset_classification
+        WHERE base_date = (SELECT MAX(base_date) FROM asset_classification)
+          AND classification != 'NORMAL'""")} - t1 - t2
+    tier_of = {**{c: "T1" for c in t1}, **{c: "T2" for c in t2}, **{c: "T3" for c in t3}}
+    event_ids = set(tier_of)
+    TIER_SEV = {"T1": 1.0, "T2": 0.85, "T3": 0.40}   # 악화 곡선 깊이 배수 (T2 는 이벤트 직전 부분 탐지, T3 약신호)
     event_month = {cid: MONTHS_24[18 + int(h(cid, "evt") * 6)] for cid in event_ids}
 
-    # 대조군 400사 (오경보율 측정 모집단)
+    # 대조군 400사 (전 계층 이벤트 제외 - 오염 방지)
     non_event = [r["customer_id"] for r in customers if r["customer_id"] not in event_ids]
     control = sorted(non_event, key=lambda c: h(c, "ctl"))[:400]
     panel = set(event_ids) | set(control)
@@ -93,7 +102,7 @@ def main():
               "ews_b2b_delinquency", "ews_channel_score_monthly",
               "ews_channel_consent"):
         cur.execute(f"DELETE FROM {t}")
-    cur.execute("DELETE FROM ews_validation_metrics WHERE scope_type='CHANNEL'")
+    cur.execute("DELETE FROM ews_validation_metrics WHERE scope_type IN ('CHANNEL','CHANNEL_TIER')")
 
     # ── 동의 레지스트리 ──────────────────────────────────────────────
     def consent_mix(cid, salt, adopt_rate):
@@ -109,8 +118,15 @@ def main():
             return ("ACTIVE", "2026-09-10")   # 만료 임박 (D-30 배지 시연)
         return ("ACTIVE", "2027-12-31")
 
-    card_eligible = {r["customer_id"] for r in customers
-                     if r["size_category"] == "SOHO" or "유통" in (r["industry_name"] or "")}
+    # 카드 적격: SOHO(업종 불문 가맹점 보유 관행) + 유통 + B2C 성격 서비스
+    # 법인 일부(IT서비스·바이오헬스의 25% - 대고객 사업장 보유 가정, 결정론 해시)
+    card_eligible = set()
+    for r in customers:
+        ind = r["industry_name"] or ""
+        if r["size_category"] == "SOHO" or "유통" in ind:
+            card_eligible.add(r["customer_id"])
+        elif ind in ("IT서비스", "바이오헬스") and h(r["customer_id"], "b2c") < 0.25:
+            card_eligible.add(r["customer_id"])
     card_ok, emp_ok = set(), set()
     for r in customers:
         cid = r["customer_id"]
@@ -146,6 +162,7 @@ def main():
         cid = r["customer_id"]
         is_event = cid in event_ids
         e_idx = month_idx(event_month[cid]) if is_event else None
+        sev = TIER_SEV.get(tier_of.get(cid, ""), 0.0)
         noise = (not is_event) and h(cid, "noise") < 0.05   # 오경보 주입 5%
         noise_idx = 6 + int(h(cid, "nidx") * 12) if noise else None
 
@@ -159,9 +176,9 @@ def main():
                 ind_pct = 30 + h(cid, "cpct" + ym) * 60
                 if is_event and i >= e_idx - 9:
                     prog = min((i - (e_idx - 9)) / 9.0, 1.0)
-                    mult *= (1 - 0.45 * prog)                     # 최대 -45%
-                    days_drop = prog * 30
-                    ind_pct = max(5, 25 - prog * 20)
+                    mult *= (1 - 0.45 * prog * sev)               # T1 최대 -45%, 계층 차등
+                    days_drop = prog * 30 * sev
+                    ind_pct = max(5, 25 - prog * 20 * sev) if sev >= 0.5 else ind_pct
                 if noise and i == noise_idx:
                     mult *= 0.62                                   # 일시 급감 (오경보)
                     ind_pct = 8.0
@@ -193,11 +210,15 @@ def main():
             arrears = 0
             if is_event and i >= e_idx - 5:
                 prog = min((i - (e_idx - 5)) / 5.0, 1.0)
-                mult *= (1 - 0.26 * prog)                          # 최대 -26%
-                if i >= e_idx - 2:
+                mult *= (1 - 0.26 * prog * sev)                    # T1 최대 -26%, 계층 차등
+                t = tier_of[cid]
+                if t == "T1":
+                    if i >= e_idx - 2:
+                        arrears = 1
+                    if i >= e_idx - 1:
+                        arrears = 2
+                elif t == "T2" and i >= e_idx - 1:
                     arrears = 1
-                if i >= e_idx - 1:
-                    arrears = 2
             if noise and i == noise_idx:
                 mult *= 0.78                                       # 일시 감원 (오경보)
                 arrears = 1
@@ -220,11 +241,18 @@ def main():
         open_by_month = {ym: (0, 0, False, 0.0) for ym in MONTHS_24}
         events = []
         if is_event:
-            events.append((e_idx - 4, "PAYMENT_DELAY", 35, 1))
-            events.append((e_idx - 3, "PAYMENT_DELAY", 60, 1))
-            events.append((e_idx - 2, "NOTE_EXTENSION", 65, 1))
-            if h(cid, "b2bdef") < 0.30:
-                events.append((e_idx - 1, "COMMERCIAL_DEFAULT", 90, 1))
+            t = tier_of[cid]
+            if t == "T1":
+                events.append((e_idx - 4, "PAYMENT_DELAY", 35, 1))
+                events.append((e_idx - 3, "PAYMENT_DELAY", 60, 1))
+                events.append((e_idx - 2, "NOTE_EXTENSION", 65, 1))
+                if h(cid, "b2bdef") < 0.30:
+                    events.append((e_idx - 1, "COMMERCIAL_DEFAULT", 90, 1))
+            elif t == "T2":
+                events.append((e_idx - 3, "PAYMENT_DELAY", 45, 1))
+                events.append((e_idx - 2, "NOTE_EXTENSION", 62, 1))
+            else:  # T3 - 약신호만
+                events.append((e_idx - 2, "PAYMENT_DELAY", 35, 1))
         elif noise:
             events.append((noise_idx, "PAYMENT_DELAY", 65, 2))
         for idx, etype, odays, ncp in events:
@@ -253,7 +281,7 @@ def main():
     # ── 부실 진행 기업의 현재 레거시 채널점수 정합화 ────────────────
     # 워크아웃·DPD90 기업이 거래행태·뉴스·공급망에서 건전 점수를 유지하던
     # 구세대 데이터 모순을 해소한다 (부실 기업은 현재도 부실 신호를 낸다).
-    for cid in event_ids:
+    for cid in t1:
         cur.execute("""UPDATE ews_composite_score
             SET transaction_score = MIN(transaction_score, ?),
                 news_score        = MIN(news_score, ?),
@@ -378,9 +406,11 @@ def main():
             "SELECT customer_id, month, channel, score FROM ews_channel_score_monthly"):
         panel_scores.setdefault((cid, ch), []).append((ym, sc))
 
+    TIERS = {"T1": t1, "T2": t2, "T3": t3}
     for ch in CHANNELS:
+      for tier, tier_ids in TIERS.items():
         leads, detected, n_events_covered = [], 0, 0
-        for cid in event_ids:
+        for cid in tier_ids:
             series = sorted(panel_scores.get((cid, ch), []))
             if not series:
                 continue
@@ -405,13 +435,15 @@ def main():
         leads.sort()
         med = leads[len(leads) // 2] if leads else None
         avg = sum(leads) / len(leads) if leads else None
+        scope_type = "CHANNEL" if tier == "T1" else "CHANNEL_TIER"
+        scope_value = ch if tier == "T1" else f"{ch}:{tier}"
         cur.execute("""INSERT INTO ews_validation_metrics
             (scope_type, scope_value, n_defaults, n_detected, detection_rate_pct,
              avg_lead_months, median_lead_months, pct_alert_before_3m,
              pct_alert_before_6m, pct_alert_before_12m, alert_threshold_score,
              computed_ym, source, false_alarm_rate_pct)
-            VALUES ('CHANNEL',?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (ch, n_events_covered, detected,
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (scope_type, scope_value, n_events_covered, detected,
              round(detected / n_events_covered * 100, 1),
              round(avg, 1) if avg else None, med,
              round(sum(1 for x in leads if x >= 3) / n_events_covered * 100, 1),

@@ -26,6 +26,7 @@ export default function EWSChannelValidation() {
   const [val, setVal] = useState<any>(null);
   const [prop, setProp] = useState<any>(null);
   const [seg, setSeg] = useState('SOHO');
+  const [tier, setTier] = useState('T1');
   const [reason, setReason] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,6 +79,15 @@ export default function EWSChannelValidation() {
   return (
     <div className="space-y-6">
       <Card title="채널 선행성 백테스트" subtitle={val.methodology.events} noPadding>
+        <div className="px-4 pt-3 flex flex-wrap gap-2">
+          {Object.entries(val.tier_definitions || { T1: '부도·워크아웃' }).map(([k, label]: [string, any]) => (
+            <button key={k} onClick={() => setTier(k)}
+              className={`px-3 py-1 text-xs rounded-full border font-medium ${
+                tier === k ? 'bg-[#00897B] text-white border-[#00897B]' : 'border-gray-300 text-gray-600'}`}>
+              {k} · {label}
+            </button>
+          ))}
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -92,7 +102,17 @@ export default function EWSChannelValidation() {
               </tr>
             </thead>
             <tbody>
-              {val.channels.map((c: any) => (
+              {val.channels.map((raw: any) => {
+                const c = tier === 'T1' ? raw : {
+                  ...raw,
+                  ...(raw.tiers?.[tier] || { n_events: 0, detection_rate: null,
+                       median_lead_months: null, control_alert_rate: raw.control_alert_rate }),
+                  detection_ci95: null,
+                  sample_adequate: (raw.tiers?.[tier]?.n_events || 0) >= 30,
+                  pct_before_3m: null, pct_before_6m: null,
+                };
+                if (tier !== 'T1' && !raw.tiers?.[tier]) return null;
+                return (
                 <tr key={c.channel} className="border-b border-gray-50">
                   <td className="py-2 px-4 font-medium text-gray-900">
                     {c.label}
@@ -104,19 +124,20 @@ export default function EWSChannelValidation() {
                     {!c.sample_adequate && <span className="ml-1 text-[10px] text-red-500 font-semibold">표본부족</span>}
                   </td>
                   <td className={`py-2 px-3 text-right tabular font-semibold ${c.detection_rate >= 70 ? 'text-green-600' : c.detection_rate >= 25 ? 'text-amber-600' : 'text-gray-500'}`}>
-                    {formatPercent(c.detection_rate, 1)}
+                    {c.detection_rate != null ? formatPercent(c.detection_rate, 1) : '-'}
                     {c.detection_ci95 && <span className="block text-[10px] font-normal text-gray-400">[{c.detection_ci95[0]}~{c.detection_ci95[1]}%]</span>}
                   </td>
                   <td className="py-2 px-3 text-right tabular font-semibold">
                     {c.median_lead_months != null ? `${c.median_lead_months}개월 전` : '-'}
                   </td>
-                  <td className="py-2 px-3 text-right tabular">{formatPercent(c.pct_before_3m ?? 0, 0)}</td>
-                  <td className="py-2 px-3 text-right tabular">{formatPercent(c.pct_before_6m ?? 0, 0)}</td>
+                  <td className="py-2 px-3 text-right tabular">{c.pct_before_3m != null ? formatPercent(c.pct_before_3m, 0) : '-'}</td>
+                  <td className="py-2 px-3 text-right tabular">{c.pct_before_6m != null ? formatPercent(c.pct_before_6m, 0) : '-'}</td>
                   <td className={`py-2 px-4 text-right tabular ${(c.control_alert_rate ?? 0) > 25 ? 'text-red-500 font-semibold' : 'text-gray-700'}`}>
                     {formatPercent(c.control_alert_rate ?? 0, 1)}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -128,6 +149,14 @@ export default function EWSChannelValidation() {
             <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
               ⚠ {val.synthetic_notice}
             </p>
+          )}
+          {val.roadmap && (
+            <div className="pt-1">
+              <p className="text-[11px] font-semibold text-gray-600 mb-0.5">실데이터 검증 로드맵</p>
+              {val.roadmap.map((r: string, i: number) => (
+                <p key={i} className="text-[11px] text-gray-400">{r}</p>
+              ))}
+            </div>
           )}
         </div>
       </Card>
