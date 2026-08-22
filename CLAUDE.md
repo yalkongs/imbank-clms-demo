@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 42개 사용자 화면 · 43개 API 모듈(라우터) · 97개 업무 테이블 · 자동 테스트 223건.
+iM뱅크 CLMS (Credit Lifecycle Management System) — 기업여신의 심사·실행·모니터링·회수까지 전체 생애주기를 통합 관리하는 PoC 시스템. 42개 사용자 화면 · 44개 API 모듈(라우터) · 103개 업무 테이블 · 자동 테스트 223건.
 
 ## 개발 서버 실행
 
@@ -40,7 +40,7 @@ React 18 (Vite, port 3000)  →  /api/* proxy  →  FastAPI (uvicorn, port 8000)
 
 **프론트엔드** (`frontend/`): TypeScript + React 18 + Vite. Tailwind CSS, Recharts, Axios. `vite.config.ts`에 `/api` → `localhost:8000` 프록시 설정.
 
-**백엔드** (`backend/`): FastAPI + SQLAlchemy. ORM 모델 정의는 있으나 실제로는 raw SQL을 직접 실행하는 방식을 사용함 (`db.execute(text(...))`). `backend/app/main.py`에서 43개 라우터 등록.
+**백엔드** (`backend/`): FastAPI + SQLAlchemy. ORM 모델 정의는 있으나 실제로는 raw SQL을 직접 실행하는 방식을 사용함 (`db.execute(text(...))`). `backend/app/main.py`에서 44개 라우터 등록.
 
 **데이터베이스** (`database/`): SQLite 단일 파일 (`database/imbank_demo.db`, 40MB). 업무 테이블 103개 (schema.sql 49 + migrations/*.sql 확장). WAL 모드 활성화됨.
 
@@ -52,13 +52,15 @@ React 18 (Vite, port 3000)  →  /api/* proxy  →  FastAPI (uvicorn, port 8000)
 | `backend/app/core/database.py` | SQLAlchemy 엔진 및 세션 팩토리 |
 | `backend/app/services/calculations.py` | RAROC, PD, LGD, RWA 핵심 계산 로직 |
 | `backend/app/services/credit_models.py` | 신용 모델 (16단계 등급 체계) |
+| `backend/app/services/ews_channels.py` | EWS 8채널 점수화·가중 결합 정본 (생성기·API 공유) |
+| `backend/app/core/audit.py` | 감사기록 헬퍼 - 상태 변경 API 필수 (critical=승인류) |
 | `frontend/src/App.tsx` | React Router 라우팅 정의 |
 | `frontend/src/components/Layout.tsx` | 사이드 네비게이션 및 전체 레이아웃 |
 | `database/schema.sql` | 메인 49개 테이블 스키마 |
 
 ## API 모듈 구조
 
-`backend/app/api/` 아래 44개 모듈(라우터 43 + helper 1)이 각각 담당:
+`backend/app/api/` 아래 45개 모듈(라우터 44 + helper 1)이 각각 담당:
 
 - **기본 (8개)**: `dashboard`, `applications`, `capital`, `portfolio`, `limits`, `stress_test`, `models`, `customers`
 - **고도화 (9개)**: `capital_optimizer`, `ews_advanced`, `dynamic_limits`, `customer_profitability`, `collateral_monitoring`, `portfolio_optimization`, `workout`, `esg`, `alm`
@@ -67,6 +69,7 @@ React 18 (Vite, port 3000)  →  /api/* proxy  →  FastAPI (uvicorn, port 8000)
 - **Phase 3** (자동화): `automation`
 - **추가**: `model_inference`, `region_helper`
 - **규제 대응·건전성 고도화 (2026-08, P1~P8)**: `loss_absorption`(커버리지 조종석), `cet1_path`(output floor), `region_rebalancing`, `accountability`(책무구조도 증거), `facility_lifecycle`(연장·조건변경, 에버그리닝 통제) + `inclusive_finance`·`ecl`·`pf` 확장
+- **EWS 8채널 확장 (2026-08)**: `ews_extended` — 카드매출·고용·상거래연체 대시보드, 채널 선행성 백테스트(3계층), 가중치 거버넌스(해시 결박·synthetic_ack)
 
 ## 페이지-API 대응
 
@@ -74,7 +77,8 @@ React 18 (Vite, port 3000)  →  /api/* proxy  →  FastAPI (uvicorn, port 8000)
 |------|------|
 | `Applications.tsx` (101KB, 대규모) | `/api/applications` |
 | `Models.tsx` | `/api/models` |
-| `EWSAdvanced.tsx` + `ews/` 하위 6개 | `/api/ews-advanced` |
+| `EWSAdvanced.tsx` (2단 탭 IA) + `ews/` 하위 10개 | `/api/ews-advanced` |
+| `LossAbsorption.tsx`·`CET1Path.tsx`·`RegionRebalancing.tsx`·`Accountability.tsx`·`FacilityLifecycle.tsx` | `/api/loss-absorption`·`/api/cet1-path`·`/api/region-rebalancing`·`/api/accountability`·`/api/lifecycle` |
 | `AssetClassification.tsx` | `/api/asset-classification` |
 | `Covenant.tsx` | `/api/covenant` |
 
@@ -90,7 +94,48 @@ python generate_phase2_data.py   # Phase 2 부실관리 데이터
 python generate_phase3_data.py   # Phase 3 자동화 데이터
 python generate_ews_leading_data.py  # EWS 선행지표 데이터
 python generate_extension_data.py    # 확장 데이터
+python migrate.py                    # migrations/*.sql 멱등 적용 (앱 기동 시 자동 실행되기도 함)
+../venv/bin/python generate_ews_extended_channels.py  # EWS 8채널 데이터 (멱등, 백엔드 정본 import)
 ```
+
+## 테스트
+
+```bash
+cd backend && ../venv/bin/python -m pytest tests -q   # 223건, 약 3초
+```
+
+- venv 는 **저장소 루트** `venv/` (backend 안 아님). 시스템 python 은 의존성 없음.
+- `tests/conftest.py` 가 데모 DB 를 임시 사본으로 격리(`CLMS_DB_PATH`)하고
+  `CLMS_DB_POOL=null` 로 커넥션 풀을 끈다 (테스트 세션 미반납 대비).
+- **쓰기 동작을 수동 검증할 때도 배포 DB 에 직접 하지 말 것** — `CLMS_DB_PATH` 로
+  사본을 가리켜 실행한다. 데모 DB 는 커밋되는 배포 자산이다 (의도적 시연 시드 제외).
+
+## 정본·통제 원칙 (2026-08 외부감사 2회 정비 이후)
+
+- **산식 단일 정본**: IRB·분류·ECL 은 `services/calculations.py`, EWS 점수·가중
+  결합은 `services/ews_channels.py`. 모듈별 상수·공식 복제 금지 — 과거 감사에서
+  동일 거래 조달원가가 모듈 간 110bp 어긋난 원인이었다.
+- **규정값은 rule_register 정본**: 가중치·한도·임계는 하드코딩 대신 규정 레지스터
+  버전으로 관리하고, 변경은 승인 API(부서장+ · 감사 critical · 해시 결박)로만 발효.
+- **통제 완결 출고**: 신규 쓰기 기능은 상태기계 + 전결권 검증 + `record_audit`
+  (승인류는 critical=True — 감사 실패 시 롤백)를 갖춰서만 추가한다.
+- **표기 정직성**: 수치에는 공시/가정/합성 라벨을 구분해 붙인다. 특정 시기 언론
+  보도·컨퍼런스콜 발언의 직접 인용은 화면·투어에 넣지 않는다 (사용자 지시).
+  합성 백테스트는 '생성 규칙의 재확인'임을 상시 고지한다.
+- **투어 앵커**: 스토리 투어(10단계)의 (주)영남바이오는 종합점수 41.2 WARNING 을
+  전제한다 — EWS 데이터 재생성 시 `generate_ews_extended_channels.py` 의
+  `ANCHOR_TARGETS` 가 이를 보존하는지 확인할 것.
+- **외부 감사 루프**: `codex exec --sandbox read-only` 로 감사 → 발견을 코드·SQL 로
+  재검증 → 타당 건 정비 → `docs/EXTERNAL_AUDIT_*.md` 에 기록. agy CLI 는 비대화
+  모드 권한 문제로 이 환경에서 실행 불가 (2026-08-21 문서 참조).
+
+## 연구·설계 문서 (docs/)
+
+- `IMPROVEMENT_RESEARCH_2026-08-19.md` — 규제·건전성 개선 P1~P8 (전량 구현 완료)
+- `EWS_8CHANNEL_DESIGN_2026-08-21.md` — EWS 8채널 설계 (구현 완료)
+- `EXTERNAL_AUDIT_VERIFICATION_2026-08-21.md` / `EXTERNAL_AUDIT_EWS_2026-08-22.md`
+  — codex 감사 검증·조치 기록. 후속 과제(ECL EIR 엔진, 오경보율 성숙 코호트,
+  점수 스냅샷 이력화, 실데이터 리트로 백테스트·그림자 운영)는 여기서 추적.
 
 ## 주의사항
 
