@@ -190,8 +190,9 @@ export default function LossAbsorption() {
             height={280}
           />
           {sim && !sim.hits_target && (
-            <p className="text-xs text-red-500 mt-2">
-              현재 레버 조합으로는 연말 {formatPercent(sim.end_coverage, 1)}에 그칩니다 - 적립 증액 또는 상각·매각 병행이 필요합니다
+            <p className="flex items-center gap-2 text-xs font-semibold text-red-600 mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
+              <span className="status-dot is-critical" />
+              즉각조치 필요 - 현재 레버로는 연말 {formatPercent(sim.end_coverage, 1)} (목표 미달). 적립 증액 또는 상각·매각 병행 검토
             </p>
           )}
         </Card>

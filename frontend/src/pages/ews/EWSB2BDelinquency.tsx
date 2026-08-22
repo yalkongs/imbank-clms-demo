@@ -71,9 +71,11 @@ export default function EWSB2BDelinquency() {
                     <p className="text-[11px] text-gray-400">{r.industry}</p>
                   </td>
                   <td className="py-2 px-3">
-                    <Badge variant={r.event_type === 'COMMERCIAL_DEFAULT' ? 'danger' : 'warning'}>
-                      {EVENT_LABEL[r.event_type] || r.event_type}
-                    </Badge>
+                    <span className={r.event_type === 'COMMERCIAL_DEFAULT' ? 'badge-alert inline-block rounded-full' : ''}>
+                      <Badge variant={r.event_type === 'COMMERCIAL_DEFAULT' ? 'danger' : 'warning'}>
+                        {EVENT_LABEL[r.event_type] || r.event_type}
+                      </Badge>
+                    </span>
                   </td>
                   <td className="py-2 px-3 text-right tabular text-xs">{r.event_date}</td>
                   <td className="py-2 px-3 text-right tabular">{r.overdue_days}일</td>

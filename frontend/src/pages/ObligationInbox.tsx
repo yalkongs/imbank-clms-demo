@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { Inbox, Clock, ArrowUpRight, ChevronRight } from 'lucide-react';
-import { Card, StatCard, PageLoader } from '../components';
+import { Card, StatCard, PageLoader, ActionBanner, Deadline } from '../components';
 
 /**
  * 통합 의무관리함 - 정책 예외 재검토·EWS 조치·코베넌트 점검·금리인하 SLA·
@@ -39,6 +39,10 @@ export default function ObligationInbox() {
           예외 재검토 · EWS 조치 · 코베넌트 점검 · 금리인하 SLA · 승인조건 이행을 한 곳에서
         </p>
       </div>
+
+      <ActionBanner items={[
+        { label: '기한초과 의무', count: data.overdue, to: '/obligations' },
+      ]} />
 
       <div className="grid grid-cols-3 gap-4">
         <StatCard title="전체 의무" value={data.total} icon={<Inbox size={22} />} color="blue" />
@@ -88,8 +92,11 @@ export default function ObligationInbox() {
                 </td>
                 <td className="py-2 text-xs max-w-md truncate">{i.subject}</td>
                 <td className="py-2 text-xs text-gray-500">{i.owner}</td>
-                <td className={`py-2 text-center text-xs ${i.overdue ? 'text-red-600 font-bold' : 'text-gray-500'}`}>
-                  {i.due_date || '-'}
+                <td className="py-2 text-center text-xs text-gray-500">
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span>{i.due_date || '-'}</span>
+                    <Deadline date={i.due_date} overdue={i.overdue} />
+                  </div>
                 </td>
                 <td className="py-2 text-center">
                   {i.overdue ? (

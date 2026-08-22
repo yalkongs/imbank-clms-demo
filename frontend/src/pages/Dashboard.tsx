@@ -12,7 +12,7 @@ import {
   Activity,
   Users
 } from 'lucide-react';
-import { Card, StatCard, GaugeCard, TrendChart, DonutChart, COLORS, RegionFilter } from '../components';
+import { Card, StatCard, GaugeCard, TrendChart, DonutChart, COLORS, RegionFilter, ActionBanner, LiveBadge } from '../components';
 import { dashboardApi, automationApi } from '../utils/api';
 import { formatAmount, formatPercent, formatNumber } from '../utils/format';
 
@@ -42,6 +42,22 @@ export default function Dashboard() {
   const [capitalTrend, setCapitalTrend] = useState<any[]>([]);
   const [automationData, setAutomationData] = useState<any>(null);
   const [scanning, setScanning] = useState(false);
+  // 실시간성: 경보·의무는 60초 주기로 재조회하고 갱신 시각을 표시한다
+  const [alertsUpdatedAt, setAlertsUpdatedAt] = useState<Date | null>(null);
+  const [obligationOverdue, setObligationOverdue] = useState(0);
+  useEffect(() => {
+    const poll = () => {
+      dashboardApi.getEWSAlerts(region || undefined)
+        .then(r => { setAlerts(r.data || []); setAlertsUpdatedAt(new Date()); })
+        .catch(() => {});
+      fetch('/api/obligations').then(r => r.json())
+        .then(d => setObligationOverdue(d.overdue || 0)).catch(() => {});
+    };
+    poll();
+    const t = setInterval(poll, 60000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region]);
 
   useEffect(() => {
     loadData();
@@ -110,8 +126,17 @@ export default function Dashboard() {
   ];
 
 
+  const criticalAlerts = alerts.filter((a: any) => a.severity === 'CRITICAL').length;
+
   return (
     <div className="space-y-6">
+      {/* 즉각조치 배너 - 지금 처리해야 할 것 (실시간 폴링 연동) */}
+      <ActionBanner items={[
+        { label: 'EWS 위험(CRITICAL) 경보', count: criticalAlerts, to: '/ews-advanced' },
+        { label: '기한초과 의무', count: obligationOverdue, to: '/obligations' },
+        { label: '자동화 조치 대기', count: automationData?.total_pending || 0, to: '/ews-advanced', severity: 'warning' },
+      ]} />
+
       {/* 브랜드 히어로 - 가이드가 민트→라임 그라디언트를 hero treatment 로 규정한다.
           첫 화면에서 규모·기준일·건전성을 한 줄로 먼저 보여준다. */}
       <div className="im-gradient rounded-2xl px-6 py-5 text-imbank-ink">
@@ -265,8 +290,11 @@ export default function Dashboard() {
           title="EWS 알림"
           className="col-span-2"
           headerAction={
-            <button onClick={() => navigate('/ews-advanced')}
-              className="text-sm text-blue-600 cursor-pointer hover:underline">전체보기 →</button>
+            <div className="flex items-center gap-3">
+              <LiveBadge updatedAt={alertsUpdatedAt} intervalSec={60} />
+              <button onClick={() => navigate('/ews-advanced')}
+                className="text-sm text-blue-600 cursor-pointer hover:underline">전체보기 →</button>
+            </div>
           }
         >
           {alerts.length > 0 ? (
@@ -277,12 +305,15 @@ export default function Dashboard() {
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
                 >
                   <div className="flex items-center">
-                    <div className={`p-2 rounded-lg mr-3 ${
-                      alert.severity === 'HIGH' ? 'bg-red-100 text-red-600' :
+                    <div className={`relative p-2 rounded-lg mr-3 ${
+                      alert.severity === 'CRITICAL' || alert.severity === 'HIGH' ? 'bg-red-100 text-red-600' :
                       alert.severity === 'MEDIUM' ? 'bg-yellow-100 text-yellow-600' :
                       'bg-blue-100 text-blue-600'
                     }`}>
                       <AlertTriangle size={16} />
+                      {alert.severity === 'CRITICAL' && (
+                        <span className="status-dot is-critical absolute -top-1 -right-1" />
+                      )}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">{alert.customer_name}</p>

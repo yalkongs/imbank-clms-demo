@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { CalendarClock, Recycle, AlertTriangle, Eye } from 'lucide-react';
-import { Card, StatCard, Badge } from '../components';
+import { Card, StatCard, Badge, Deadline } from '../components';
 import { formatNumber, formatPercent } from '../utils/format';
 import axios from 'axios';
 
@@ -140,9 +140,7 @@ export default function FacilityLifecycle() {
                   </td>
                   <td className="py-2 px-3 text-right tabular">{formatNumber(f.outstanding_eok)}</td>
                   <td className="py-2 px-3 text-right">
-                    <span className={`tabular text-xs font-semibold ${f.days_to_maturity <= 30 ? 'text-red-500' : 'text-gray-700'}`}>
-                      D-{f.days_to_maturity}
-                    </span>
+                    <Deadline date={f.maturity_date} days={f.days_to_maturity} />
                   </td>
                   <td className={`py-2 px-3 text-right tabular ${f.ews_score !== null && f.ews_score < 50 ? 'text-red-500 font-semibold' : ''}`}>
                     {f.ews_score !== null ? f.ews_score.toFixed(1) : '-'}
@@ -190,7 +188,7 @@ export default function FacilityLifecycle() {
           ) : (
             <div className="space-y-3">
               {pending.map((t: any) => (
-                <div key={t.txn_id} className={`p-3 rounded-lg border ${t.evergreen_flags.length ? 'border-red-200 bg-red-50/40' : 'border-gray-200 bg-gray-50'}`}>
+                <div key={t.txn_id} className={`p-3 rounded-lg border ${t.evergreen_flags.length ? 'badge-alert border-red-200 bg-red-50/40' : 'border-gray-200 bg-gray-50'}`}>
                   <div className="flex items-center justify-between">
                     <p className="text-sm font-semibold text-gray-900">
                       {t.customer_name}

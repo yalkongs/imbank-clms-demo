@@ -287,11 +287,14 @@ export default function Layout() {
         {/* 로고 영역 - 공식 가로형 국문 시그니처 (iM Financial Design System).
             시스템명은 상단 헤더에 있으므로 로고만 둔다. */}
         <div className="h-16 flex items-center px-6 border-b border-gray-200">
-          <img
-            src="/brand/imbank-logo-h-kr.jpg"
-            alt="iM뱅크"
-            className="h-7 w-auto"
-          />
+          {/* 로고 클릭 = 홈(대시보드) - 웹 표준 관행 */}
+          <NavLink to="/" aria-label="대시보드로 이동">
+            <img
+              src="/brand/imbank-logo-h-kr.jpg"
+              alt="iM뱅크"
+              className="h-7 w-auto cursor-pointer"
+            />
+          </NavLink>
         </div>
 
         {/* 네비게이션 */}

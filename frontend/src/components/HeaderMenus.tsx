@@ -54,10 +54,14 @@ export function AlertMenu() {
   const ref = useOutsideClose(() => setOpen(false));
 
   useEffect(() => {
-    fetch('/api/dashboard/ews-alerts')
-      .then(r => r.json())
-      .then(d => setAlerts(Array.isArray(d) ? d : (d?.alerts ?? [])))
-      .catch(() => setAlerts([]));
+    const load = () =>
+      fetch('/api/dashboard/ews-alerts')
+        .then(r => r.json())
+        .then(d => setAlerts(Array.isArray(d) ? d : (d?.alerts ?? [])))
+        .catch(() => setAlerts([]));
+    load();
+    const t = setInterval(load, 60000);   // 실시간성: 60초 주기 갱신
+    return () => clearInterval(t);
   }, []);
 
   const unread = alerts.filter(a => !seen.includes(a.alert_id));
@@ -77,8 +81,9 @@ export function AlertMenu() {
       >
         <Bell size={20} />
         {unread.length > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white
-                           text-[10px] font-bold rounded-full flex items-center justify-center">
+          <span className={`absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 text-white
+                           text-[10px] font-bold rounded-full flex items-center justify-center ${
+                             unread.some(a => a.severity === 'CRITICAL') ? 'badge-alert' : ''}`}>
             {unread.length}
           </span>
         )}

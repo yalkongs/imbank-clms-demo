@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, TrendingUp, TrendingDown, Activity, BarChart3, Shield, BookOpen } from 'lucide-react';
-import { Card, StatCard, DonutChart, COLORS } from '../../components';
+import { Card, StatCard, DonutChart, COLORS, LiveBadge } from '../../components';
 import Modal from '../../components/Modal';
 import { ewsAdvancedApi } from '../../utils/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -11,15 +11,23 @@ export default function EWSIntegratedDashboard({ region }: Props) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [methodOpen, setMethodOpen] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
 
-  useEffect(() => { loadData(); }, [region]);
+  // 실시간성: 60초 주기 자동 갱신 (조기경보는 최신성이 곧 가치)
+  useEffect(() => {
+    loadData();
+    const t = setInterval(() => loadData(true), 60000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region]);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const r = region || undefined;
       const res = await ewsAdvancedApi.getIntegratedDashboard(r);
       setData(res.data);
+      setUpdatedAt(new Date());
     } catch (e) {
       console.error(e);
       setData(null);
@@ -70,7 +78,12 @@ export default function EWSIntegratedDashboard({ region }: Props) {
       <div className="grid grid-cols-5 gap-4">
         <StatCard title="모니터링 기업" value={data.total_monitored || 0} icon={<Activity size={22} />} color="blue" />
         <StatCard title="종합점수 평균" value={`${cs.composite || 0}점`} icon={<BarChart3 size={22} />} color="green" />
-        <StatCard title="CRITICAL" value={gradeDist['CRITICAL'] || 0} subtitle="긴급 대응 필요" icon={<AlertTriangle size={22} />} color="red" />
+        <div className="relative">
+          {(gradeDist['CRITICAL'] || 0) > 0 && (
+            <span className="status-dot is-critical absolute top-3 right-3 z-10" />
+          )}
+          <StatCard title="CRITICAL" value={gradeDist['CRITICAL'] || 0} subtitle="긴급 대응 필요 - 즉각조치" icon={<AlertTriangle size={22} />} color="red" />
+        </div>
         <StatCard title="WARNING" value={gradeDist['WARNING'] || 0} subtitle="주의 관찰" icon={<Shield size={22} />} color="yellow" />
         <StatCard title="악화 추세" value={trendDist['DETERIORATING'] || 0}
           subtitle={`개선 ${trendDist['IMPROVING'] || 0}`}
@@ -112,7 +125,7 @@ export default function EWSIntegratedDashboard({ region }: Props) {
       </div>
 
       {/* 워치리스트 테이블 */}
-      <Card title="Watchlist (WARNING / CRITICAL)">
+      <Card title="Watchlist (WARNING / CRITICAL)" headerAction={<LiveBadge updatedAt={updatedAt} intervalSec={60} />}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -130,8 +143,13 @@ export default function EWSIntegratedDashboard({ region }: Props) {
             </thead>
             <tbody>
               {(data.watchlist || []).map((w: any) => (
-                <tr key={w.customer_id} className="border-b hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium">{w.customer_name}</td>
+                <tr key={w.customer_id} className={`border-b hover:bg-gray-50 ${w.ews_grade === 'CRITICAL' ? 'bg-red-50/40' : ''}`}>
+                  <td className="px-3 py-2 font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      {w.ews_grade === 'CRITICAL' && <span className="status-dot is-critical" />}
+                      {w.customer_name}
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-gray-600">{w.industry_name}</td>
                   <td className="px-3 py-2 text-center">
                     <span className={`px-2 py-1 rounded font-semibold text-xs ${
